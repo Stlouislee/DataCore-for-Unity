@@ -9,7 +9,10 @@
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
-    "precompiledReferences": [],
+    "precompiledReferences": [
+        "Apache.Arrow.dll",
+        "Microsoft.ML.DataView.dll"
+    ],
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],

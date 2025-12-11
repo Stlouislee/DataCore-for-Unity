@@ -2,7 +2,7 @@
   "name": "com.stlouislee.datacore-for-unity",
   "version": "1.0.0",
   "displayName": "DataCore for Unity",
-  "description": "A foundational package for Unity applications providing high-performance, cross-platform data storage, management, and access capabilities for tensor, tabular, and graph data.",
+  "description": "A foundational package for Unity applications providing high-performance, cross-platform data storage, management, and access capabilities for tensor, tabular, and graph data. Includes Apache Arrow and Microsoft ML DataView support.",
   "unity": "2021.3",
   "unityRelease": "0f1",
   "documentationUrl": "https://github.com/Stlouislee/DataCore-for-Unity",

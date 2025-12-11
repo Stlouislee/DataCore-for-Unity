@@ -30,6 +30,17 @@ Add the following to your `Packages/manifest.json`:
 
 All necessary .meta files are included with the package. If you need to regenerate meta files for any reason, Unity will automatically create them when importing the package.
 
+### External Dependencies
+
+DataCore includes the following external libraries:
+
+- **Apache Arrow** (v22.1.0) - Cross-language development platform for in-memory data
+- **Microsoft ML DataView** (v5.0.0) - Data processing and machine learning utilities
+- **Microsoft Data Analysis** - DataFrame and data manipulation capabilities
+- **NumSharp** - NumPy-like library for .NET
+
+These dependencies are included as pre-compiled DLLs and are automatically referenced by the package.
+
 ### Manual Installation
 
 1. Clone this repository
