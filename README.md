@@ -26,6 +26,10 @@ Add the following to your `Packages/manifest.json`:
 }
 ```
 
+### Meta Files for Unity Package
+
+All necessary .meta files are included with the package. If you need to regenerate meta files for any reason, Unity will automatically create them when importing the package.
+
 ### Manual Installation
 
 1. Clone this repository
