@@ -274,7 +274,7 @@ namespace DataCore.Serialization
             // Quote if contains separator, quote, or newline
             if (value.Contains(_separator) || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
             {
-                return $"\"{value}"";
+                return $"\"{value}\"";
             }
             
             return value;
