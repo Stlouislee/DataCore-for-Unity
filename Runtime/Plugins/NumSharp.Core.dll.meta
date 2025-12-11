@@ -1,7 +1,26 @@
 fileFormatVersion: 2
-guid: c18a0f5b-6b8c-f4a4-8162-23b975f82618
-DefaultImporter:
-  externalObjects: {{}}
+guid: daf46539-e421-e55e-19ed-42ab98666428
+PluginImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  iconMap: {}
+  executionOrder: {}
+  defineConstraints: []
+  isPreloaded: 0
+  isOverridable: 0
+  isExplicitlyReferenced: 0
+  validateReferences: 1
+  platformData:
+  - first:
+      : Any
+    second:
+      enabled: 1
+      settings:
+        ExcludeEditor: 0
+        ExcludeLinux64: 0
+        ExcludeOSXUniversal: 0
+        ExcludeWin: 0
+        ExcludeWin64: 0
   userData: 
   assetBundleName: 
   assetBundleVariant: 
