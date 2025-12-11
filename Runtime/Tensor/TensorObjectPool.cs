@@ -181,7 +181,6 @@ namespace DataCore.Tensor
                     while (pool.Count > 0)
                     {
                         var array = pool.Dequeue();
-                        array.Dispose();
                     }
                 }
                 
@@ -211,7 +210,6 @@ namespace DataCore.Tensor
                     while (pool.Count > 1 && _totalObjects > 100)
                     {
                         var array = pool.Dequeue();
-                        array.Dispose();
                         _arrayToKey.Remove(array);
                         _totalObjects--;
                     }

@@ -490,7 +490,7 @@ namespace DataCore
         private static void RegisterDefaultTransforms(TransformRegistry registry)
         {
             // DataFrame to NDArray (feature matrix extraction)
-            registry.Register<DataFrame, NDArray>("dataframe_to_tensor", (df, parameters) =>
+            registry.Register<Microsoft.Data.Analysis.DataFrame, NDArray>("dataframe_to_tensor", (df, parameters) =>
             {
                 var columnNames = parameters["columns"] as string[];
                 if (columnNames == null)
@@ -518,7 +518,7 @@ namespace DataCore
             });
             
             // NDArray to DataFrame
-            registry.Register<NDArray, DataFrame>("tensor_to_dataframe", (array, parameters) =>
+            registry.Register<NDArray, Microsoft.Data.Analysis.DataFrame>("tensor_to_dataframe", (array, parameters) =>
             {
                 var columnNames = parameters["columnNames"] as string[];
                 if (columnNames == null)
@@ -540,7 +540,7 @@ namespace DataCore
                     columns.Add(new DoubleDataFrameColumn(columnNames[j], columnData));
                 }
                 
-                return new DataFrame(columns);
+                return new Microsoft.Data.Analysis.DataFrame(columns);
             });
             
             // Normalize NDArray

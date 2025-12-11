@@ -470,7 +470,11 @@ namespace DataCore.Tensor
         /// </summary>
         public DataCore.Monitoring.MemoryUsageReport GetMemoryReport()
         {
-            return _memoryTracker.GetReport();
+            return new DataCore.Monitoring.MemoryUsageReport(
+                new Dictionary<string, long>
+                {
+                    { "Tensor", _memoryTracker.TotalMemoryUsage }
+                });
         }
         
         private void CheckMemoryUsage()

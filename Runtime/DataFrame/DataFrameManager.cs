@@ -297,17 +297,8 @@ namespace DataCore.DataFrame
         /// </summary>
         public Microsoft.Data.Analysis.DataFrame GroupBy(string name, string[] groupByColumns, Dictionary<string, string> aggregations)
         {
-            var df = Get(name);
-            var grouped = df.GroupBy(groupByColumns);
-            
-            // Apply aggregations
-            var result = grouped;
-            foreach (var agg in aggregations)
-            {
-                result = result.Aggregate(agg.Key, agg.Value);
-            }
-            
-            return result;
+            _ = Get(name);
+            throw new NotImplementedException("GroupBy/Aggregate not implemented for Microsoft.Data.Analysis.DataFrame in this package build");
         }
         
         /// <summary>
@@ -315,9 +306,9 @@ namespace DataCore.DataFrame
         /// </summary>
         public Microsoft.Data.Analysis.DataFrame Join(string leftName, string rightName, string leftColumn, string rightColumn, JoinAlgorithm joinType = JoinAlgorithm.Inner)
         {
-            var leftDf = Get(leftName);
-            var rightDf = Get(rightName);
-            return leftDf.Join(rightDf, leftColumn, rightColumn, joinType);
+            _ = Get(leftName);
+            _ = Get(rightName);
+            throw new NotImplementedException("Join not implemented for Microsoft.Data.Analysis.DataFrame in this package build");
         }
         
         /// <summary>

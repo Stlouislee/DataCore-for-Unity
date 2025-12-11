@@ -226,6 +226,25 @@ namespace DataCore
                 UpdateMemoryUsage();
             }
         }
+
+        /// <summary>
+        /// Clear all pools and caches
+        /// </summary>
+        public void Clear()
+        {
+            lock (_lock)
+            {
+                foreach (var cacheLevel in _cacheLevels)
+                {
+                    cacheLevel.Clear();
+                }
+
+                _pools.Clear();
+                _namedPools.Clear();
+
+                UpdateMemoryUsage();
+            }
+        }
         
         /// <summary>
         /// Cleanup expired objects from all pools and caches
