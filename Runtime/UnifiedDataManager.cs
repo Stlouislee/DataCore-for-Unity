@@ -52,6 +52,11 @@ namespace DataCore
         /// Data transformation pipeline
         /// </summary>
         public DataPipeline Pipeline => _pipeline;
+
+        /// <summary>
+        /// Total number of datasets across all managers
+        /// </summary>
+        public int DatasetCount => _tensorManager.DatasetCount + _dataFrameManager.DatasetCount + _graphManager.DatasetCount;
         
         /// <summary>
         /// Memory pool manager
