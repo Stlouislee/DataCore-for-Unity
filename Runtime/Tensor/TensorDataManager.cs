@@ -466,9 +466,9 @@ namespace DataCore.Tensor
         }
         
         /// <summary>
-        /// Get memory usage statistics
+        /// Get memory usage report
         /// </summary>
-        public MemoryUsageReport GetMemoryReport()
+        public DataCore.Monitoring.MemoryUsageReport GetMemoryReport()
         {
             return _memoryTracker.GetReport();
         }
@@ -553,11 +553,11 @@ namespace DataCore.Tensor
             }
         }
         
-        public MemoryUsageReport GetReport()
+        public TensorMemoryUsageReport GetReport()
         {
             lock (_lock)
             {
-                return new MemoryUsageReport
+                return new TensorMemoryUsageReport
                 {
                     TotalMemoryUsage = _totalMemoryUsage,
                     AllocatedObjects = 0, // Would track object count in real implementation
@@ -568,9 +568,9 @@ namespace DataCore.Tensor
     }
     
     /// <summary>
-    /// Memory usage report
+    /// Tensor memory usage report
     /// </summary>
-    public struct MemoryUsageReport
+    public struct TensorMemoryUsageReport
     {
         public long TotalMemoryUsage { get; set; }
         public long PeakMemoryUsage { get; set; }

@@ -373,9 +373,9 @@ namespace DataCore
     /// </summary>
     public class UnifiedMemoryReport
     {
-        public MemoryUsageReport TensorMemory { get; set; }
-        public MemoryUsageReport DataFrameMemory { get; set; }
-        public MemoryUsageReport GraphMemory { get; set; }
+        public DataCore.Monitoring.MemoryUsageReport TensorMemory { get; set; }
+        public DataCore.Monitoring.MemoryUsageReport DataFrameMemory { get; set; }
+        public DataCore.Monitoring.MemoryUsageReport GraphMemory { get; set; }
         public PoolStatistics PoolMemory { get; set; }
         public long TotalMemory { get; set; }
         
