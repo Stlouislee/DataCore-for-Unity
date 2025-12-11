@@ -1,0 +1,50 @@
+{
+  "name": "com.stlouislee.datacore-for-unity",
+  "version": "1.0.0",
+  "displayName": "DataCore for Unity",
+  "description": "A foundational package for Unity applications providing high-performance, cross-platform data storage, management, and access capabilities for tensor, tabular, and graph data.",
+  "unity": "2021.3",
+  "unityRelease": "0f1",
+  "documentationUrl": "https://github.com/Stlouislee/DataCore-for-Unity",
+  "changelogUrl": "https://github.com/Stlouislee/DataCore-for-Unity/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/Stlouislee/DataCore-for-Unity/blob/main/LICENSE",
+  "dependencies": {
+    "com.unity.collections": "1.4.0",
+    "com.unity.burst": "1.8.0"
+  },
+  "samples": [
+    {
+      "displayName": "Tensor Example",
+      "description": "Basic tensor operations and serialization",
+      "path": "Samples/TensorExample"
+    },
+    {
+      "displayName": "DataFrame Example",
+      "description": "DataFrame manipulation and analysis",
+      "path": "Samples/DataFrameExample"
+    },
+    {
+      "displayName": "Graph Example",
+      "description": "Graph algorithms and pathfinding",
+      "path": "Samples/GraphExample"
+    },
+    {
+      "displayName": "Comprehensive Example",
+      "description": "All features working together",
+      "path": "Samples/ComprehensiveExample"
+    }
+  ],
+  "keywords": [
+    "data",
+    "tensor",
+    "dataframe",
+    "graph",
+    "machine-learning",
+    "visualization"
+  ],
+  "author": {
+    "name": "Stlouislee",
+    "email": "contact@stlouislee.com",
+    "url": "https://github.com/Stlouislee"
+  }
+}
