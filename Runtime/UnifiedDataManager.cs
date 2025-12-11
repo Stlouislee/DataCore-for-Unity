@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DataCore.DataFrame;
 using DataCore.Graph;
+using DataCore.Monitoring;
 using DataCore.Platform;
 using DataCore.Serialization;
 using DataCore.Tensor;

@@ -8,6 +8,27 @@ PluginImporter:
   defineConstraints: []
   isPreloaded: 0
   isOverridable: 0
+  platformData:
+  - first:
+      Any: 
+    second:
+      enabled: 1
+  - first:
+      Editor: Editor
+    second:
+      enabled: 1
+  - first:
+      Standalone: Windows
+    second:
+      enabled: 1
+  - first:
+      Standalone: Linux
+    second:
+      enabled: 1
+  - first:
+      Standalone: OSX
+    second:
+      enabled: 1
   isExplicitlyReferenced: 0
   validateReferences: 1
   platformData:
