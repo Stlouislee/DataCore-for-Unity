@@ -6,9 +6,8 @@ PluginImporter:
   iconMap: {}
   executionOrder: {}
   defineConstraints: []
-  isPreloaded: 0
+  isPreloaded: 1
   isOverridable: 0
-  validateReferences: 0
   platformData:
   - first:
       Any: 
@@ -30,19 +29,3 @@ PluginImporter:
       Standalone: OSX
     second:
       enabled: 1
-  isExplicitlyReferenced: 0
-  validateReferences: 1
-  platformData:
-  - first:
-      : Any
-    second:
-      enabled: 1
-      settings:
-        ExcludeEditor: 0
-        ExcludeLinux64: 0
-        ExcludeOSXUniversal: 0
-        ExcludeWin: 0
-        ExcludeWin64: 0
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
