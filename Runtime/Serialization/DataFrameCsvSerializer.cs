@@ -12,7 +12,7 @@ namespace DataCore.Serialization
     /// <summary>
     /// CSV serializer for DataFrame
     /// </summary>
-    public class DataFrameCsvSerializer : ISerializer<DataFrame>
+    public class DataFrameCsvSerializer : ISerializer<Microsoft.Data.Analysis.DataFrame>
     {
         private readonly SerializerConfig _config;
         private readonly char _separator;
@@ -27,7 +27,7 @@ namespace DataCore.Serialization
             _encoding = encoding ?? Encoding.UTF8;
         }
         
-        public byte[] Serialize(DataFrame data)
+        public byte[] Serialize(Microsoft.Data.Analysis.DataFrame data)
         {
             if (data == null)
                 throw new ArgumentNullException(nameof(data));
@@ -41,7 +41,7 @@ namespace DataCore.Serialization
             }
         }
         
-        public DataFrame Deserialize(byte[] bytes)
+        public Microsoft.Data.Analysis.DataFrame Deserialize(byte[] bytes)
         {
             if (bytes == null || bytes.Length == 0)
                 throw new ArgumentException("Bytes cannot be null or empty", nameof(bytes));
@@ -53,7 +53,7 @@ namespace DataCore.Serialization
             }
         }
         
-        public async Task SerializeAsync(DataFrame data, string filePath, CancellationToken cancellationToken = default)
+        public async Task SerializeAsync(Microsoft.Data.Analysis.DataFrame data, string filePath, CancellationToken cancellationToken = default)
         {
             if (data == null)
                 throw new ArgumentNullException(nameof(data));
@@ -73,7 +73,7 @@ namespace DataCore.Serialization
             }
         }
         
-        public async Task<DataFrame> DeserializeAsync(string filePath, CancellationToken cancellationToken = default)
+        public async Task<Microsoft.Data.Analysis.DataFrame> DeserializeAsync(string filePath, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(filePath))
                 throw new ArgumentException("File path cannot be null or empty", nameof(filePath));
@@ -88,7 +88,7 @@ namespace DataCore.Serialization
             }
         }
         
-        private void WriteDataFrame(StreamWriter writer, DataFrame data)
+        private void WriteDataFrame(StreamWriter writer, Microsoft.Data.Analysis.DataFrame data)
         {
             // Write header
             if (_includeHeader)
@@ -112,7 +112,7 @@ namespace DataCore.Serialization
             }
         }
         
-        private async Task WriteDataFrameAsync(StreamWriter writer, DataFrame data, CancellationToken cancellationToken)
+        private async Task WriteDataFrameAsync(StreamWriter writer, Microsoft.Data.Analysis.DataFrame data, CancellationToken cancellationToken)
         {
             // Write header
             if (_includeHeader)
@@ -138,7 +138,7 @@ namespace DataCore.Serialization
             }
         }
         
-        private DataFrame ReadDataFrame(StreamReader reader)
+        private Microsoft.Data.Analysis.DataFrame ReadDataFrame(StreamReader reader)
         {
             var lines = new List<string>();
             string line;
@@ -154,7 +154,7 @@ namespace DataCore.Serialization
             return ParseDataFrame(lines);
         }
         
-        private async Task<DataFrame> ReadDataFrameAsync(StreamReader reader, CancellationToken cancellationToken)
+        private async Task<Microsoft.Data.Analysis.DataFrame> ReadDataFrameAsync(StreamReader reader, CancellationToken cancellationToken)
         {
             var lines = new List<string>();
             string line;
@@ -171,7 +171,7 @@ namespace DataCore.Serialization
             return ParseDataFrame(lines);
         }
         
-        private DataFrame ParseDataFrame(List<string> lines)
+        private Microsoft.Data.Analysis.DataFrame ParseDataFrame(List<string> lines)
         {
             if (lines.Count == 0)
                 throw new InvalidDataException("No data to parse");

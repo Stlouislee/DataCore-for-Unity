@@ -55,5 +55,7 @@ namespace DataCore.Monitoring
         public long CacheHits { get; set; }
         public long CacheMisses { get; set; }
         public double CacheHitRate { get; set; }
+        public Dictionary<string, TimeSpan> Timings { get; set; } = new Dictionary<string, TimeSpan>();
+        public Dictionary<string, long> MemoryUsage { get; set; } = new Dictionary<string, long>();
     }
 }

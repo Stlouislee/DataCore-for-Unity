@@ -463,7 +463,7 @@ namespace DataCore.Graph.Algorithms
         /// <summary>
         /// Euclidean distance heuristic (for 2D/3D coordinates)
         /// </summary>
-        public static double EuclideanDistance<TVertex>(TVertex a, TVertex b) where TVertex : UnityEngine.Vector3
+        public static double EuclideanDistance(UnityEngine.Vector3 a, UnityEngine.Vector3 b)
         {
             return UnityEngine.Vector3.Distance(a, b);
         }
@@ -471,7 +471,7 @@ namespace DataCore.Graph.Algorithms
         /// <summary>
         /// Manhattan distance heuristic (for grid-based graphs)
         /// </summary>
-        public static double ManhattanDistance<TVertex>(TVertex a, TVertex b) where TVertex : UnityEngine.Vector3
+        public static double ManhattanDistance(UnityEngine.Vector3 a, UnityEngine.Vector3 b)
         {
             return UnityEngine.Mathf.Abs(a.x - b.x) + UnityEngine.Mathf.Abs(a.y - b.y) + UnityEngine.Mathf.Abs(a.z - b.z);
         }

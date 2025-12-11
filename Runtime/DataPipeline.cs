@@ -593,7 +593,7 @@ namespace DataCore
     /// </summary>
     public interface ITransform
     {
-        object Transform(object data, Dictionary<string, object> parameters);
+        object ExecuteTransform(object data, Dictionary<string, object> parameters);
         Type SourceType { get; }
         Type TargetType { get; }
     }
@@ -610,7 +610,7 @@ namespace DataCore
             _transformFunc = transformFunc;
         }
         
-        public object Transform(object data, Dictionary<string, object> parameters)
+        public object ExecuteTransform(object data, Dictionary<string, object> parameters)
         {
             if (data is TSource typedData)
             {
