@@ -70,7 +70,7 @@ def generate_guid(path_str):
     normalized_path = path_str.replace('\\', '/')
     hash_object = hashlib.md5(normalized_path.encode())
     hex_hash = hash_object.hexdigest()
-    return f"{hex_hash[:8]}-{hex_hash[8:12]}-{hex_hash[12:16]}-{hex_hash[16:20]}-{hex_hash[20:32]}"
+    return hex_hash # Unity expects 32 hex chars, no dashes
 
 def get_meta_content(path, relative_path):
     guid = generate_guid(str(relative_path))
