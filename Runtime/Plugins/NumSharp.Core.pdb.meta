@@ -1,4 +1,30 @@
 fileFormatVersion: 2
+guid: c7a9b8d4e3f0123456789abcdeff0012
+PluginImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  iconMap: {}
+  executionOrder: {}
+  defineConstraints: []
+  isPreloaded: 0
+  isOverridable: 0
+  isExplicitlyReferenced: 0
+  validateReferences: 0
+  platformData:
+  - first:
+      : Any
+    second:
+      enabled: 1
+      settings:
+        ExcludeEditor: 0
+        ExcludeLinux64: 0
+        ExcludeOSXUniversal: 0
+        ExcludeWin: 0
+        ExcludeWin64: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+fileFormatVersion: 2
 guid: e45045bbe33d43a02a90643adb9b958c
 PluginImporter:
   externalObjects: {}
