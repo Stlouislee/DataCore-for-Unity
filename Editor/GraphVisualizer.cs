@@ -35,7 +35,7 @@ namespace DataCore.Editor
     /// <summary>
     /// Custom property drawer for graph data
     /// </summary>
-    [CustomPropertyDrawer(typeof(DataCore.Graph.Graph<>))]
+    [CustomPropertyDrawer(typeof(DataCore.Graph.Graph<,>))]
     public class GraphPropertyDrawer : PropertyDrawer
     {
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
