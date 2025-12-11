@@ -134,6 +134,41 @@ Access via `Window > DataCore > Graph Visualizer` to visualize graph structures 
 
 Enhanced inspectors for DataCore components with quick access to data management features.
 
+## Troubleshooting
+
+### Missing Menu Items
+
+If menu items like "Window > DataCore > Data Manager" are missing:
+
+1. **Refresh Package Cache**: Delete `Library/PackageCache/com.stlouislee.datacore-for-unity@*` folders in your Unity project
+2. **Reimport Package**: Remove and re-add the package in Package Manager
+3. **Check Console**: Look for compilation errors that might prevent editor scripts from loading
+4. **Alternative Access**: Use "Tools > DataCore > Data Manager" as an alternative menu path
+
+### Meta File Warnings
+
+If you see warnings about missing .meta files:
+
+1. **Package Cache Issue**: The package cache might be outdated - refresh as above
+2. **Manual Fix**: Delete the cached package folder and reimport
+3. **Local Development**: If developing locally, ensure all files have proper .meta files
+
+### Compilation Errors
+
+If you encounter compilation errors:
+
+1. **Clear Cache**: Delete `Library/ScriptAssemblies` and `Library/PackageCache`
+2. **Restart Unity**: Sometimes a restart resolves assembly resolution issues
+3. **Check Dependencies**: Ensure all external DLLs are properly referenced
+
+### External DLL Loading Issues
+
+If external DLLs fail to load:
+
+1. **Reference Validation**: DLL .meta files have `validateReferences: 0` to prevent validation errors
+2. **Platform Settings**: All platforms are enabled in plugin settings
+3. **Dependency Chain**: Ensure all dependent DLLs are present (Apache.Arrow.dll, Microsoft.ML.DataView.dll)
+
 ## Samples
 
 ### Included Examples

@@ -16,6 +16,12 @@ namespace DataCore.Editor
             var window = GetWindow<DataManagerWindow>("Data Manager");
             window.minSize = new Vector2(400, 300);
         }
+
+        [MenuItem("Tools/DataCore/Data Manager")]
+        public static void ShowWindowFromTools()
+        {
+            ShowWindow();
+        }
         
         private void OnGUI()
         {
