@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DataCore.DataFrame;
@@ -10,6 +11,7 @@ using DataCore.Serialization;
 using DataCore.Tensor;
 using NumSharp;
 using Microsoft.Data.Analysis;
+using UnityEngine;
 
 namespace DataCore
 {
@@ -127,7 +129,7 @@ namespace DataCore
             }
             
             // Try to get as DataFrame
-            if (typeof(T) == typeof(DataFrame) || typeof(T).IsAssignableFrom(typeof(DataFrame)))
+            if (typeof(T) == typeof(Microsoft.Data.Analysis.DataFrame) || typeof(T).IsAssignableFrom(typeof(Microsoft.Data.Analysis.DataFrame)))
             {
                 if (_dataFrameManager.Contains(key))
                 {
@@ -164,7 +166,7 @@ namespace DataCore
             }
             
             // Set as DataFrame
-            if (data is DataFrame dataframe)
+            if (data is Microsoft.Data.Analysis.DataFrame dataframe)
             {
                 _dataFrameManager.Set(key, dataframe);
                 return;

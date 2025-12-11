@@ -37,7 +37,7 @@ namespace DataCore.Graph
         /// <summary>
         /// Current memory usage in bytes
         /// </summary>
-        public long CurrentMemoryUsage => _memoryTracker.TotalMemoryUsage;
+        public long CurrentMemoryUsage => _memoryTracker.GetTotalMemoryUsage();
         
         /// <summary>
         /// Number of datasets currently loaded
@@ -509,6 +509,49 @@ namespace DataCore.Graph
             public GraphMetadata Metadata { get; set; }
             public DateTime LastAccessTime { get; set; }
             public int AccessCount { get; set; }
+        }
+        
+        /// <summary>
+        /// Memory usage tracker for graph datasets
+        /// </summary>
+        public class MemoryUsageTracker
+        {
+            private long _totalMemoryUsage;
+            private readonly object _lock = new object();
+            
+            public long TotalMemoryUsage
+            {
+                get
+                {
+                    lock (_lock)
+                    {
+                        return _totalMemoryUsage;
+                    }
+                }
+            }
+            
+            public void AllocateMemory(long bytes)
+            {
+                lock (_lock)
+                {
+                    _totalMemoryUsage += bytes;
+                }
+            }
+            
+            public void ReleaseMemory(long bytes)
+            {
+                lock (_lock)
+                {
+                    _totalMemoryUsage = Math.Max(0, _totalMemoryUsage - bytes);
+                }
+            }
+            
+            public DataCore.Monitoring.MemoryUsageReport GetReport()
+            {
+                // Convert to the monitoring system's report format
+                var memoryUsage = new Dictionary<string, long> { { "GraphManager", _totalMemoryUsage } };
+                return new DataCore.Monitoring.MemoryUsageReport(memoryUsage);
+            }
         }
     }
     

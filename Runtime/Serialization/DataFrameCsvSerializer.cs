@@ -219,7 +219,7 @@ namespace DataCore.Serialization
                 columns.Add(column);
             }
             
-            return new DataFrame(columns);
+            return new Microsoft.Data.Analysis.DataFrame(columns);
         }
         
         private List<string> ParseLine(string line)

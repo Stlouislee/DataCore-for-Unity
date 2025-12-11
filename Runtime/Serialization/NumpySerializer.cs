@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -146,7 +147,8 @@ namespace DataCore.Serialization
             if (bytesRead != dataSize)
                 throw new InvalidDataException("Incomplete data in file");
             
-            return NDArray.FromByteArray(dataBytes, shape, dtype);
+            // return NDArray.FromByteArray(dataBytes, shape, dtype); // Method doesn't exist
+            return np.frombuffer(dataBytes, dtype: dtype).reshape(shape);
         }
         
         private string GetDtypeString(Type type)

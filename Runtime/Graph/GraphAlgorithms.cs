@@ -43,9 +43,9 @@ namespace DataCore.Graph.Algorithms
             var visited = new HashSet<TVertex>();
             var priorityQueue = new SortedSet<(double distance, TVertex vertex)>(Comparer<(double, TVertex)>.Create((a, b) => 
             {
-                var cmp = a.distance.CompareTo(b.distance);
+                var cmp = a.Item1.CompareTo(b.Item1);
                 if (cmp == 0)
-                    cmp = a.vertex.GetHashCode().CompareTo(b.vertex.GetHashCode());
+                    cmp = a.Item2.GetHashCode().CompareTo(b.Item2.GetHashCode());
                 return cmp;
             }));
             
@@ -127,9 +127,9 @@ namespace DataCore.Graph.Algorithms
             var openSet = new HashSet<TVertex> { source };
             var priorityQueue = new SortedSet<(double fScore, TVertex vertex)>(Comparer<(double, TVertex)>.Create((a, b) => 
             {
-                var cmp = a.fScore.CompareTo(b.fScore);
+                var cmp = a.Item1.CompareTo(b.Item1);
                 if (cmp == 0)
-                    cmp = a.vertex.GetHashCode().CompareTo(b.vertex.GetHashCode());
+                    cmp = a.Item2.GetHashCode().CompareTo(b.Item2.GetHashCode());
                 return cmp;
             }));
             

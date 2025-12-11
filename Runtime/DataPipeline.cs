@@ -58,7 +58,7 @@ namespace DataCore
         /// </summary>
         public DataPipeline LoadDataFrame(string source, Dictionary<string, object> parameters = null)
         {
-            return Load<DataFrame>(source, parameters);
+            return Load<Microsoft.Data.Analysis.DataFrame>(source, parameters);
         }
         
         /// <summary>
@@ -374,7 +374,7 @@ namespace DataCore
             if (data is T typedData)
             {
                 // For DataFrame filtering
-                if (typedData is DataFrame dataframe)
+                if (typedData is Microsoft.Data.Analysis.DataFrame dataframe)
                 {
                     // This would apply the predicate to filter rows
                     throw new NotImplementedException("DataFrame filtering not implemented");

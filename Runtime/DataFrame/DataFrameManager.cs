@@ -39,7 +39,7 @@ namespace DataCore.DataFrame
         /// <summary>
         /// Current memory usage in bytes
         /// </summary>
-        public long CurrentMemoryUsage => _memoryTracker.TotalMemoryUsage;
+        public long CurrentMemoryUsage => _memoryTracker.GetTotalMemoryUsage();
         
         /// <summary>
         /// Number of datasets currently loaded
@@ -259,7 +259,8 @@ namespace DataCore.DataFrame
         public Microsoft.Data.Analysis.DataFrame Filter(string name, DataFrameColumn condition)
         {
             var df = Get(name);
-            return df.Filter(condition);
+            // return df.Filter(condition); // Method doesn't exist
+            throw new NotImplementedException("Filter method not implemented for Microsoft.Data.Analysis.DataFrame");
         }
         
         /// <summary>
@@ -277,9 +278,8 @@ namespace DataCore.DataFrame
         public Microsoft.Data.Analysis.DataFrame DropDuplicates(string name, string[] columnNames = null)
         {
             var df = Get(name);
-            if (columnNames == null)
-                return df.DropDuplicates();
-            return df.DropDuplicates(columnNames);
+            // Microsoft.Data.Analysis.DataFrame doesn't have DropDuplicates method
+            throw new NotImplementedException("DropDuplicates method not implemented for Microsoft.Data.Analysis.DataFrame");
         }
         
         /// <summary>
@@ -288,7 +288,8 @@ namespace DataCore.DataFrame
         public Microsoft.Data.Analysis.DataFrame Sample(string name, int count, int? seed = null)
         {
             var df = Get(name);
-            return df.Sample(count, seed);
+            // return df.Sample(count, seed); // Method signature doesn't match
+            throw new NotImplementedException("Sample method not implemented for Microsoft.Data.Analysis.DataFrame");
         }
         
         /// <summary>
@@ -534,6 +535,49 @@ namespace DataCore.DataFrame
             public DataFrameMetadata Metadata { get; set; }
             public DateTime LastAccessTime { get; set; }
             public int AccessCount { get; set; }
+        }
+        
+        /// <summary>
+        /// Memory usage tracker for DataFrame datasets
+        /// </summary>
+        public class MemoryUsageTracker
+        {
+            private long _totalMemoryUsage;
+            private readonly object _lock = new object();
+            
+            public long TotalMemoryUsage
+            {
+                get
+                {
+                    lock (_lock)
+                    {
+                        return _totalMemoryUsage;
+                    }
+                }
+            }
+            
+            public void AllocateMemory(long bytes)
+            {
+                lock (_lock)
+                {
+                    _totalMemoryUsage += bytes;
+                }
+            }
+            
+            public void ReleaseMemory(long bytes)
+            {
+                lock (_lock)
+                {
+                    _totalMemoryUsage = Math.Max(0, _totalMemoryUsage - bytes);
+                }
+            }
+            
+            public DataCore.Monitoring.MemoryUsageReport GetReport()
+            {
+                // Convert to the monitoring system's report format
+                var memoryUsage = new Dictionary<string, long> { { "DataFrameManager", _totalMemoryUsage } };
+                return new DataCore.Monitoring.MemoryUsageReport(memoryUsage);
+            }
         }
     }
     
