@@ -240,8 +240,9 @@ namespace DataCore.Serialization
             // This is a simplified implementation
             // In a real implementation, you would use NumSharp's internal buffer
             var bytes = new byte[array.size * GetElementSize(array.dtype)];
-            Buffer.BlockCopy(array.Array, 0, bytes, 0, bytes.Length);
-            return bytes;
+            // Buffer.BlockCopy(array.Array, 0, bytes, 0, bytes.Length); // Array is inaccessible
+            // For now, we'll throw an exception as this is a complex operation
+            throw new NotImplementedException("Serialization of NDArray to bytes not fully implemented");
         }
         
         /// <summary>
