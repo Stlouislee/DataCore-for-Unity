@@ -552,6 +552,11 @@ namespace DataCore.Graph
                 var memoryUsage = new Dictionary<string, long> { { "GraphManager", _totalMemoryUsage } };
                 return new DataCore.Monitoring.MemoryUsageReport(memoryUsage);
             }
+
+            public long GetTotalMemoryUsage()
+            {
+                return TotalMemoryUsage;
+            }
         }
     }
     

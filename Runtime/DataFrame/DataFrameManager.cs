@@ -569,6 +569,11 @@ namespace DataCore.DataFrame
                 var memoryUsage = new Dictionary<string, long> { { "DataFrameManager", _totalMemoryUsage } };
                 return new DataCore.Monitoring.MemoryUsageReport(memoryUsage);
             }
+
+            public long GetTotalMemoryUsage()
+            {
+                return TotalMemoryUsage;
+            }
         }
     }
     
