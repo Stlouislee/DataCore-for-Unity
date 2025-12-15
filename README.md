@@ -1,8 +1,12 @@
 # AroAro DataCore (Unity Package)
 
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-blue)](https://github.com/Stlouislee/DataCore-for-Unity)
+
 Tabular + graph datasets with CRUD/query and persistence.
 
-## Install via Git URL
+## Installation
+
+### Method 1: Git URL (Recommended)
 
 In Unity: **Window → Package Manager → + → Add package from git URL...** and enter:
 
@@ -10,7 +14,9 @@ In Unity: **Window → Package Manager → + → Add package from git URL...** a
 https://github.com/Stlouislee/DataCore-for-Unity.git
 ```
 
-Or add to your `Packages/manifest.json`:
+### Method 2: Manifest.json
+
+Add to your `Packages/manifest.json`:
 
 ```json
 {
@@ -19,6 +25,14 @@ Or add to your `Packages/manifest.json`:
   }
 }
 ```
+
+### Method 3: Package Manager UI
+
+1. Open **Window → Package Manager**
+2. Click the **+** button
+3. Select **Add package from git URL**
+4. Enter: `https://github.com/Stlouislee/DataCore-for-Unity.git`
+5. Click **Add**
 
 ## Dependencies
 
