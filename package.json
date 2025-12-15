@@ -1,0 +1,10 @@
+{
+  "name": "com.aroaro.datacore",
+  "version": "0.2.0",
+  "displayName": "Aroaro DataCore",
+  "description": "DataCore: tabular + graph datasets with CRUD/query and persistence.",
+  "unity": "2021.3",
+  "author": {
+    "name": "stederlee"
+  }
+}

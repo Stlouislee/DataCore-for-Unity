@@ -1,0 +1,16 @@
+{
+  "name": "AroAro.DataCore",
+  "rootNamespace": "AroAro.DataCore",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [
+    "Microsoft.Data.Analysis"
+  ],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -1,0 +1,19 @@
+{
+  "name": "AroAro.DataCore.Tests",
+  "rootNamespace": "AroAro.DataCore.Tests",
+  "references": [
+    "AroAro.DataCore"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
