@@ -15,5 +15,8 @@ namespace AroAro.DataCore
 
         /// <summary>Returns a dataset copy with a different name.</summary>
         IDataSet WithName(string name);
+
+        /// <summary>获取数据集的唯一标识符</summary>
+        string Id { get; }
     }
 }

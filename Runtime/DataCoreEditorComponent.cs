@@ -464,5 +464,16 @@ namespace AroAro.DataCore
             var graphPath = $"{persistencePath}/{name}.dcgraph";
             return System.IO.File.Exists(tabularPath) || System.IO.File.Exists(graphPath);
         }
+
+        /// <summary>
+        /// Get the SessionManager instance
+        /// </summary>
+        public Session.SessionManager GetSessionManager()
+        {
+            if (store == null)
+                store = new DataCoreStore();
+            
+            return store.SessionManager;
+        }
     }
 }

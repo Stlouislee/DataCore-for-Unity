@@ -3,6 +3,7 @@ using UnityEngine;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using AroAro.DataCore.Session;
 
 namespace AroAro.DataCore.Editor
 {
@@ -25,6 +26,13 @@ namespace AroAro.DataCore.Editor
         private Vector2 previewScrollPosition;
         private int previewMaxRows = 10; // 预览最大行数
         private int previewMaxNodes = 20; // 预览最大节点数
+
+        // Session 相关字段
+        private bool showSessions = true;
+        private Dictionary<string, bool> sessionFoldouts = new Dictionary<string, bool>();
+        private Dictionary<string, bool> sessionDatasetFoldouts = new Dictionary<string, bool>();
+        private Vector2 sessionScrollPosition;
+        private string newSessionName = "NewSession";
 
         private void OnEnable()
         {
@@ -187,7 +195,20 @@ namespace AroAro.DataCore.Editor
             {
                 RunSelfTest();
             }
+            if (GUILayout.Button("Session Tests"))
+            {
+                RunSessionTests();
+            }
             EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.Space();
+
+            // Sessions section
+            showSessions = EditorGUILayout.Foldout(showSessions, "Sessions", true);
+            if (showSessions)
+            {
+                ShowSessionsPanel();
+            }
 
             EditorGUILayout.Space();
 
@@ -298,6 +319,14 @@ namespace AroAro.DataCore.Editor
         private void RunSelfTest()
         {
             var go = new GameObject("DataCore Test Runner");
+            var test = go.AddComponent<DataCoreSelfTest>();
+            test.RunTests();
+            DestroyImmediate(go);
+        }
+
+        private void RunSessionTests()
+        {
+            var go = new GameObject("Session Test Runner");
             var test = go.AddComponent<DataCoreSelfTest>();
             test.RunTests();
             DestroyImmediate(go);
@@ -573,6 +602,263 @@ namespace AroAro.DataCore.Editor
                 EditorGUILayout.EndScrollView();
                 
                 EditorGUI.indentLevel--;
+            }
+        }
+
+        /// <summary>
+        /// 显示 Session 面板
+        /// </summary>
+        private void ShowSessionsPanel()
+        {
+            var store = component.GetStore();
+            var sessionManager = store.SessionManager;
+            var sessionIds = sessionManager.SessionIds;
+
+            // 创建新会话
+            EditorGUILayout.BeginVertical(GUI.skin.box);
+            EditorGUILayout.LabelField("Create New Session", EditorStyles.boldLabel);
+            EditorGUILayout.BeginHorizontal();
+            newSessionName = EditorGUILayout.TextField("Session Name", newSessionName);
+            if (GUILayout.Button("Create", GUILayout.Width(60)))
+            {
+                if (!string.IsNullOrEmpty(newSessionName))
+                {
+                    var session = sessionManager.CreateSession(newSessionName);
+                    Debug.Log($"Created session: {session.Name} (ID: {session.Id})");
+                    newSessionName = "NewSession";
+                    EditorUtility.SetDirty(component);
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.EndVertical();
+
+            EditorGUILayout.Space();
+
+            // 显示现有会话
+            if (sessionIds.Count == 0)
+            {
+                EditorGUILayout.LabelField("No active sessions", EditorStyles.centeredGreyMiniLabel);
+            }
+            else
+            {
+                EditorGUILayout.LabelField($"Active Sessions ({sessionIds.Count})", EditorStyles.boldLabel);
+                sessionScrollPosition = EditorGUILayout.BeginScrollView(sessionScrollPosition, GUILayout.Height(300));
+
+                foreach (var sessionId in sessionIds)
+                {
+                    try
+                    {
+                        var session = sessionManager.GetSession(sessionId);
+                        
+                        if (!sessionFoldouts.ContainsKey(sessionId))
+                            sessionFoldouts[sessionId] = false;
+
+                        // Session 标题行
+                        EditorGUILayout.BeginVertical(GUI.skin.box);
+                        EditorGUILayout.BeginHorizontal();
+                        
+                        var sessionTitle = $"{session.Name} (ID: {session.Id.Substring(0, 8)}...)";
+                        sessionFoldouts[sessionId] = EditorGUILayout.Foldout(sessionFoldouts[sessionId], sessionTitle, true);
+                        
+                        GUILayout.FlexibleSpace();
+                        
+                        // Session 信息
+                        EditorGUILayout.LabelField($"Datasets: {session.DatasetCount}", EditorStyles.miniLabel, GUILayout.Width(80));
+                        EditorGUILayout.LabelField($"Created: {session.CreatedAt:HH:mm:ss}", EditorStyles.miniLabel, GUILayout.Width(100));
+                        
+                        // 关闭会话按钮
+                        if (GUILayout.Button("Close", GUILayout.Width(60)))
+                        {
+                            if (EditorUtility.DisplayDialog("Close Session", $"Are you sure you want to close session '{session.Name}'?", "Close", "Cancel"))
+                            {
+                                sessionManager.CloseSession(sessionId);
+                                sessionFoldouts.Remove(sessionId);
+                                EditorUtility.SetDirty(component);
+                            }
+                        }
+                        
+                        EditorGUILayout.EndHorizontal();
+
+                        if (sessionFoldouts[sessionId])
+                        {
+                            EditorGUI.indentLevel++;
+                            ShowSessionDetails(session);
+                            EditorGUI.indentLevel--;
+                        }
+                        
+                        EditorGUILayout.EndVertical();
+                        EditorGUILayout.Space();
+                    }
+                    catch (Exception ex)
+                    {
+                        EditorGUILayout.HelpBox($"Error loading session {sessionId}: {ex.Message}", MessageType.Error);
+                    }
+                }
+
+                EditorGUILayout.EndScrollView();
+
+                // 批量操作
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("Close All Sessions"))
+                {
+                    if (EditorUtility.DisplayDialog("Close All Sessions", "Are you sure you want to close all sessions?", "Close All", "Cancel"))
+                    {
+                        sessionManager.CloseAllSessions();
+                        sessionFoldouts.Clear();
+                        EditorUtility.SetDirty(component);
+                    }
+                }
+                if (GUILayout.Button("Cleanup Idle Sessions"))
+                {
+                    var idleTimeout = TimeSpan.FromMinutes(30);
+                    var cleanedCount = sessionManager.CleanupIdleSessions(idleTimeout);
+                    Debug.Log($"Cleaned up {cleanedCount} idle sessions");
+                    EditorUtility.SetDirty(component);
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+        }
+
+        /// <summary>
+        /// 显示会话详细信息
+        /// </summary>
+        private void ShowSessionDetails(ISession session)
+        {
+            EditorGUILayout.LabelField("Session Details", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("ID", session.Id);
+            EditorGUILayout.LabelField("Name", session.Name);
+            EditorGUILayout.LabelField("Created", session.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss"));
+            EditorGUILayout.LabelField("Last Activity", session.LastActivityAt.ToString("yyyy-MM-dd HH:mm:ss"));
+            EditorGUILayout.LabelField("Dataset Count", session.DatasetCount.ToString());
+
+            EditorGUILayout.Space();
+
+            // 显示会话中的数据集
+            var datasetNames = session.DatasetNames;
+            if (datasetNames.Count == 0)
+            {
+                EditorGUILayout.LabelField("No datasets in this session", EditorStyles.centeredGreyMiniLabel);
+            }
+            else
+            {
+                EditorGUILayout.LabelField("Datasets in Session", EditorStyles.boldLabel);
+                
+                foreach (var datasetName in datasetNames)
+                {
+                    var datasetKey = $"{session.Id}_{datasetName}";
+                    if (!sessionDatasetFoldouts.ContainsKey(datasetKey))
+                        sessionDatasetFoldouts[datasetKey] = false;
+
+                    EditorGUILayout.BeginVertical(GUI.skin.box);
+                    EditorGUILayout.BeginHorizontal();
+                    
+                    sessionDatasetFoldouts[datasetKey] = EditorGUILayout.Foldout(sessionDatasetFoldouts[datasetKey], datasetName, true);
+                    
+                    GUILayout.FlexibleSpace();
+                    
+                    try
+                    {
+                        var dataset = session.GetDataset(datasetName);
+                        EditorGUILayout.LabelField(dataset.Kind.ToString(), EditorStyles.miniLabel, GUILayout.Width(80));
+                        
+                        // 移除数据集按钮
+                        if (GUILayout.Button("Remove", GUILayout.Width(60)))
+                        {
+                            if (EditorUtility.DisplayDialog("Remove Dataset", $"Remove dataset '{datasetName}' from session?", "Remove", "Cancel"))
+                            {
+                                session.RemoveDataset(datasetName);
+                                sessionDatasetFoldouts.Remove(datasetKey);
+                                EditorUtility.SetDirty(component);
+                            }
+                        }
+                        
+                        // 持久化按钮
+                        if (GUILayout.Button("Persist", GUILayout.Width(60)))
+                        {
+                            try
+                            {
+                                if (session.PersistDataset(datasetName))
+                                {
+                                    Debug.Log($"Persisted dataset '{datasetName}' from session");
+                                }
+                                else
+                                {
+                                    EditorUtility.DisplayDialog("Persist Failed", $"Failed to persist dataset '{datasetName}'", "OK");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                EditorUtility.DisplayDialog("Persist Error", $"Error persisting dataset: {ex.Message}", "OK");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        EditorGUILayout.LabelField("Error", EditorStyles.miniLabel, GUILayout.Width(80));
+                    }
+                    
+                    EditorGUILayout.EndHorizontal();
+
+                    if (sessionDatasetFoldouts[datasetKey])
+                    {
+                        EditorGUI.indentLevel++;
+                        try
+                        {
+                            var dataset = session.GetDataset(datasetName);
+                            ShowDatasetDetails(dataset);
+                        }
+                        catch (Exception ex)
+                        {
+                            EditorGUILayout.HelpBox($"Error loading dataset: {ex.Message}", MessageType.Error);
+                        }
+                        EditorGUI.indentLevel--;
+                    }
+                    
+                    EditorGUILayout.EndVertical();
+                    EditorGUILayout.Space();
+                }
+
+                // 会话操作
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("Clear Session"))
+                {
+                    if (EditorUtility.DisplayDialog("Clear Session", $"Clear all datasets from session '{session.Name}'?", "Clear", "Cancel"))
+                    {
+                        session.Clear();
+                        sessionDatasetFoldouts.Clear();
+                        EditorUtility.SetDirty(component);
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+        }
+
+        /// <summary>
+        /// 显示数据集详细信息
+        /// </summary>
+        private void ShowDatasetDetails(IDataSet dataset)
+        {
+            EditorGUILayout.LabelField("Dataset ID", dataset.Id);
+            EditorGUILayout.LabelField("Kind", dataset.Kind.ToString());
+
+            switch (dataset.Kind)
+            {
+                case DataSetKind.Tabular:
+                    var tabular = dataset as Tabular.TabularData;
+                    if (tabular != null)
+                    {
+                        EditorGUILayout.LabelField("Rows", tabular.RowCount.ToString());
+                        EditorGUILayout.LabelField("Columns", string.Join(", ", tabular.ColumnNames));
+                    }
+                    break;
+                case DataSetKind.Graph:
+                    var graph = dataset as Graph.GraphData;
+                    if (graph != null)
+                    {
+                        EditorGUILayout.LabelField("Nodes", graph.NodeCount.ToString());
+                        EditorGUILayout.LabelField("Edges", graph.EdgeCount.ToString());
+                    }
+                    break;
             }
         }
     }

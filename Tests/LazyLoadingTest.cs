@@ -8,7 +8,7 @@ namespace AroAro.DataCore.Tests
         
         private void Start()
         {
-            dataCore = FindObjectOfType<DataCoreEditorComponent>();
+            dataCore = FindFirstObjectByType<DataCoreEditorComponent>();
             if (dataCore == null)
             {
                 Debug.LogError("DataCoreEditorComponent not found in scene");

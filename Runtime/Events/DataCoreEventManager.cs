@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using AroAro.DataCore.Session;
 
 namespace AroAro.DataCore.Events
 {
@@ -25,6 +26,18 @@ namespace AroAro.DataCore.Events
         
         // 数据集查询事件
         public static event EventHandler<DatasetQueriedEventArgs> DatasetQueried;
+
+        // 会话数据集添加事件
+        public static event EventHandler<SessionDatasetAddedEventArgs> SessionDatasetAdded;
+        
+        // 会话数据集创建事件
+        public static event EventHandler<SessionDatasetCreatedEventArgs> SessionDatasetCreated;
+        
+        // 会话数据集移除事件
+        public static event EventHandler<SessionDatasetRemovedEventArgs> SessionDatasetRemoved;
+        
+        // 会话查询结果保存事件
+        public static event EventHandler<SessionQueryResultSavedEventArgs> SessionQueryResultSaved;
 
         /// <summary>
         /// 触发数据集创建事件
@@ -75,6 +88,38 @@ namespace AroAro.DataCore.Events
         }
 
         /// <summary>
+        /// 触发会话数据集添加事件
+        /// </summary>
+        public static void RaiseSessionDatasetAdded(ISession session, IDataSet dataset)
+        {
+            SessionDatasetAdded?.Invoke(null, new SessionDatasetAddedEventArgs(session, dataset));
+        }
+
+        /// <summary>
+        /// 触发会话数据集创建事件
+        /// </summary>
+        public static void RaiseSessionDatasetCreated(ISession session, IDataSet dataset)
+        {
+            SessionDatasetCreated?.Invoke(null, new SessionDatasetCreatedEventArgs(session, dataset));
+        }
+
+        /// <summary>
+        /// 触发会话数据集移除事件
+        /// </summary>
+        public static void RaiseSessionDatasetRemoved(ISession session, IDataSet dataset)
+        {
+            SessionDatasetRemoved?.Invoke(null, new SessionDatasetRemovedEventArgs(session, dataset));
+        }
+
+        /// <summary>
+        /// 触发会话查询结果保存事件
+        /// </summary>
+        public static void RaiseSessionQueryResultSaved(ISession session, IDataSet source, IDataSet result)
+        {
+            SessionQueryResultSaved?.Invoke(null, new SessionQueryResultSavedEventArgs(session, source, result));
+        }
+
+        /// <summary>
         /// 清除所有事件订阅
         /// </summary>
         public static void ClearAllSubscriptions()
@@ -85,6 +130,10 @@ namespace AroAro.DataCore.Events
             DatasetSaved = null;
             DatasetModified = null;
             DatasetQueried = null;
+            SessionDatasetAdded = null;
+            SessionDatasetCreated = null;
+            SessionDatasetRemoved = null;
+            SessionQueryResultSaved = null;
         }
     }
 }

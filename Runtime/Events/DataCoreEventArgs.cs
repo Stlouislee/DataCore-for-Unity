@@ -1,4 +1,5 @@
 using System;
+using AroAro.DataCore.Session;
 
 namespace AroAro.DataCore.Events
 {
@@ -99,6 +100,68 @@ namespace AroAro.DataCore.Events
         {
             QueryType = queryType;
             QueryResult = queryResult;
+        }
+    }
+
+    /// <summary>
+    /// 会话数据集添加事件参数
+    /// </summary>
+    public class SessionDatasetAddedEventArgs : EventArgs
+    {
+        public ISession Session { get; }
+        public IDataSet Dataset { get; }
+        
+        public SessionDatasetAddedEventArgs(ISession session, IDataSet dataset)
+        {
+            Session = session;
+            Dataset = dataset;
+        }
+    }
+
+    /// <summary>
+    /// 会话数据集创建事件参数
+    /// </summary>
+    public class SessionDatasetCreatedEventArgs : EventArgs
+    {
+        public ISession Session { get; }
+        public IDataSet Dataset { get; }
+        
+        public SessionDatasetCreatedEventArgs(ISession session, IDataSet dataset)
+        {
+            Session = session;
+            Dataset = dataset;
+        }
+    }
+
+    /// <summary>
+    /// 会话数据集移除事件参数
+    /// </summary>
+    public class SessionDatasetRemovedEventArgs : EventArgs
+    {
+        public ISession Session { get; }
+        public IDataSet Dataset { get; }
+        
+        public SessionDatasetRemovedEventArgs(ISession session, IDataSet dataset)
+        {
+            Session = session;
+            Dataset = dataset;
+        }
+    }
+
+    /// <summary>
+    /// 会话查询结果保存事件参数
+    /// </summary>
+    public class SessionQueryResultSavedEventArgs : EventArgs
+    {
+        public ISession Session { get; }
+        public IDataSet Source { get; }
+        public IDataSet Result { get; }
+        
+        public SessionQueryResultSavedEventArgs(ISession session, IDataSet source, IDataSet result)
+        {
+            Session = session;
+            Source = source;
+            Result = result;
         }
     }
 }

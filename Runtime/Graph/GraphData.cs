@@ -8,14 +8,17 @@ namespace AroAro.DataCore.Graph
     {
         private readonly Dictionary<string, Node> _nodes = new(StringComparer.Ordinal);
         private readonly Dictionary<(string From, string To), Edge> _edges = new();
+        private readonly string _id;
 
         public GraphData(string name)
         {
             Name = string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("Name required", nameof(name)) : name;
+            _id = Guid.NewGuid().ToString("N");
         }
 
         public string Name { get; }
         public DataSetKind Kind => DataSetKind.Graph;
+        public string Id => _id;
 
         public int NodeCount => _nodes.Count;
         public int EdgeCount => _edges.Count;

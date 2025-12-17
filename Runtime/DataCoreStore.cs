@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AroAro.DataCore.Events;
+using AroAro.DataCore.Session;
 
 namespace AroAro.DataCore
 {
@@ -21,8 +22,24 @@ namespace AroAro.DataCore
     {
         private readonly Dictionary<string, IDataSet> _dataSets = new(StringComparer.Ordinal);
         private readonly Dictionary<string, DatasetMetadata> _metadata = new(StringComparer.Ordinal);
+        private SessionManager _sessionManager;
 
         public IReadOnlyCollection<string> Names => _metadata.Keys;
+
+        /// <summary>
+        /// 会话管理器
+        /// </summary>
+        public SessionManager SessionManager
+        {
+            get
+            {
+                if (_sessionManager == null)
+                {
+                    _sessionManager = new SessionManager(this);
+                }
+                return _sessionManager;
+            }
+        }
 
         public Tabular.TabularData CreateTabular(string name)
         {
@@ -96,6 +113,16 @@ namespace AroAro.DataCore
             if (ds is not T typed)
                 throw new InvalidOperationException($"Dataset '{name}' is {ds.Kind}, not {typeof(T).Name}");
             return typed;
+        }
+
+        /// <summary>
+        /// 清理资源，包括关闭所有会话
+        /// </summary>
+        public void Dispose()
+        {
+            _sessionManager?.CloseAllSessions();
+            _dataSets.Clear();
+            _metadata.Clear();
         }
 
         public bool Delete(string name)

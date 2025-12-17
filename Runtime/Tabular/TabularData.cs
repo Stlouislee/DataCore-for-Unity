@@ -5,21 +5,23 @@ using System.Linq;
 using System.Text;
 using NumSharp;
 using AroAro.DataCore.Events;
-using AroAro.DataCore.Events;
 
 namespace AroAro.DataCore.Tabular
 {
     public sealed class TabularData : IDataSet
     {
         private readonly Dictionary<string, IColumn> _columns = new(StringComparer.Ordinal);
+        private readonly string _id;
 
         public TabularData(string name)
         {
             Name = string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("Name required", nameof(name)) : name;
+            _id = Guid.NewGuid().ToString("N");
         }
 
         public string Name { get; }
         public DataSetKind Kind => DataSetKind.Tabular;
+        public string Id => _id;
 
         public int RowCount { get; private set; }
 

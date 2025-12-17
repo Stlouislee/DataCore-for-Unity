@@ -15,7 +15,7 @@ namespace AroAro.DataCore.SampleDatasets
             // If loader is not assigned, try to find it
             if (loader == null)
             {
-                loader = FindObjectOfType<CaliforniaHousingLoader>();
+                loader = FindFirstObjectByType<CaliforniaHousingLoader>();
             }
 
             if (loader == null)
