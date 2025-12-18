@@ -193,6 +193,25 @@ namespace AroAro.DataCore.Editor
             EditorGUILayout.LabelField("ID", session.Id);
             EditorGUILayout.LabelField("Created", session.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss"));
             EditorGUILayout.LabelField("Last Activity", session.LastActivityAt.ToString("yyyy-MM-dd HH:mm:ss"));
+            
+            // DataFrame统计信息
+            if (session is AroAro.DataCore.Session.Session concreteSession)
+            {
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("DataFrame Statistics", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("DataFrames", concreteSession.DataFrameCount.ToString());
+                
+                // 显示DataFrame列表
+                var dfNames = concreteSession.DataFrameNames;
+                if (dfNames.Count() > 0)
+                {
+                    EditorGUILayout.LabelField("DataFrame Names", string.Join(", ", dfNames.Take(5)));
+                    if (dfNames.Count() > 5)
+                    {
+                        EditorGUILayout.LabelField($"... and {dfNames.Count() - 5} more");
+                    }
+                }
+            }
             EditorGUILayout.EndVertical();
 
             EditorGUILayout.Space();

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Data.Analysis;
 using AroAro.DataCore.Events;
 using AroAro.DataCore.Tabular;
 using AroAro.DataCore.Graph;
@@ -13,6 +14,8 @@ namespace AroAro.DataCore.Session
     public class Session : ISession
     {
         private readonly Dictionary<string, IDataSet> _datasets = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, DataFrame> _dataFrameCache = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, WeakReference<DataFrame>> _weakDataFrames = new(StringComparer.Ordinal);
         private readonly DataCoreStore _store;
         private bool _disposed = false;
 
@@ -23,6 +26,16 @@ namespace AroAro.DataCore.Session
 
         public int DatasetCount => _datasets.Count;
         public IReadOnlyCollection<string> DatasetNames => _datasets.Keys;
+
+        /// <summary>
+        /// DataFrame缓存数量
+        /// </summary>
+        public int DataFrameCount => _dataFrameCache.Count;
+
+        /// <summary>
+        /// DataFrame名称列表
+        /// </summary>
+        public IReadOnlyCollection<string> DataFrameNames => _dataFrameCache.Keys;
 
         public Session(string name, DataCoreStore store)
         {
@@ -222,8 +235,203 @@ namespace AroAro.DataCore.Session
             if (!_disposed)
             {
                 _datasets.Clear();
+                _dataFrameCache.Clear();
+                _weakDataFrames.Clear();
                 _disposed = true;
             }
         }
+
+        #region DataFrame Support Methods
+
+        /// <summary>
+        /// 创建新的DataFrame
+        /// </summary>
+        public DataFrame CreateDataFrame(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("DataFrame name cannot be null or empty", nameof(name));
+
+            if (_dataFrameCache.ContainsKey(name))
+                throw new InvalidOperationException($"DataFrame already exists in session: {name}");
+
+            var df = new DataFrame();
+            _dataFrameCache[name] = df;
+
+            // 触发DataFrame创建事件
+            DataCoreEventManager.RaiseSessionDataFrameCreated(this, name);
+
+            Touch();
+            return df;
+        }
+
+        /// <summary>
+        /// 获取DataFrame
+        /// </summary>
+        public DataFrame GetDataFrame(string name)
+        {
+            if (!_dataFrameCache.TryGetValue(name, out var df))
+                throw new KeyNotFoundException($"DataFrame not found in session: {name}");
+
+            Touch();
+            return df;
+        }
+
+        /// <summary>
+        /// 检查是否存在DataFrame
+        /// </summary>
+        public bool HasDataFrame(string name)
+        {
+            return _dataFrameCache.ContainsKey(name);
+        }
+
+        /// <summary>
+        /// 移除DataFrame
+        /// </summary>
+        public bool RemoveDataFrame(string name)
+        {
+            if (!_dataFrameCache.ContainsKey(name))
+                return false;
+
+            _dataFrameCache.Remove(name);
+
+            // 触发DataFrame移除事件
+            DataCoreEventManager.RaiseSessionDataFrameRemoved(this, name);
+
+            Touch();
+            return true;
+        }
+
+        /// <summary>
+        /// 执行DataFrame查询并保存结果
+        /// </summary>
+        public IDataSet ExecuteDataFrameQuery(string sourceName, Func<DataFrame, DataFrame> query, string resultName)
+        {
+            if (string.IsNullOrWhiteSpace(sourceName))
+                throw new ArgumentException("Source DataFrame name cannot be null or empty", nameof(sourceName));
+
+            if (string.IsNullOrWhiteSpace(resultName))
+                throw new ArgumentException("Result dataset name cannot be null or empty", nameof(resultName));
+
+            if (_datasets.ContainsKey(resultName))
+                throw new InvalidOperationException($"Dataset already exists in session: {resultName}");
+
+            // 获取源DataFrame
+            var sourceDf = GetDataFrame(sourceName);
+
+            // 执行查询
+            var resultDf = query(sourceDf);
+
+            // 创建DataFrame适配器
+            var adapter = new DataFrameAdapter(resultName, resultDf);
+            _datasets[resultName] = adapter;
+
+            // 缓存结果DataFrame
+            _dataFrameCache[resultName] = resultDf;
+
+            // 触发查询结果保存事件
+            DataCoreEventManager.RaiseSessionQueryResultSaved(this, adapter.ToTabularData(), adapter);
+
+            Touch();
+            return adapter;
+        }
+
+        /// <summary>
+        /// 将现有数据集转换为DataFrame
+        /// </summary>
+        public DataFrame ConvertToDataFrame(string datasetName)
+        {
+            var dataset = GetDataset(datasetName);
+            
+            if (dataset is TabularData tabular)
+            {
+                return TabularToDataFrame(tabular);
+            }
+            else
+            {
+                throw new InvalidOperationException($"Unsupported dataset type for DataFrame conversion: {dataset.Kind}");
+            }
+        }
+
+        /// <summary>
+        /// TabularData转换为DataFrame
+        /// </summary>
+        private DataFrame TabularToDataFrame(TabularData tabular)
+        {
+            var df = new DataFrame();
+
+            foreach (var columnName in tabular.ColumnNames)
+            {
+                try
+                {
+                    // 尝试获取数值列
+                    var numericData = tabular.GetNumericColumn(columnName);
+                    var doubleData = numericData.ToArray<double>();
+                    df.Columns.Add(new DoubleDataFrameColumn(columnName, doubleData));
+                }
+                catch
+                {
+                    // 如果数值列失败，尝试字符串列
+                    try
+                    {
+                        var stringData = tabular.GetStringColumn(columnName);
+                        df.Columns.Add(new StringDataFrameColumn(columnName, stringData));
+                    }
+                    catch (Exception ex)
+                    {
+                        UnityEngine.Debug.LogWarning($"Failed to convert column {columnName}: {ex.Message}");
+                    }
+                }
+            }
+
+            return df;
+        }
+
+        /// <summary>
+        /// 注册弱引用DataFrame（用于大数据集内存管理）
+        /// </summary>
+        public void RegisterWeakDataFrame(string name, DataFrame df)
+        {
+            _weakDataFrames[name] = new WeakReference<DataFrame>(df);
+        }
+
+        /// <summary>
+        /// 尝试获取弱引用DataFrame
+        /// </summary>
+        public bool TryGetWeakDataFrame(string name, out DataFrame df)
+        {
+            if (_weakDataFrames.TryGetValue(name, out var weakRef) && weakRef.TryGetTarget(out df))
+                return true;
+
+            df = null;
+            return false;
+        }
+
+        /// <summary>
+        /// 清理无效的弱引用
+        /// </summary>
+        public void CleanupWeakReferences()
+        {
+            var toRemove = _weakDataFrames
+                .Where(kv => !kv.Value.TryGetTarget(out _))
+                .Select(kv => kv.Key)
+                .ToList();
+
+            foreach (var key in toRemove)
+            {
+                _weakDataFrames.Remove(key);
+            }
+        }
+
+        /// <summary>
+        /// 获取DataFrame统计信息
+        /// </summary>
+        public Dictionary<string, object> GetDataFrameStatistics(string name)
+        {
+            var df = GetDataFrame(name);
+            var adapter = new DataFrameAdapter(name, df);
+            return adapter.GetStatistics();
+        }
+
+        #endregion
     }
 }

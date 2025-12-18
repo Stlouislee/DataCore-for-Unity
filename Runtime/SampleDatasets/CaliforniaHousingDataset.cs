@@ -1,4 +1,6 @@
 using NumSharp;
+using UnityEngine;
+using System.Linq;
 
 namespace AroAro.DataCore.SampleDatasets
 {
@@ -12,6 +14,60 @@ namespace AroAro.DataCore.SampleDatasets
         /// Get the built-in California housing data as a dictionary
         /// </summary>
         public static System.Collections.Generic.Dictionary<string, double[]> GetSampleData()
+        {
+            var csvFile = Resources.Load<TextAsset>("AroAro/DataCore/california_housing_test");
+            if (csvFile != null)
+            {
+                return ParseCsv(csvFile.text);
+            }
+            
+            Debug.LogWarning("Could not find California Housing CSV in Resources. Using fallback small dataset.");
+            return GetFallbackData();
+        }
+
+        private static System.Collections.Generic.Dictionary<string, double[]> ParseCsv(string csvText)
+        {
+            var lines = csvText.Split(new[] { '\n', '\r' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length < 2) return new System.Collections.Generic.Dictionary<string, double[]>();
+
+            var headers = lines[0].Trim().Replace("\"", "").Split(',');
+            var data = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<double>>();
+
+            foreach (var header in headers)
+            {
+                data[header] = new System.Collections.Generic.List<double>();
+            }
+
+            for (int i = 1; i < lines.Length; i++)
+            {
+                var line = lines[i].Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+
+                var values = line.Split(',');
+                if (values.Length != headers.Length) continue;
+
+                for (int j = 0; j < headers.Length; j++)
+                {
+                    if (double.TryParse(values[j], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var val))
+                    {
+                        data[headers[j]].Add(val);
+                    }
+                    else
+                    {
+                        data[headers[j]].Add(0.0);
+                    }
+                }
+            }
+
+            var result = new System.Collections.Generic.Dictionary<string, double[]>();
+            foreach (var kvp in data)
+            {
+                result[kvp.Key] = kvp.Value.ToArray();
+            }
+            return result;
+        }
+
+        private static System.Collections.Generic.Dictionary<string, double[]> GetFallbackData()
         {
             return new System.Collections.Generic.Dictionary<string, double[]>
             {

@@ -119,6 +119,43 @@ namespace AroAro.DataCore.Events
             SessionQueryResultSaved?.Invoke(null, new SessionQueryResultSavedEventArgs(session, source, result));
         }
 
+        #region DataFrame Events
+
+        // DataFrame创建事件
+        public static event EventHandler<DataFrameCreatedEventArgs> DataFrameCreated;
+        
+        // DataFrame移除事件
+        public static event EventHandler<DataFrameRemovedEventArgs> DataFrameRemoved;
+        
+        // DataFrame查询事件
+        public static event EventHandler<DataFrameQueriedEventArgs> DataFrameQueried;
+
+        /// <summary>
+        /// 触发DataFrame创建事件
+        /// </summary>
+        public static void RaiseSessionDataFrameCreated(ISession session, string dataFrameName)
+        {
+            DataFrameCreated?.Invoke(null, new DataFrameCreatedEventArgs(session, dataFrameName));
+        }
+
+        /// <summary>
+        /// 触发DataFrame移除事件
+        /// </summary>
+        public static void RaiseSessionDataFrameRemoved(ISession session, string dataFrameName)
+        {
+            DataFrameRemoved?.Invoke(null, new DataFrameRemovedEventArgs(session, dataFrameName));
+        }
+
+        /// <summary>
+        /// 触发DataFrame查询事件
+        /// </summary>
+        public static void RaiseDataFrameQueried(ISession session, string sourceDataFrame, string resultDataset, string queryDescription)
+        {
+            DataFrameQueried?.Invoke(null, new DataFrameQueriedEventArgs(session, sourceDataFrame, resultDataset, queryDescription));
+        }
+
+        #endregion
+
         /// <summary>
         /// 清除所有事件订阅
         /// </summary>
@@ -134,6 +171,9 @@ namespace AroAro.DataCore.Events
             SessionDatasetCreated = null;
             SessionDatasetRemoved = null;
             SessionQueryResultSaved = null;
+            DataFrameCreated = null;
+            DataFrameRemoved = null;
+            DataFrameQueried = null;
         }
     }
 }

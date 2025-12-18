@@ -164,4 +164,57 @@ namespace AroAro.DataCore.Events
             Result = result;
         }
     }
+
+    #region DataFrame Events
+
+    /// <summary>
+    /// DataFrame创建事件参数
+    /// </summary>
+    public class DataFrameCreatedEventArgs : EventArgs
+    {
+        public ISession Session { get; }
+        public string DataFrameName { get; }
+        
+        public DataFrameCreatedEventArgs(ISession session, string dataFrameName)
+        {
+            Session = session;
+            DataFrameName = dataFrameName;
+        }
+    }
+
+    /// <summary>
+    /// DataFrame移除事件参数
+    /// </summary>
+    public class DataFrameRemovedEventArgs : EventArgs
+    {
+        public ISession Session { get; }
+        public string DataFrameName { get; }
+        
+        public DataFrameRemovedEventArgs(ISession session, string dataFrameName)
+        {
+            Session = session;
+            DataFrameName = dataFrameName;
+        }
+    }
+
+    /// <summary>
+    /// DataFrame查询事件参数
+    /// </summary>
+    public class DataFrameQueriedEventArgs : EventArgs
+    {
+        public ISession Session { get; }
+        public string SourceDataFrame { get; }
+        public string ResultDataset { get; }
+        public string QueryDescription { get; }
+        
+        public DataFrameQueriedEventArgs(ISession session, string sourceDataFrame, string resultDataset, string queryDescription)
+        {
+            Session = session;
+            SourceDataFrame = sourceDataFrame;
+            ResultDataset = resultDataset;
+            QueryDescription = queryDescription;
+        }
+    }
+
+    #endregion
 }

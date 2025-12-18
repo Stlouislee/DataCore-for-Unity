@@ -33,6 +33,7 @@ namespace AroAro.DataCore
 
         private void Awake()
         {
+            Debug.Log("DataCoreEditorComponent Awake started.");
             // Singleton pattern: ensure only one instance exists
             if (Instance != null && Instance != this)
             {
@@ -44,18 +45,74 @@ namespace AroAro.DataCore
             Instance = this;
 
             if (store == null)
+            {
+                Debug.Log("Initializing new DataCoreStore.");
                 store = new DataCoreStore();
+            }
+
+            // 默认在启动时自动加载所有持久化的数据集
+            LoadAllDatasets();
+
+            if (loadSampleDatasets)
+            {
+                InitializeSampleDatasets();
+            }
 
 #if UNITY_EDITOR
             // Register for play mode state changes
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
 #endif
+            Debug.Log($"DataCoreEditorComponent Awake finished. Loaded datasets: {string.Join(", ", store.Names)}");
         }
+
+        [Header("Sample Datasets")]
+        [SerializeField] private bool loadSampleDatasets = true;
 
         private void Start()
         {
-            // 默认在启动时自动加载所有持久化的数据集
-            LoadAllDatasets();
+        }
+
+        private void InitializeSampleDatasets()
+        {
+            // Auto-load CSVs from Resources/AroAro/DataCore/AutoLoad
+            var csvAssets = Resources.LoadAll<TextAsset>("AroAro/DataCore/AutoLoad");
+            if (csvAssets == null || csvAssets.Length == 0)
+            {
+                Debug.Log("No auto-load datasets found in Resources/AroAro/DataCore/AutoLoad");
+                return;
+            }
+
+            foreach (var csvAsset in csvAssets)
+            {
+                string datasetName = csvAsset.name;
+                
+                // Check if dataset already exists in persistence
+                if (store.TryGet(datasetName, out _))
+                {
+                    // Already exists, skip
+                    continue;
+                }
+
+                Debug.Log($"Auto-loading dataset '{datasetName}' from Resources...");
+                try
+                {
+                    var dataset = Import.CsvImporter.Parse(csvAsset.text, datasetName);
+                    if (dataset != null)
+                    {
+                        store.Register(dataset);
+                        SaveDataset(datasetName);
+                        Debug.Log($"✅ Successfully auto-loaded and saved dataset: {datasetName}");
+                    }
+                    else
+                    {
+                        Debug.LogError($"Failed to parse auto-load dataset: {datasetName}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Error auto-loading dataset {datasetName}: {ex.Message}");
+                }
+            }
         }
 
         private void LoadAllDatasets()
@@ -474,6 +531,68 @@ namespace AroAro.DataCore
                 store = new DataCoreStore();
             
             return store.SessionManager;
+        }
+
+        private void Reset()
+        {
+#if UNITY_EDITOR
+            // Ensure the AutoLoad directory exists in Assets/Resources/AroAro/DataCore/AutoLoad
+            string resourcesPath = System.IO.Path.Combine(Application.dataPath, "Resources");
+            string autoLoadPath = System.IO.Path.Combine(resourcesPath, "AroAro", "DataCore", "AutoLoad");
+
+            if (!System.IO.Directory.Exists(autoLoadPath))
+            {
+                try
+                {
+                    System.IO.Directory.CreateDirectory(autoLoadPath);
+                    Debug.Log($"Created AutoLoad directory at: {autoLoadPath}");
+                    UnityEditor.AssetDatabase.Refresh();
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError($"Failed to create AutoLoad directory: {ex.Message}");
+                }
+            }
+
+            // Move California CSV to AutoLoad folder
+            MoveCaliforniaCsvToAutoLoad();
+#endif
+        }
+
+        private void MoveCaliforniaCsvToAutoLoad()
+        {
+#if UNITY_EDITOR
+    string packageCsvPath = System.IO.Path.Combine(Application.dataPath, "..", "california_housing_test.csv");
+    string autoLoadPath = System.IO.Path.Combine(Application.dataPath, "Resources", "AroAro", "DataCore", "AutoLoad", "california_housing_test.csv");
+
+    if (System.IO.File.Exists(packageCsvPath))
+    {
+        try
+        {
+            System.IO.File.Copy(packageCsvPath, autoLoadPath, overwrite: true);
+            Debug.Log($"Moved California CSV to AutoLoad folder: {autoLoadPath}");
+            UnityEditor.AssetDatabase.Refresh();
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Failed to move California CSV: {ex.Message}");
+        }
+    }
+    else
+    {
+        Debug.LogWarning($"California CSV not found at: {packageCsvPath}");
+    }
+#endif
+}
+
+[ContextMenu("Setup Sample Datasets")]
+        public void SetupSampleDatasets()
+        {
+#if UNITY_EDITOR
+            Reset();
+#else
+            Debug.LogWarning("Setup Sample Datasets is only available in the Unity Editor.");
+#endif
         }
     }
 }

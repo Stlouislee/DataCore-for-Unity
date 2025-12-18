@@ -730,6 +730,30 @@ namespace AroAro.DataCore.Editor
             EditorGUILayout.LabelField("Created", session.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss"));
             EditorGUILayout.LabelField("Last Activity", session.LastActivityAt.ToString("yyyy-MM-dd HH:mm:ss"));
             EditorGUILayout.LabelField("Dataset Count", session.DatasetCount.ToString());
+            
+            // DataFrame统计信息
+            if (session is AroAro.DataCore.Session.Session concreteSession)
+            {
+                EditorGUILayout.LabelField("DataFrame Count", concreteSession.DataFrameCount.ToString());
+                
+                // DataFrame快速操作
+                if (concreteSession.DataFrameCount > 0)
+                {
+                    EditorGUILayout.Space();
+                    EditorGUILayout.LabelField("DataFrame Operations", EditorStyles.boldLabel);
+                    
+                    EditorGUILayout.BeginHorizontal();
+                    if (GUILayout.Button("Show DataFrame Stats"))
+                    {
+                        ShowDataFrameStatistics(concreteSession);
+                    }
+                    if (GUILayout.Button("Create DataFrame"))
+                    {
+                        ShowCreateDataFrameDialog(concreteSession);
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+            }
 
             EditorGUILayout.Space();
 
@@ -861,5 +885,80 @@ namespace AroAro.DataCore.Editor
                     break;
             }
         }
+
+        #region DataFrame UI Methods
+
+        /// <summary>
+        /// 显示DataFrame统计信息
+        /// </summary>
+        private void ShowDataFrameStatistics(AroAro.DataCore.Session.Session session)
+        {
+            var dfNames = session.DataFrameNames;
+            var message = "DataFrame Statistics for Session '" + session.Name + "'\n\n";
+            message += "Total DataFrames: " + session.DataFrameCount + "\n\n";
+
+            foreach (var dfName in dfNames)
+            {
+                try
+                {
+                    var stats = session.GetDataFrameStatistics(dfName);
+                    message += "DataFrame: " + dfName + "\n";
+                    message += "  Rows: " + stats["RowCount"] + "\n";
+                    message += "  Columns: " + stats["ColumnCount"] + "\n";
+                    
+                    if (stats.ContainsKey("MemoryUsage"))
+                    {
+                        message += "  Memory: " + FormatMemory((long)stats["MemoryUsage"]) + "\n";
+                    }
+                    
+                    message += "\n";
+                }
+                catch (Exception ex)
+                {
+                    message += "DataFrame: " + dfName + " - Error: " + ex.Message + "\n\n";
+                }
+            }
+
+            EditorUtility.DisplayDialog("DataFrame Statistics", message, "OK");
+        }
+
+        /// <summary>
+        /// 显示创建DataFrame对话框
+        /// </summary>
+        private void ShowCreateDataFrameDialog(AroAro.DataCore.Session.Session session)
+        {
+            var dfName = EditorUtility.SaveFilePanel("Create DataFrame", "", "NewDataFrame", "");
+            if (!string.IsNullOrEmpty(dfName))
+            {
+                try
+                {
+                    var df = session.CreateDataFrame(dfName);
+                    EditorUtility.DisplayDialog("Success", "DataFrame '" + dfName + "' created successfully", "OK");
+                    EditorUtility.SetDirty(component);
+                }
+                catch (Exception ex)
+                {
+                    EditorUtility.DisplayDialog("Error", "Failed to create DataFrame: " + ex.Message, "OK");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 格式化内存大小
+        /// </summary>
+        private string FormatMemory(long bytes)
+        {
+            string[] sizes = { "B", "KB", "MB", "GB" };
+            int order = 0;
+            double len = bytes;
+            while (len >= 1024 && order < sizes.Length - 1)
+            {
+                order++;
+                len /= 1024;
+            }
+            return len.ToString("0.##") + " " + sizes[order];
+        }
+
+        #endregion
     }
 }
