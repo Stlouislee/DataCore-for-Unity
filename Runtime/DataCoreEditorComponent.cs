@@ -291,6 +291,61 @@ namespace AroAro.DataCore
         }
 
         /// <summary>
+        /// 彻底删除数据库文件（用于重置或修复损坏）
+        /// </summary>
+        public void DeleteDatabaseFile()
+        {
+            // 1. Dispose existing store
+            if (_store != null)
+            {
+                _store.Dispose();
+                _store = null;
+            }
+
+            // Force GC to release file handles (important on Windows)
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+
+            // 2. Resolve path
+            var resolvedPath = databasePath;
+#if UNITY_2019_1_OR_NEWER
+            if (!Path.IsPathRooted(databasePath))
+            {
+                resolvedPath = Path.Combine(Application.persistentDataPath, databasePath);
+            }
+#endif
+            // 3. Delete files
+            try
+            {
+                bool deleted = false;
+                if (File.Exists(resolvedPath))
+                {
+                    File.Delete(resolvedPath);
+                    Debug.Log($"Deleted database file: {resolvedPath}");
+                    deleted = true;
+                }
+
+                var logPath = resolvedPath + "-log";
+                if (File.Exists(logPath))
+                {
+                    File.Delete(logPath);
+                    Debug.Log($"Deleted log file: {logPath}");
+                    deleted = true;
+                }
+
+                if (!deleted)
+                {
+                    Debug.Log($"No database file found at: {resolvedPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to delete database file: {ex.Message}");
+            }
+        }
+
+
+        /// <summary>
         /// 获取会话管理器
         /// </summary>
         public Session.SessionManager GetSessionManager()

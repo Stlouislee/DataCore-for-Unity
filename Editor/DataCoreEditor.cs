@@ -383,7 +383,23 @@ namespace AroAro.DataCore.Editor
             }
             
             EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.Space();
+            if (GUILayout.Button("Delete Database File (Hard Reset)", GUILayout.Height(30)))
+            {
+                if (EditorUtility.DisplayDialog("Delete Database", 
+                    "Are you sure you want to delete the database file? This will ERASE ALL DATA irrevocably.\n\nUse this if the database is corrupted.", 
+                    "Yes, Delete Everything", "Cancel"))
+                {
+                    component.DeleteDatabaseFile();
+                    datasetFoldouts.Clear();
+                    datasetPreviewFoldouts.Clear();
+                    EditorUtility.SetDirty(component);
+                    EditorUtility.DisplayDialog("Database Deleted", "Database file has been deleted. It will be recreated on next access.", "OK");
+                }
+            }
         }
+
 
         private void RunSelfTest()
         {
