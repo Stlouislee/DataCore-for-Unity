@@ -32,7 +32,7 @@ namespace AroAro.DataCore.LiteDb
             var connectionString = new ConnectionString
             {
                 Filename = DatabasePath,
-                Connection = ConnectionType.Shared,
+                Connection = ConnectionType.Direct,  // Direct is more reliable in Unity
                 Upgrade = true,
                 ReadOnly = _options.ReadOnly
             };
