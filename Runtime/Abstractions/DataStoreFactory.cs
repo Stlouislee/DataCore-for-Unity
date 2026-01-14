@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 
 #if UNITY_2019_1_OR_NEWER
@@ -9,101 +8,43 @@ using UnityEngine;
 namespace AroAro.DataCore
 {
     /// <summary>
-    /// 数据存储工厂 - 创建具体的存储实现
+    /// 数据存储工厂 - 创建 LiteDB 存储实现
     /// </summary>
     public static class DataStoreFactory
     {
-        private static readonly Dictionary<StorageBackend, Func<string, DataStoreOptions, IDataStore>> _factories = new();
-
-        static DataStoreFactory()
-        {
-            // 注册默认的工厂
-            RegisterFactory(StorageBackend.LiteDb, CreateLiteDbStore);
-            RegisterFactory(StorageBackend.Memory, CreateMemoryStore);
-        }
-
         /// <summary>
         /// 创建数据存储实例
         /// </summary>
-        /// <param name="backend">存储后端类型</param>
-        /// <param name="path">存储路径（对于 LiteDb 是数据库文件路径，对于 File 是目录路径）</param>
+        /// <param name="path">数据库文件路径</param>
         /// <param name="options">可选配置</param>
-        public static IDataStore Create(StorageBackend backend = StorageBackend.LiteDb, string path = null, DataStoreOptions options = null)
+        public static IDataStore Create(string path = null, DataStoreOptions options = null)
         {
-            if (!_factories.TryGetValue(backend, out var factory))
-            {
-                throw new NotSupportedException($"Storage backend '{backend}' is not supported or not registered");
-            }
-
-            path ??= GetDefaultPath(backend);
+            path ??= GetDefaultPath();
             options ??= new DataStoreOptions();
-
-            return factory(path, options);
+            return new LiteDb.LiteDbDataStore(path, options);
         }
 
         /// <summary>
-        /// 创建 LiteDB 存储
+        /// 创建 LiteDB 存储（主要入口）
         /// </summary>
-        public static IDataStore CreateLiteDb(string path = null)
+        /// <param name="path">数据库文件路径，默认为 DataCore/datacore.db</param>
+        /// <param name="options">可选配置</param>
+        public static IDataStore CreateLiteDb(string path = null, DataStoreOptions options = null)
         {
-            return Create(StorageBackend.LiteDb, path);
+            return Create(path, options);
         }
 
         /// <summary>
-        /// 创建内存存储
+        /// 获取默认数据库路径
         /// </summary>
-        public static IDataStore CreateMemory()
+        public static string GetDefaultPath()
         {
-            return Create(StorageBackend.Memory);
+#if UNITY_2019_1_OR_NEWER
+            return Path.Combine(Application.persistentDataPath, "DataCore", "datacore.db");
+#else
+            return "DataCore/datacore.db";
+#endif
         }
-
-        /// <summary>
-        /// 注册自定义存储工厂
-        /// </summary>
-        public static void RegisterFactory(StorageBackend backend, Func<string, DataStoreOptions, IDataStore> factory)
-        {
-            _factories[backend] = factory ?? throw new ArgumentNullException(nameof(factory));
-        }
-
-        /// <summary>
-        /// 检查后端是否已注册
-        /// </summary>
-        public static bool IsBackendRegistered(StorageBackend backend)
-        {
-            return _factories.ContainsKey(backend);
-        }
-
-        #region 内部工厂方法
-
-        private static IDataStore CreateLiteDbStore(string path, DataStoreOptions options)
-        {
-            // 使用反射加载 LiteDb 实现，避免硬编码依赖
-            var type = Type.GetType("AroAro.DataCore.LiteDb.LiteDbDataStore, AroAro.DataCore");
-            if (type == null)
-            {
-                // 直接引用（如果在同一程序集）
-                return new LiteDb.LiteDbDataStore(path, options);
-            }
-            return (IDataStore)Activator.CreateInstance(type, path, options);
-        }
-
-        private static IDataStore CreateMemoryStore(string path, DataStoreOptions options)
-        {
-            return new Memory.MemoryDataStore(options);
-        }
-
-        private static string GetDefaultPath(StorageBackend backend)
-        {
-            return backend switch
-            {
-                StorageBackend.LiteDb => "DataCore/datacore.db",
-                StorageBackend.File => "DataCore/",
-                StorageBackend.Memory => null,
-                _ => null
-            };
-        }
-
-        #endregion
     }
 
     /// <summary>

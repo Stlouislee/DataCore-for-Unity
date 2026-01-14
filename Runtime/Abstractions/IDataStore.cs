@@ -4,24 +4,14 @@ using System.Collections.Generic;
 namespace AroAro.DataCore
 {
     /// <summary>
-    /// 存储后端类型
+    /// 存储后端类型 - 仅支持 LiteDB
     /// </summary>
     public enum StorageBackend
     {
         /// <summary>
-        /// LiteDB 嵌入式数据库
+        /// LiteDB 嵌入式数据库（默认且唯一）
         /// </summary>
-        LiteDb = 1,
-
-        /// <summary>
-        /// 内存存储（不持久化）
-        /// </summary>
-        Memory = 2,
-
-        /// <summary>
-        /// 文件存储（原有的 Arrow/JSON 格式）
-        /// </summary>
-        File = 3
+        LiteDb = 1
     }
 
     /// <summary>

@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Analysis;
 using AroAro.DataCore.Events;
-using AroAro.DataCore.Tabular;
-using AroAro.DataCore.Graph;
 
 namespace AroAro.DataCore.Session
 {
@@ -173,43 +171,27 @@ namespace AroAro.DataCore.Session
             // 检查全局存储中是否已存在同名数据集
             if (_store.HasDataset(target))
             {
-                // 更新现有数据集
-                // 注意：这里假设数据集支持更新操作
-                // 实际实现可能需要根据具体的数据集类型来处理
                 throw new InvalidOperationException($"Dataset already exists in global store: {target}");
             }
 
-            // 将数据集添加到全局存储
-            // 这里需要根据数据集类型进行特殊处理
+            // 根据数据集类型持久化到 LiteDB
             switch (dataset.Kind)
             {
                 case DataSetKind.Tabular:
                     {
-                        var tabular = dataset as TabularData;
-                        if (tabular != null)
+                        if (dataset is ITabularDataset sourceTabular)
                         {
-                            // 由于CreateTabular会创建新的空数据集，我们需要复制数据
                             var newTabular = _store.CreateTabular(target);
-                            
-                            // 复制所有列
-                            foreach (var columnName in tabular.ColumnNames)
-                            {
-                                // 这里需要根据列类型进行复制
-                                // 由于TabularData的内部结构，我们需要通过反射或其他方式复制
-                                // 暂时抛出异常，表示需要实现
-                                throw new NotImplementedException("Persisting tabular data requires implementation");
-                            }
+                            CopyTabularData(sourceTabular, newTabular);
                         }
                     }
                     break;
                 case DataSetKind.Graph:
                     {
-                        var graph = dataset as GraphData;
-                        if (graph != null)
+                        if (dataset is IGraphDataset sourceGraph)
                         {
                             var newGraph = _store.CreateGraph(target);
-                            // 复制图数据
-                            throw new NotImplementedException("Persisting graph data requires implementation");
+                            CopyGraphData(sourceGraph, newGraph);
                         }
                     }
                     break;
@@ -217,6 +199,29 @@ namespace AroAro.DataCore.Session
 
             Touch();
             return true;
+        }
+
+        private void CopyTabularData(ITabularDataset source, ITabularDataset target)
+        {
+            // 通过导出/导入 CSV 字符串来复制数据
+            var csvContent = source.ExportToCsv();
+            target.ImportFromCsv(csvContent);
+        }
+
+        private void CopyGraphData(IGraphDataset source, IGraphDataset target)
+        {
+            // 复制所有节点
+            foreach (var nodeId in source.GetNodeIds())
+            {
+                var props = source.GetNodeProperties(nodeId);
+                target.AddNode(nodeId, props as IDictionary<string, object>);
+            }
+
+            // 复制所有边
+            foreach (var edge in source.GetEdges())
+            {
+                target.AddEdge(edge.From, edge.To);
+            }
         }
 
         public void Clear()
@@ -328,9 +333,6 @@ namespace AroAro.DataCore.Session
             // 缓存结果DataFrame
             _dataFrameCache[resultName] = resultDf;
 
-            // 触发查询结果保存事件
-            DataCoreEventManager.RaiseSessionQueryResultSaved(this, adapter.ToTabularData(), adapter);
-
             Touch();
             return adapter;
         }
@@ -342,7 +344,7 @@ namespace AroAro.DataCore.Session
         {
             var dataset = GetDataset(datasetName);
             
-            if (dataset is TabularData tabular)
+            if (dataset is ITabularDataset tabular)
             {
                 return TabularToDataFrame(tabular);
             }
@@ -353,33 +355,40 @@ namespace AroAro.DataCore.Session
         }
 
         /// <summary>
-        /// TabularData转换为DataFrame
+        /// ITabularDataset转换为DataFrame
         /// </summary>
-        private DataFrame TabularToDataFrame(TabularData tabular)
+        private DataFrame TabularToDataFrame(ITabularDataset tabular)
         {
             var df = new DataFrame();
 
-            foreach (var columnName in tabular.ColumnNames)
+            // 通过查询获取数据
+            var results = tabular.Query().ToDictionaries();
+            if (!results.Any())
+                return df;
+
+            // 从第一行获取列名
+            var firstRow = results.First();
+            var columns = firstRow.Keys.ToList();
+
+            // 为每列创建 DataFrameColumn
+            foreach (var col in columns)
             {
-                try
+                var values = results.Select(r => r.TryGetValue(col, out var v) ? v : null).ToArray();
+                
+                // 尝试确定列类型
+                var nonNullValues = values.Where(v => v != null).ToList();
+                if (!nonNullValues.Any())
                 {
-                    // 尝试获取数值列
-                    var numericData = tabular.GetNumericColumn(columnName);
-                    var doubleData = numericData.ToArray<double>();
-                    df.Columns.Add(new DoubleDataFrameColumn(columnName, doubleData));
+                    df.Columns.Add(new StringDataFrameColumn(col, values.Select(v => v?.ToString()).ToArray()));
                 }
-                catch
+                else if (nonNullValues.All(v => v is double || v is int || v is float || v is long))
                 {
-                    // 如果数值列失败，尝试字符串列
-                    try
-                    {
-                        var stringData = tabular.GetStringColumn(columnName);
-                        df.Columns.Add(new StringDataFrameColumn(columnName, stringData));
-                    }
-                    catch (Exception ex)
-                    {
-                        UnityEngine.Debug.LogWarning($"Failed to convert column {columnName}: {ex.Message}");
-                    }
+                    var doubleValues = values.Select(v => v != null ? Convert.ToDouble(v) : double.NaN).ToArray();
+                    df.Columns.Add(new DoubleDataFrameColumn(col, doubleValues));
+                }
+                else
+                {
+                    df.Columns.Add(new StringDataFrameColumn(col, values.Select(v => v?.ToString()).ToArray()));
                 }
             }
 

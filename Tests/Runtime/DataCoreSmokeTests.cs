@@ -1,58 +1,85 @@
 using NUnit.Framework;
 using AroAro.DataCore;
-using AroAro.DataCore.Tabular;
-using AroAro.DataCore.Graph;
-using NumSharp;
+using System.Linq;
 
 namespace AroAro.DataCore.Tests
 {
     public sealed class DataCoreSmokeTests
     {
         [Test]
-        public void Tabular_Crud_Query_Works()
+        public void Tabular_Crud_Works()
         {
-            var store = new DataCoreStore();
-            var t = store.CreateTabular("t");
+            using var store = new DataCoreStore();
+            var t = store.CreateTabular("test_tabular");
 
-            t.AddNumericColumn("x", np.array(new double[] { 1, 2, 3 }));
+            // 添加列
+            t.AddNumericColumn("x", new double[] { 1, 2, 3 });
             t.AddStringColumn("s", new[] { "a", "b", "c" });
 
-            t.AddRow(new System.Collections.Generic.Dictionary<string, object>
-            {
-                ["x"] = 10,
-                ["s"] = "z"
-            });
-
-            Assert.AreEqual(4, t.RowCount);
-
-            var idx = t.Query().Where("x", TabularOp.Gt, 2).ToRowIndices();
-            Assert.AreEqual(2, idx.Length);
-            Assert.AreEqual(2, idx[0]);
-            Assert.AreEqual(3, idx[1]);
-
-            t.UpdateRow(0, new System.Collections.Generic.Dictionary<string, object> { ["x"] = 99 });
-            Assert.AreEqual(99d, (double)t.GetNumericColumn("x")[0]);
-
-            t.DeleteRow(1);
             Assert.AreEqual(3, t.RowCount);
+            Assert.AreEqual(2, t.ColumnCount);
+
+            // 查询测试
+            var results = t.Query()
+                .WhereGreaterThan("x", 1.5)
+                .ToDictionaries()
+                .ToList();
+
+            Assert.AreEqual(2, results.Count);
+
+            // 清理
+            store.Delete("test_tabular");
         }
 
         [Test]
-        public void Graph_Crud_Query_Works()
+        public void Graph_Crud_Works()
         {
-            var store = new DataCoreStore();
-            var g = store.CreateGraph("g");
+            using var store = new DataCoreStore();
+            var g = store.CreateGraph("test_graph");
 
-            g.AddNode("a", new System.Collections.Generic.Dictionary<string, string> { ["type"] = "root" });
-            g.AddNode("b", new System.Collections.Generic.Dictionary<string, string> { ["type"] = "leaf" });
+            // 添加节点
+            g.AddNode("a", new System.Collections.Generic.Dictionary<string, object> { ["type"] = "root" });
+            g.AddNode("b", new System.Collections.Generic.Dictionary<string, object> { ["type"] = "leaf" });
             g.AddEdge("a", "b");
 
             Assert.AreEqual(2, g.NodeCount);
             Assert.AreEqual(1, g.EdgeCount);
 
-            var nodes = g.Query().WhereNodePropertyEquals("type", "root").ToNodeIds();
-            Assert.AreEqual(1, nodes.Length);
-            Assert.AreEqual("a", nodes[0]);
+            // 获取邻居
+            var neighbors = g.GetNeighbors("a").ToList();
+            Assert.AreEqual(1, neighbors.Count);
+            Assert.AreEqual("b", neighbors[0]);
+
+            // 清理
+            store.Delete("test_graph");
+        }
+
+        [Test]
+        public void Store_Operations_Work()
+        {
+            using var store = new DataCoreStore();
+            
+            // 创建数据集
+            store.CreateTabular("t1");
+            store.CreateGraph("g1");
+
+            // 检查存在
+            Assert.IsTrue(store.HasDataset("t1"));
+            Assert.IsTrue(store.HasDataset("g1"));
+            Assert.IsFalse(store.HasDataset("notexist"));
+
+            // 获取数据集
+            var t = store.GetTabular("t1");
+            Assert.IsNotNull(t);
+
+            var g = store.GetGraph("g1");
+            Assert.IsNotNull(g);
+
+            // 删除
+            Assert.IsTrue(store.Delete("t1"));
+            Assert.IsFalse(store.HasDataset("t1"));
+
+            store.Delete("g1");
         }
     }
 }

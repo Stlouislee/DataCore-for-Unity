@@ -121,6 +121,7 @@ namespace AroAro.DataCore.Tests
         private class MockSession : ISession
         {
             private readonly Dictionary<string, DataFrame> _dataFrames = new();
+            private readonly Dictionary<string, IDataSet> _datasets = new();
 
             public void AddDataset(string name, DataFrame df)
             {
@@ -135,18 +136,21 @@ namespace AroAro.DataCore.Tests
             // 实现ISession接口的必需方法
             public string Id => "mock-session";
             public string Name => "Mock Session";
-            public IReadOnlyCollection<string> DatasetNames => _dataFrames.Keys.ToList();
-            public IDataSet GetDataset(string name) => throw new NotImplementedException();
-            public IDataSet CreateDataset(string name, IDataSet sourceDataset) => throw new NotImplementedException();
-            public IDataSet CreateDataset(string name, TabularData tabularData) => throw new NotImplementedException();
-            public IDataSet CreateDataset(string name, GraphData graphData) => throw new NotImplementedException();
-            public bool RemoveDataset(string name) => throw new NotImplementedException();
-            public bool ContainsDataset(string name) => _dataFrames.ContainsKey(name);
-            public IDataSet ExecuteDataFrameQuery(string sourceName, Func<DataFrame, DataFrame> query, string resultName) => throw new NotImplementedException();
-            public DataFrame CreateDataFrame(string name, TabularData tabularData) => throw new NotImplementedException();
-            public DataFrame ConvertToDataFrame(IDataSet dataset) => throw new NotImplementedException();
-            public void PersistDataset(string name) => throw new NotImplementedException();
-            public event EventHandler<DataCoreEventArgs> SessionEvent;
+            public DateTime CreatedAt => DateTime.Now;
+            public DateTime LastActivityAt => DateTime.Now;
+            public int DatasetCount => _datasets.Count;
+            public IReadOnlyCollection<string> DatasetNames => _datasets.Keys.ToList();
+            
+            public IDataSet OpenDataset(string name, string copyName = null) => throw new NotImplementedException();
+            public IDataSet CreateDataset(string name, DataSetKind kind) => throw new NotImplementedException();
+            public IDataSet GetDataset(string name) => _datasets.TryGetValue(name, out var ds) ? ds : throw new KeyNotFoundException();
+            public bool HasDataset(string name) => _datasets.ContainsKey(name);
+            public bool RemoveDataset(string name) => _datasets.Remove(name);
+            public IDataSet SaveQueryResult(string sourceName, Func<IDataSet, IDataSet> query, string newName) => throw new NotImplementedException();
+            public bool PersistDataset(string name, string targetName = null) => throw new NotImplementedException();
+            public void Clear() => _datasets.Clear();
+            public void Touch() { }
+            public void Dispose() { }
         }
     }
 }

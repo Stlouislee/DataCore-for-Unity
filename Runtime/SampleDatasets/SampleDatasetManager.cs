@@ -35,8 +35,8 @@ namespace AroAro.DataCore
                 bool success = CaliforniaHousingDataset.LoadIntoDataCore(datasetName);
                 if (success)
                 {
-                    // Optionally save it so it persists
-                    DataCoreEditorComponent.Instance.SaveDataset(datasetName);
+                    // LiteDB auto-persists, no manual save needed
+                    Debug.Log($"Sample dataset '{datasetName}' created and auto-persisted.");
                 }
             }
             else

@@ -1,7 +1,6 @@
 using UnityEditor;
 using UnityEngine;
 using System.Linq;
-using NumSharp;
 
 namespace AroAro.DataCore.Editor
 {
@@ -24,49 +23,52 @@ namespace AroAro.DataCore.Editor
             {
                 EditorGUILayout.HelpBox("No DataCoreEditorComponent found in scene. Please add one to test preview functionality.", MessageType.Warning);
                 
-                if (GUILayout.Button("Add DataCoreEditorComponent to Scene"))
+                if (GUILayout.Button("Create DataCore Component"))
                 {
-                    var go = new GameObject("DataCoreManager");
+                    var go = new GameObject("DataCore");
                     go.AddComponent<DataCoreEditorComponent>();
-                    Selection.activeGameObject = go;
                 }
                 return;
             }
 
-            var store = component.GetStore();
-            var datasets = store.Names.ToList();
+            EditorGUILayout.LabelField("DataCore Component found on: " + component.gameObject.name);
+            EditorGUILayout.Space();
 
-            EditorGUILayout.LabelField("Available Datasets:", EditorStyles.boldLabel);
+            // 测试按钮
+            EditorGUILayout.LabelField("Test Operations:", EditorStyles.boldLabel);
             
-            if (datasets.Count == 0)
+            if (GUILayout.Button("Create Sample Tabular Dataset"))
             {
-                EditorGUILayout.HelpBox("No datasets available. Create some datasets to test preview functionality.", MessageType.Info);
-                
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Test Data Creation:", EditorStyles.boldLabel);
-                
-                if (GUILayout.Button("Create Sample Tabular Dataset"))
-                {
-                    CreateSampleTabularData(component);
-                }
-                
-                if (GUILayout.Button("Create Sample Graph Dataset"))
-                {
-                    CreateSampleGraphData(component);
-                }
+                CreateSampleTabularData(component);
             }
-            else
+
+            if (GUILayout.Button("Create Sample Graph Dataset"))
             {
-                EditorGUILayout.LabelField($"Found {datasets.Count} datasets:");
-                foreach (var name in datasets)
+                CreateSampleGraphData(component);
+            }
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Current Datasets:", EditorStyles.boldLabel);
+            
+            var store = component.GetStore();
+            foreach (var name in store.Names)
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(name);
+                
+                if (GUILayout.Button("Preview", GUILayout.Width(80)))
                 {
-                    var metadata = store.GetMetadata(name);
-                    var isLoaded = metadata?.IsLoaded ?? true;
-                    EditorGUILayout.LabelField($"- {name} ({metadata?.Kind}) {(isLoaded ? "[Loaded]" : "[Not Loaded]")}");
+                    DataCorePreviewWindow.ShowWindow(component, name);
                 }
                 
-                EditorGUILayout.Space();
-                EditorGUILayout.HelpBox("Preview functionality is now available in the DataCoreEditorComponent inspector. Select the component in the scene to see dataset previews.", MessageType.Info);
+                if (GUILayout.Button("Delete", GUILayout.Width(80)))
+                {
+                    if (EditorUtility.DisplayDialog("Confirm Delete", $"Delete dataset '{name}'?", "Yes", "No"))
+                    {
+                        store.Delete(name);
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
             }
 
             EditorGUILayout.Space();
@@ -80,17 +82,23 @@ namespace AroAro.DataCore.Editor
         {
             try
             {
-                component.CreateTabularDataset("SampleTabularData");
-                var store = component.GetStore();
-                var tabular = store.Get<Tabular.TabularData>("SampleTabularData");
+                var tabular = component.CreateTabularDataset("SampleTabularData");
+                if (tabular == null)
+                {
+                    EditorUtility.DisplayDialog("Error", "Failed to create tabular dataset", "OK");
+                    return;
+                }
                 
                 // 添加示例数据
-                tabular.AddNumericColumn("ID", np.array(Enumerable.Range(1, 10).Select(i => (double)i).ToArray()));
-                tabular.AddStringColumn("Name", Enumerable.Range(1, 10).Select(i => $"Item{i}").ToArray());
-                tabular.AddNumericColumn("Value", np.array(Enumerable.Range(1, 10).Select(i => (double)i * 10).ToArray()));
+                var ids = Enumerable.Range(1, 10).Select(i => (double)i).ToArray();
+                var names = Enumerable.Range(1, 10).Select(i => $"Item{i}").ToArray();
+                var values = Enumerable.Range(1, 10).Select(i => (double)(i * 10)).ToArray();
                 
-                EditorUtility.DisplayDialog("Success", "Sample tabular dataset created successfully!", "OK");
-                EditorUtility.SetDirty(component);
+                tabular.AddNumericColumn("ID", ids);
+                tabular.AddStringColumn("Name", names);
+                tabular.AddNumericColumn("Value", values);
+                
+                EditorUtility.DisplayDialog("Success", $"Sample tabular dataset created with {tabular.RowCount} rows!", "OK");
             }
             catch (System.Exception ex)
             {
@@ -102,41 +110,31 @@ namespace AroAro.DataCore.Editor
         {
             try
             {
-                component.CreateGraphDataset("SampleGraphData");
-                var store = component.GetStore();
-                var graph = store.Get<Graph.GraphData>("SampleGraphData");
+                var graph = component.CreateGraphDataset("SampleGraphData");
+                if (graph == null)
+                {
+                    EditorUtility.DisplayDialog("Error", "Failed to create graph dataset", "OK");
+                    return;
+                }
                 
-                // 添加示例节点和边
+                // 添加示例节点
                 for (int i = 1; i <= 5; i++)
                 {
-                    graph.AddNode(i.ToString(), new System.Collections.Generic.Dictionary<string, string>
+                    graph.AddNode(i.ToString(), new System.Collections.Generic.Dictionary<string, object>
                     {
                         ["label"] = $"Node{i}",
-                        ["value"] = i.ToString()
+                        ["value"] = i
                     });
                 }
                 
                 // 添加边
-                graph.AddEdge("1", "2", new System.Collections.Generic.Dictionary<string, string>
-                {
-                    ["weight"] = "1.0",
-                    ["type"] = "connection"
-                });
+                graph.AddEdge("1", "2");
+                graph.AddEdge("2", "3");
+                graph.AddEdge("3", "4");
+                graph.AddEdge("4", "5");
+                graph.AddEdge("1", "5");
                 
-                graph.AddEdge("2", "3", new System.Collections.Generic.Dictionary<string, string>
-                {
-                    ["weight"] = "2.0",
-                    ["type"] = "connection"
-                });
-                
-                graph.AddEdge("3", "4", new System.Collections.Generic.Dictionary<string, string>
-                {
-                    ["weight"] = "1.5",
-                    ["type"] = "connection"
-                });
-                
-                EditorUtility.DisplayDialog("Success", "Sample graph dataset created successfully!", "OK");
-                EditorUtility.SetDirty(component);
+                EditorUtility.DisplayDialog("Success", $"Sample graph dataset created with {graph.NodeCount} nodes and {graph.EdgeCount} edges!", "OK");
             }
             catch (System.Exception ex)
             {

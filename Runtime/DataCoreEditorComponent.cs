@@ -11,7 +11,7 @@ namespace AroAro.DataCore
 {
     /// <summary>
     /// DataCore 编辑器组件，挂到 GameObject 上用于配置和预览
-    /// Acts as a shared singleton instance that other scripts can access
+    /// 使用 LiteDB 作为底层存储，自动持久化所有数据
     /// </summary>
     public class DataCoreEditorComponent : MonoBehaviour
     {
@@ -21,20 +21,17 @@ namespace AroAro.DataCore
         public static DataCoreEditorComponent Instance { get; private set; }
 
         [Header("DataCore Configuration")]
-        [SerializeField] private string persistencePath = "DataCore/";
-        [SerializeField] private bool autoSaveOnExit = true;
-        [SerializeField] private bool clearOnEditMode = false; // 控制是否在进入 Edit 模式时清空数据（默认保留运行时数据）
+        [SerializeField] private string databasePath = "DataCore/datacore.db";
+        [SerializeField] private bool loadSampleDatasets = true;
 
         [Header("Runtime Store")]
-        [SerializeField] private DataCoreStore store;
-
-        [Header("Performance Settings")]
-        [SerializeField] private bool lazyLoading = true; // 是否启用延迟加载
+        private DataCoreStore _store;
 
         private void Awake()
         {
             Debug.Log("DataCoreEditorComponent Awake started.");
-            // Singleton pattern: ensure only one instance exists
+            
+            // Singleton pattern
             if (Instance != null && Instance != this)
             {
                 Debug.LogWarning($"Multiple DataCoreEditorComponent instances detected. Destroying duplicate on '{gameObject.name}'.");
@@ -43,33 +40,44 @@ namespace AroAro.DataCore
             }
 
             Instance = this;
+            
+            // 初始化存储
+            InitializeStore();
 
-            if (store == null)
-            {
-                Debug.Log("Initializing new DataCoreStore.");
-                store = new DataCoreStore();
-            }
-
-            // 默认在启动时自动加载所有持久化的数据集
-            LoadAllDatasets();
-
+            // 加载示例数据集
             if (loadSampleDatasets)
             {
                 InitializeSampleDatasets();
             }
 
 #if UNITY_EDITOR
-            // Register for play mode state changes
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
 #endif
-            Debug.Log($"DataCoreEditorComponent Awake finished. Loaded datasets: {string.Join(", ", store.Names)}");
+            Debug.Log($"DataCoreEditorComponent Awake finished. Datasets: {string.Join(", ", _store.Names)}");
         }
 
-        [Header("Sample Datasets")]
-        [SerializeField] private bool loadSampleDatasets = true;
-
-        private void Start()
+        private void InitializeStore()
         {
+            if (_store != null) return;
+
+            var resolvedPath = databasePath;
+            
+#if UNITY_2019_1_OR_NEWER
+            if (!Path.IsPathRooted(databasePath))
+            {
+                resolvedPath = Path.Combine(Application.persistentDataPath, databasePath);
+            }
+#endif
+            
+            // 确保目录存在
+            var directory = Path.GetDirectoryName(resolvedPath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            Debug.Log($"Initializing DataCoreStore at: {resolvedPath}");
+            _store = new DataCoreStore(resolvedPath);
         }
 
         private void InitializeSampleDatasets()
@@ -86,26 +94,20 @@ namespace AroAro.DataCore
             {
                 string datasetName = csvAsset.name;
                 
-                // Check if dataset already exists in persistence
-                if (store.TryGet(datasetName, out _))
+                // 检查是否已存在
+                if (_store.HasDataset(datasetName))
                 {
-                    // Already exists, skip
+                    Debug.Log($"Dataset '{datasetName}' already exists, skipping...");
                     continue;
                 }
 
                 Debug.Log($"Auto-loading dataset '{datasetName}' from Resources...");
                 try
                 {
-                    var dataset = Import.CsvImporter.Parse(csvAsset.text, datasetName);
-                    if (dataset != null)
+                    var tabular = Import.CsvImporter.ImportFromText(_store, csvAsset.text, datasetName);
+                    if (tabular != null)
                     {
-                        store.Register(dataset);
-                        SaveDataset(datasetName);
-                        Debug.Log($"✅ Successfully auto-loaded and saved dataset: {datasetName}");
-                    }
-                    else
-                    {
-                        Debug.LogError($"Failed to parse auto-load dataset: {datasetName}");
+                        Debug.Log($"✅ Successfully auto-loaded dataset: {datasetName} ({tabular.RowCount} rows)");
                     }
                 }
                 catch (Exception ex)
@@ -115,239 +117,106 @@ namespace AroAro.DataCore
             }
         }
 
-        private void LoadAllDatasets()
-        {
-            if (string.IsNullOrEmpty(persistencePath))
-                return;
-
-            // 确保store存在
-            if (store == null)
-                store = new DataCoreStore();
-
-            try
-            {
-                var backend = new Persistence.FileStorageBackend();
-                var resolvedPath = persistencePath;
-                
-#if UNITY_2019_1_OR_NEWER
-                if (!System.IO.Path.IsPathRooted(persistencePath))
-                    resolvedPath = System.IO.Path.Combine(Application.persistentDataPath, persistencePath);
-#endif
-
-                if (!System.IO.Directory.Exists(resolvedPath))
-                {
-                    Debug.Log($"Persistence path does not exist: {resolvedPath}. Creating directory...");
-                    System.IO.Directory.CreateDirectory(resolvedPath);
-                    return;
-                }
-
-                var arrowFiles = System.IO.Directory.GetFiles(resolvedPath, "*.arrow");
-                var graphFiles = System.IO.Directory.GetFiles(resolvedPath, "*.dcgraph");
-
-                int metadataCount = 0;
-
-                // 只注册元数据，不实际加载数据
-                foreach (var file in arrowFiles)
-                {
-                    try
-                    {
-                        var name = System.IO.Path.GetFileNameWithoutExtension(file);
-                        var fileInfo = new System.IO.FileInfo(file);
-                        
-                        store.RegisterMetadata(name, DataSetKind.Tabular, file);
-                        Debug.Log($"Registered tabular dataset metadata '{name}' from {file}");
-                        metadataCount++;
-                    }
-                    catch (System.Exception ex)
-                    {
-                        Debug.LogError($"Failed to register metadata for {file}: {ex.Message}");
-                    }
-                }
-
-                foreach (var file in graphFiles)
-                {
-                    try
-                    {
-                        var name = System.IO.Path.GetFileNameWithoutExtension(file);
-                        var fileInfo = new System.IO.FileInfo(file);
-                        
-                        store.RegisterMetadata(name, DataSetKind.Graph, file);
-                        Debug.Log($"Registered graph dataset metadata '{name}' from {file}");
-                        metadataCount++;
-                    }
-                    catch (System.Exception ex)
-                    {
-                        Debug.LogError($"Failed to register metadata for {file}: {ex.Message}");
-                    }
-                }
-
-                if (metadataCount > 0)
-                {
-                    Debug.Log($"Successfully registered {metadataCount} dataset metadata from {resolvedPath}");
-                }
-                else
-                {
-                    Debug.Log($"No datasets found in {resolvedPath}");
-                }
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"Failed to load datasets: {ex.Message}");
-            }
-        }
-
         private void OnDestroy()
         {
-            // Clear singleton reference when destroyed
             if (Instance == this)
             {
                 Instance = null;
             }
 
 #if UNITY_EDITOR
-            // Unregister from play mode state changes
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
 #endif
-
-            if (autoSaveOnExit && store != null)
-            {
-                // 检查是否有需要保存的数据集
-                var namesCopy = new List<string>(store.Names);
-                if (namesCopy.Count > 0)
-                {
-                    SaveAllDatasets();
-                }
-            }
+            
+            // LiteDB 会自动保存，只需要 dispose
+            _store?.Dispose();
         }
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// Handle Unity Editor play mode transitions
-        /// </summary>
         private void OnPlayModeStateChanged(PlayModeStateChange state)
         {
             if (state == PlayModeStateChange.ExitingPlayMode)
             {
-                // Save datasets when exiting play mode
-                if (autoSaveOnExit && store != null)
-                {
-                    Debug.Log("Saving datasets before exiting play mode...");
-                    SaveAllDatasets();
-                }
-            }
-            else if (state == PlayModeStateChange.EnteredEditMode)
-            {
-                // Clear the store when returning to edit mode (可选)
-                if (store != null && clearOnEditMode)
-                {
-                    Debug.Log("Clearing runtime datasets after exiting play mode...");
-                    // Create a copy of the names list to avoid modification during iteration
-                    var namesCopy = new List<string>(store.Names);
-                    foreach (var name in namesCopy)
-                    {
-                        store.Delete(name);
-                    }
-                }
+                // 执行检查点确保数据写入
+                _store?.Checkpoint();
+                Debug.Log("DataCore checkpoint completed before exiting play mode.");
             }
         }
 #endif
 
-        private void SaveAllDatasets()
-        {
-            if (store == null)
-                return;
+        #region Public API
 
-            // 创建名称副本以避免并发修改问题
-            var namesCopy = new List<string>(store.Names);
-            
-            if (namesCopy.Count == 0)
-                return;
-
-            foreach (var name in namesCopy)
-            {
-                if (!store.TryGet(name, out var dataset))
-                    continue;
-
-                try
-                {
-#if DATACORE_APACHE_ARROW
-                    var extension = dataset.Kind == DataSetKind.Tabular ? ".arrow" : ".dcgraph";
-                    var fileName = $"{name}{extension}";
-                    var filePath = string.IsNullOrEmpty(persistencePath) ? fileName : $"{persistencePath}/{fileName}";
-                    
-                    store.Save(name, filePath);
-                    Debug.Log($"Saved dataset '{name}' to {filePath}");
-#else
-                    Debug.LogWarning($"Cannot save dataset '{name}': Apache Arrow persistence is disabled. Define DATACORE_APACHE_ARROW to enable.");
-#endif
-                }
-                catch (System.Exception ex)
-                {
-                    Debug.LogError($"Failed to save dataset '{name}': {ex.Message}");
-                }
-            }
-        }
-
+        /// <summary>
+        /// 获取数据存储实例
+        /// </summary>
         public DataCoreStore GetStore()
         {
-            if (store == null)
-            {
-                store = new DataCoreStore();
-                
-                // 在非Play模式下自动加载持久化数据
-                if (!Application.isPlaying)
-                {
-                    if (lazyLoading)
-                    {
-                        LoadAllDatasets(); // 只加载元数据
-                    }
-                    else
-                    {
-                        LoadAllDatasets();
-                        store.PreloadAll(); // 预加载所有数据
-                    }
-                }
-            }
-            return store;
+            InitializeStore();
+            return _store;
         }
 
-        public string GetPersistencePath() => persistencePath;
+        /// <summary>
+        /// 获取数据库路径
+        /// </summary>
+        public string GetDatabasePath() => databasePath;
 
-        public void SetPersistencePath(string path) => persistencePath = path;
+        /// <summary>
+        /// 设置数据库路径（需要重新初始化）
+        /// </summary>
+        public void SetDatabasePath(string path)
+        {
+            if (databasePath != path)
+            {
+                databasePath = path;
+                _store?.Dispose();
+                _store = null;
+                InitializeStore();
+            }
+        }
 
-        public IEnumerable<string> GetDatasetNames() => store?.Names ?? new List<string>();
+        /// <summary>
+        /// 获取所有数据集名称
+        /// </summary>
+        public IEnumerable<string> GetDatasetNames() => _store?.Names ?? Array.Empty<string>();
 
+        /// <summary>
+        /// 获取数据集
+        /// </summary>
         public IDataSet GetDataset(string name)
         {
-            if (store?.TryGet(name, out var ds) == true)
+            if (_store?.TryGet(name, out var ds) == true)
                 return ds;
             return null;
         }
 
-        public void CreateTabularDataset(string name)
+        /// <summary>
+        /// 创建表格数据集
+        /// </summary>
+        public ITabularDataset CreateTabularDataset(string name)
         {
-            store?.CreateTabular(name);
-        }
-
-        public void CreateGraphDataset(string name)
-        {
-            store?.CreateGraph(name);
-        }
-
-        public bool DeleteDataset(string name)
-        {
-            return store?.Delete(name) == true;
+            return _store?.CreateTabular(name);
         }
 
         /// <summary>
-        /// 从 CSV 文件导入数据到新的 Tabular 数据集
+        /// 创建图数据集
         /// </summary>
-        /// <param name="csvFilePath">CSV 文件路径</param>
-        /// <param name="datasetName">新数据集的名称</param>
-        /// <param name="hasHeader">第一行是否为列名</param>
-        /// <param name="delimiter">分隔符，默认为逗号</param>
-        /// <param name="useFastMode">是否使用快速模式（适用于简单CSV文件）</param>
-        public void ImportCsvToTabular(string csvFilePath, string datasetName, bool hasHeader = true, char delimiter = ',', bool useFastMode = false)
+        public IGraphDataset CreateGraphDataset(string name)
+        {
+            return _store?.CreateGraph(name);
+        }
+
+        /// <summary>
+        /// 删除数据集
+        /// </summary>
+        public bool DeleteDataset(string name)
+        {
+            return _store?.Delete(name) == true;
+        }
+
+        /// <summary>
+        /// 从 CSV 文件导入数据
+        /// </summary>
+        public ITabularDataset ImportCsvToTabular(string csvFilePath, string datasetName, bool hasHeader = true, char delimiter = ',')
         {
             if (string.IsNullOrEmpty(csvFilePath))
                 throw new ArgumentException("CSV file path cannot be null or empty", nameof(csvFilePath));
@@ -355,249 +224,68 @@ namespace AroAro.DataCore
             if (string.IsNullOrEmpty(datasetName))
                 throw new ArgumentException("Dataset name cannot be null or empty", nameof(datasetName));
 
-            if (!System.IO.File.Exists(csvFilePath))
+            if (!File.Exists(csvFilePath))
                 throw new FileNotFoundException($"CSV file not found: {csvFilePath}");
 
-            try
-            {
-                // 创建新的 Tabular 数据集
-                var tabular = store?.CreateTabular(datasetName);
-                if (tabular == null)
-                    throw new InvalidOperationException("Failed to create tabular dataset");
-
-                // 导入 CSV
-                tabular.ImportFromCsvFile(csvFilePath, hasHeader, delimiter, useFastMode);
-                
-                Debug.Log($"Successfully imported CSV '{csvFilePath}' to dataset '{datasetName}'");
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"Failed to import CSV: {ex.Message}");
-                throw;
-            }
+            InitializeStore();
+            return Import.CsvImporter.ImportFromFile(_store.UnderlyingStore, csvFilePath, datasetName, hasHeader, delimiter);
         }
 
         /// <summary>
-        /// Manually save all datasets to the persistence path
+        /// 执行检查点（刷新数据到磁盘）
         /// </summary>
-        public void SaveAll()
+        public void Checkpoint()
         {
-            SaveAllDatasets();
+            _store?.Checkpoint();
+            Debug.Log("DataCore checkpoint completed.");
         }
 
         /// <summary>
-        /// Manually load all datasets from the persistence path
+        /// 清空所有数据
         /// </summary>
-        public void LoadAll()
+        public void ClearAll()
         {
-            if (store != null)
-            {
-                store.PreloadAll();
-                Debug.Log("All datasets preloaded");
-            }
+            _store?.ClearAll();
+            Debug.Log("All datasets cleared.");
         }
 
         /// <summary>
-        /// 只加载元数据（延迟加载模式）
-        /// </summary>
-        public void LoadMetadataOnly()
-        {
-            LoadAllDatasets();
-        }
-
-        /// <summary>
-        /// 性能测试：比较新旧CSV导入方法的性能
-        /// </summary>
-        public void PerformanceTestCsvImport(string csvFilePath, string datasetName)
-        {
-            if (!System.IO.File.Exists(csvFilePath))
-            {
-                Debug.LogError($"CSV file not found: {csvFilePath}");
-                return;
-            }
-
-            var stopwatch = new System.Diagnostics.Stopwatch();
-            
-            // 测试标准模式
-            stopwatch.Start();
-            try
-            {
-                ImportCsvToTabular(csvFilePath, datasetName + "_standard", true, ',', false);
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"Standard mode failed: {ex.Message}");
-            }
-            stopwatch.Stop();
-            var standardTime = stopwatch.ElapsedMilliseconds;
-
-            // 测试快速模式
-            stopwatch.Restart();
-            try
-            {
-                ImportCsvToTabular(csvFilePath, datasetName + "_fast", true, ',', true);
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"Fast mode failed: {ex.Message}");
-            }
-            stopwatch.Stop();
-            var fastTime = stopwatch.ElapsedMilliseconds;
-
-            Debug.Log($"CSV Import Performance Test:\n" +
-                     $"File: {csvFilePath}\n" +
-                     $"Standard Mode: {standardTime}ms\n" +
-                     $"Fast Mode: {fastTime}ms\n" +
-                     $"Speedup: {((double)standardTime / fastTime):F2}x faster");
-        }
-
-        /// <summary>
-        /// Save a specific dataset
-        /// </summary>
-        public void SaveDataset(string name)
-        {
-            if (store == null || !store.TryGet(name, out var dataset))
-            {
-                Debug.LogError($"Dataset '{name}' not found");
-                return;
-            }
-
-            try
-            {
-#if DATACORE_APACHE_ARROW
-                var extension = dataset.Kind == DataSetKind.Tabular ? ".arrow" : ".dcgraph";
-                var fileName = $"{name}{extension}";
-                var filePath = string.IsNullOrEmpty(persistencePath) ? fileName : $"{persistencePath}/{fileName}";
-                
-                store.Save(name, filePath);
-                Debug.Log($"Saved dataset '{name}' to {filePath}");
-#else
-                Debug.LogWarning($"Cannot save dataset '{name}': Apache Arrow persistence is disabled. Define DATACORE_APACHE_ARROW to enable.");
-#endif
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"Failed to save dataset '{name}': {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Persist a dataset so it survives play mode transitions
-        /// </summary>
-        public void PersistDataset(string name)
-        {
-            SaveDataset(name);
-        }
-
-        /// <summary>
-        /// Load a persisted dataset after play mode transition
-        /// </summary>
-        public void LoadPersistedDataset(string name)
-        {
-            try
-            {
-#if DATACORE_APACHE_ARROW
-                var tabularPath = $"{persistencePath}/{name}.arrow";
-                var graphPath = $"{persistencePath}/{name}.dcgraph";
-
-                if (System.IO.File.Exists(tabularPath))
-                {
-                    store.Load(tabularPath, registerAsName: name);
-                    Debug.Log($"Loaded persisted dataset '{name}' from {tabularPath}");
-                }
-                else if (System.IO.File.Exists(graphPath))
-                {
-                    store.Load(graphPath, registerAsName: name);
-                    Debug.Log($"Loaded persisted dataset '{name}' from {graphPath}");
-                }
-                else
-                {
-                    Debug.LogWarning($"Persisted dataset '{name}' not found");
-                }
-#else
-                Debug.LogWarning($"Cannot load dataset '{name}': Apache Arrow persistence is disabled. Define DATACORE_APACHE_ARROW to enable.");
-#endif
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"Failed to load persisted dataset '{name}': {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Check if a dataset has been persisted
-        /// </summary>
-        public bool IsDatasetPersisted(string name)
-        {
-            var tabularPath = $"{persistencePath}/{name}.arrow";
-            var graphPath = $"{persistencePath}/{name}.dcgraph";
-            return System.IO.File.Exists(tabularPath) || System.IO.File.Exists(graphPath);
-        }
-
-        /// <summary>
-        /// Get the SessionManager instance
+        /// 获取会话管理器
         /// </summary>
         public Session.SessionManager GetSessionManager()
         {
-            if (store == null)
-                store = new DataCoreStore();
-            
-            return store.SessionManager;
+            InitializeStore();
+            return _store.SessionManager;
         }
+
+        #endregion
+
+        #region Editor Setup
 
         private void Reset()
         {
 #if UNITY_EDITOR
-            // Ensure the AutoLoad directory exists in Assets/Resources/AroAro/DataCore/AutoLoad
-            string resourcesPath = System.IO.Path.Combine(Application.dataPath, "Resources");
-            string autoLoadPath = System.IO.Path.Combine(resourcesPath, "AroAro", "DataCore", "AutoLoad");
+            // 确保 AutoLoad 目录存在
+            string resourcesPath = Path.Combine(Application.dataPath, "Resources");
+            string autoLoadPath = Path.Combine(resourcesPath, "AroAro", "DataCore", "AutoLoad");
 
-            if (!System.IO.Directory.Exists(autoLoadPath))
+            if (!Directory.Exists(autoLoadPath))
             {
                 try
                 {
-                    System.IO.Directory.CreateDirectory(autoLoadPath);
+                    Directory.CreateDirectory(autoLoadPath);
                     Debug.Log($"Created AutoLoad directory at: {autoLoadPath}");
-                    UnityEditor.AssetDatabase.Refresh();
+                    AssetDatabase.Refresh();
                 }
-                catch (System.Exception ex)
+                catch (Exception ex)
                 {
                     Debug.LogError($"Failed to create AutoLoad directory: {ex.Message}");
                 }
             }
-
-            // Move California CSV to AutoLoad folder
-            MoveCaliforniaCsvToAutoLoad();
 #endif
         }
 
-        private void MoveCaliforniaCsvToAutoLoad()
-        {
-#if UNITY_EDITOR
-    string packageCsvPath = System.IO.Path.Combine(Application.dataPath, "..", "california_housing_test.csv");
-    string autoLoadPath = System.IO.Path.Combine(Application.dataPath, "Resources", "AroAro", "DataCore", "AutoLoad", "california_housing_test.csv");
-
-    if (System.IO.File.Exists(packageCsvPath))
-    {
-        try
-        {
-            System.IO.File.Copy(packageCsvPath, autoLoadPath, overwrite: true);
-            Debug.Log($"Moved California CSV to AutoLoad folder: {autoLoadPath}");
-            UnityEditor.AssetDatabase.Refresh();
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogError($"Failed to move California CSV: {ex.Message}");
-        }
-    }
-    else
-    {
-        Debug.LogWarning($"California CSV not found at: {packageCsvPath}");
-    }
-#endif
-}
-
-[ContextMenu("Setup Sample Datasets")]
+        [ContextMenu("Setup Sample Datasets")]
         public void SetupSampleDatasets()
         {
 #if UNITY_EDITOR
@@ -606,5 +294,7 @@ namespace AroAro.DataCore
             Debug.LogWarning("Setup Sample Datasets is only available in the Unity Editor.");
 #endif
         }
+
+        #endregion
     }
 }

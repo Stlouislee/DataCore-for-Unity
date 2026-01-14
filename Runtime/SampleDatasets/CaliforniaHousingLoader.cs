@@ -36,7 +36,7 @@ namespace AroAro.DataCore.SampleDatasets
             var store = DataCoreEditorComponent.Instance.GetStore();
             
             // Remove existing dataset if it exists
-            if (store.TryGet(datasetName, out _))
+            if (store.HasDataset(datasetName))
             {
                 store.Delete(datasetName);
             }
@@ -52,9 +52,8 @@ namespace AroAro.DataCore.SampleDatasets
                 Debug.Log($"Dataset name: {datasetName}");
                 Debug.Log($"Columns: {string.Join(", ", housingData.ColumnNames)}");
 
-                // Save the dataset
-                DataCoreEditorComponent.Instance.SaveDataset(datasetName);
-                Debug.Log($"✅ Dataset saved to persistence storage");
+                // Data is auto-saved with LiteDB
+                Debug.Log($"✅ Dataset auto-persisted to LiteDB");
 
             }
             catch (System.Exception ex)
@@ -67,7 +66,7 @@ namespace AroAro.DataCore.SampleDatasets
         /// <summary>
         /// Add built-in California housing data to the dataset
         /// </summary>
-        private void AddCaliforniaHousingData(Tabular.TabularData housingData)
+        private void AddCaliforniaHousingData(ITabularDataset housingData)
         {
             var sampleData = CaliforniaHousingDataset.GetSampleData();
 
@@ -78,51 +77,43 @@ namespace AroAro.DataCore.SampleDatasets
             }
         }
 
-
-
         /// <summary>
         /// Get sample queries for the California housing dataset
         /// </summary>
         public void RunSampleQueries()
         {
-            if (DataCoreEditorComponent.Instance == null || !DataCoreEditorComponent.Instance.GetStore().TryGet(datasetName, out var dataset))
+            if (DataCoreEditorComponent.Instance == null)
             {
-                Debug.LogError("Dataset not found. Please load it first.");
+                Debug.LogError("DataCoreEditorComponent not found.");
                 return;
             }
 
-            var housingData = dataset as Tabular.TabularData;
+            var store = DataCoreEditorComponent.Instance.GetStore();
+            var housingData = store.GetTabular(datasetName);
+            
             if (housingData == null)
             {
-                Debug.LogError("Dataset is not tabular data");
+                Debug.LogError("Dataset not found. Please load it first.");
                 return;
             }
 
             Debug.Log($"=== Sample Queries for California Housing Dataset ===");
 
             // Query 1: High-value houses
-            var highValueHouses = housingData.Query()
-                .Where("median_house_value", Tabular.TabularOp.Gt, 500000)
-                .ToRowIndices();
-            Debug.Log($"High-value houses (>$500k): {highValueHouses.Length} properties");
+            var highValueIndices = housingData.Where("median_house_value", QueryOp.Gt, 500000);
+            Debug.Log($"High-value houses (>$500k): {highValueIndices.Length} properties");
 
             // Query 2: High-income areas
-            var highIncomeAreas = housingData.Query()
-                .Where("median_income", Tabular.TabularOp.Gt, 8.0)
-                .ToRowIndices();
-            Debug.Log($"High-income areas (>$80k): {highIncomeAreas.Length} properties");
+            var highIncomeIndices = housingData.Where("median_income", QueryOp.Gt, 8.0);
+            Debug.Log($"High-income areas (>$80k): {highIncomeIndices.Length} properties");
 
             // Query 3: Large households
-            var largeHouseholds = housingData.Query()
-                .Where("households", Tabular.TabularOp.Gt, 1000)
-                .ToRowIndices();
-            Debug.Log($"Large households (>1000 people): {largeHouseholds.Length} properties");
+            var largeHouseholdIndices = housingData.Where("households", QueryOp.Gt, 1000);
+            Debug.Log($"Large households (>1000 people): {largeHouseholdIndices.Length} properties");
 
             // Query 4: Old houses
-            var oldHouses = housingData.Query()
-                .Where("housing_median_age", Tabular.TabularOp.Gt, 50)
-                .ToRowIndices();
-            Debug.Log($"Old houses (>50 years): {oldHouses.Length} properties");
+            var oldHouseIndices = housingData.Where("housing_median_age", QueryOp.Gt, 50);
+            Debug.Log($"Old houses (>50 years): {oldHouseIndices.Length} properties");
         }
 
         /// <summary>
@@ -130,16 +121,18 @@ namespace AroAro.DataCore.SampleDatasets
         /// </summary>
         public void ShowStatistics()
         {
-            if (DataCoreEditorComponent.Instance == null || !DataCoreEditorComponent.Instance.GetStore().TryGet(datasetName, out var dataset))
+            if (DataCoreEditorComponent.Instance == null)
             {
-                Debug.LogError("Dataset not found. Please load it first.");
+                Debug.LogError("DataCoreEditorComponent not found.");
                 return;
             }
 
-            var housingData = dataset as Tabular.TabularData;
+            var store = DataCoreEditorComponent.Instance.GetStore();
+            var housingData = store.GetTabular(datasetName);
+            
             if (housingData == null)
             {
-                Debug.LogError("Dataset is not tabular data");
+                Debug.LogError("Dataset not found. Please load it first.");
                 return;
             }
 
@@ -151,17 +144,25 @@ namespace AroAro.DataCore.SampleDatasets
             {
                 try
                 {
-                    var data = housingData.GetNumericColumn(column);
-                    var min = np.min(data);
-                    var max = np.max(data);
-                    var mean = np.mean(data);
-                    Debug.Log($"{column}: min={min:F2}, max={max:F2}, mean={mean:F2}");
+                    var mean = housingData.Mean(column);
+                    var min = housingData.Min(column);
+                    var max = housingData.Max(column);
+                    Debug.Log($"  {column}: mean={mean:F2}, min={min:F2}, max={max:F2}");
                 }
-                catch
+                catch (System.Exception)
                 {
-                    Debug.Log($"{column}: [non-numeric data]");
+                    Debug.Log($"  {column}: (non-numeric column)");
                 }
             }
         }
+
+        [ContextMenu("Load California Housing Dataset")]
+        private void LoadDatasetMenu() => LoadDataset();
+
+        [ContextMenu("Run Sample Queries")]
+        private void RunSampleQueriesMenu() => RunSampleQueries();
+
+        [ContextMenu("Show Statistics")]
+        private void ShowStatisticsMenu() => ShowStatistics();
     }
 }

@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace AroAro.DataCore
 {
@@ -27,14 +28,14 @@ namespace AroAro.DataCore
 
             Debug.Log($"Created dataset with {myData.RowCount} rows");
 
-            // Example: Query the data
-            var query = myData.Query().Where("score", Tabular.TabularOp.Gt, 150);
-            var indices = query.ToRowIndices();
-            Debug.Log($"Found {indices.Length} players with score > 150");
+            // Example: Query the data using the fluent API
+            var results = myData.Query()
+                .WhereGreaterThan("score", 150)
+                .ToDictionaries()
+                .ToList();
+            Debug.Log($"Found {results.Count} players with score > 150");
 
-            // The dataset will be automatically saved when the scene ends
-            // Or you can manually save it:
-            // DataCoreEditorComponent.Instance.SaveDataset("player-stats");
+            // Data is automatically persisted to LiteDB
         }
 
         public void AddPlayerScore(string playerName, double score)
@@ -44,58 +45,55 @@ namespace AroAro.DataCore
             if (store == null) return;
 
             // Get or create the dataset
-            if (!store.TryGet("player-stats", out var dataset))
+            var playerData = store.GetOrCreateTabular("player-stats");
+            
+            // Check if columns exist, add them if this is a new dataset
+            if (!playerData.HasColumn("score"))
             {
-                var newData = store.CreateTabular("player-stats");
-                newData.AddNumericColumn("score", NumSharp.np.array(new double[] { }));
-                newData.AddStringColumn("name", new string[] { });
-                dataset = newData;
+                playerData.AddNumericColumn("score", new double[0]);
+            }
+            if (!playerData.HasColumn("name"))
+            {
+                playerData.AddStringColumn("name", new string[0]);
             }
 
-            var playerData = dataset as Tabular.TabularData;
-            if (playerData != null)
+            // Add the new row
+            playerData.AddRow(new Dictionary<string, object>
             {
-                playerData.AddRow(new System.Collections.Generic.Dictionary<string, object>
-                {
-                    { "name", playerName },
-                    { "score", score }
-                });
+                { "name", playerName },
+                { "score", score }
+            });
 
-                Debug.Log($"Added player {playerName} with score {score}");
-            }
+            Debug.Log($"Added player {playerName} with score {score}");
         }
 
         public void LoadHighScores()
         {
             var store = DataCoreEditorComponent.Instance?.GetStore();
-            if (store == null || !store.TryGet("player-stats", out var dataset))
+            if (store == null)
+            {
+                Debug.Log("Store not available");
+                return;
+            }
+
+            var playerData = store.GetTabular("player-stats");
+            if (playerData == null)
             {
                 Debug.Log("No player stats found");
                 return;
             }
 
-            var playerData = dataset as Tabular.TabularData;
-            if (playerData != null)
+            // Query for high scores using fluent API
+            var highScorers = playerData.Query()
+                .WhereGreaterThan("score", 500)
+                .OrderByDescending("score")
+                .ToDictionaries()
+                .ToList();
+
+            Debug.Log($"=== High Scores (> 500) ===");
+            foreach (var scorer in highScorers)
             {
-                // Query for high scores
-                var highScorerIndices = playerData.Query()
-                    .Where("score", Tabular.TabularOp.Gt, 500)
-                    .ToRowIndices();
-
-                var names = playerData.GetStringColumn("name");
-                var scores = playerData.GetNumericColumn("score");
-
-                // Sort manually since OrderBy is not available
-                var highScorers = highScorerIndices
-                    .Select(idx => new { Name = names[idx], Score = scores[idx], Index = idx })
-                    .OrderByDescending(x => x.Score)
-                    .ToList();
-
-                Debug.Log($"=== High Scores (> 500) ===");
-                foreach (var scorer in highScorers)
-                {
-                    Debug.Log($"{scorer.Name}: {scorer.Score}");
-                }
+                Debug.Log($"{scorer["name"]}: {scorer["score"]}");
             }
         }
     }

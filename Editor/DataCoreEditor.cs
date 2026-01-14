@@ -24,15 +24,17 @@ namespace AroAro.DataCore.Editor
         
         // 预览相关字段
         private Vector2 previewScrollPosition;
-        private int previewMaxRows = 10; // 预览最大行数
-        private int previewMaxNodes = 20; // 预览最大节点数
+        private int previewMaxRows = 10;
+        private int previewMaxNodes = 20;
 
         // Session 相关字段
         private bool showSessions = true;
         private Dictionary<string, bool> sessionFoldouts = new Dictionary<string, bool>();
-        private Dictionary<string, bool> sessionDatasetFoldouts = new Dictionary<string, bool>();
-        private Vector2 sessionScrollPosition;
         private string newSessionName = "NewSession";
+
+        // 创建数据集
+        private string newTabularName = "NewTabular";
+        private string newGraphName = "NewGraph";
 
         private void OnEnable()
         {
@@ -42,282 +44,345 @@ namespace AroAro.DataCore.Editor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-
-            // Draw default properties (includes persistencePath, autoSaveOnExit, clearOnEditMode, lazyLoading)
             DrawDefaultInspector();
 
             EditorGUILayout.Space();
 
-            // Datasets section
+            // 数据集管理
+            DrawDatasetsSection();
+            
+            // CSV 导入
+            DrawCsvImportSection();
+            
+            // 创建数据集
+            DrawCreateDatasetSection();
+            
+            // 操作按钮
+            DrawActionsSection();
+
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        private void DrawDatasetsSection()
+        {
             showDatasets = EditorGUILayout.Foldout(showDatasets, "Datasets", true);
+            
             if (showDatasets)
             {
-                scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(200));
+                EditorGUI.indentLevel++;
                 
                 var store = component.GetStore();
                 var names = store.Names.ToList();
-
+                
                 if (names.Count == 0)
                 {
-                    EditorGUILayout.LabelField("No datasets", EditorStyles.centeredGreyMiniLabel);
+                    EditorGUILayout.HelpBox("No datasets loaded.", MessageType.Info);
                 }
                 else
                 {
+                    scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(300));
+                    
                     foreach (var name in names)
                     {
-                        if (!datasetFoldouts.ContainsKey(name))
-                            datasetFoldouts[name] = false;
+                        DrawDatasetItem(store, name);
+                    }
+                    
+                    EditorGUILayout.EndScrollView();
+                }
+                
+                EditorGUI.indentLevel--;
+            }
+        }
 
-                        var metadata = store.GetMetadata(name);
-                        var isLoaded = metadata?.IsLoaded ?? true;
-                        
-                        // 显示加载状态
-                        var displayName = name + (isLoaded ? "" : " (Not Loaded)");
-                        datasetFoldouts[name] = EditorGUILayout.Foldout(datasetFoldouts[name], displayName, true);
-                        if (datasetFoldouts[name])
-                        {
-                            EditorGUI.indentLevel++;
-                            
-                            if (isLoaded)
-                            {
-                                var ds = store.Get<IDataSet>(name);
-                                if (ds != null)
-                                {
-                                    EditorGUILayout.LabelField("Type", ds.Kind.ToString());
-                                    
-                                    switch (ds.Kind)
-                                    {
-                                        case DataSetKind.Tabular:
-                                            var tabular = store.Get<Tabular.TabularData>(name);
-                                            if (tabular != null)
-                                            {
-                                                EditorGUILayout.LabelField("Rows", tabular.RowCount.ToString());
-                                                EditorGUILayout.LabelField("Columns", string.Join(", ", tabular.ColumnNames));
-                                                
-                                                // 表格数据预览
-                                                ShowTabularPreview(tabular, name);
-                                            }
-                                            break;
-                                        case DataSetKind.Graph:
-                                            var graph = store.Get<Graph.GraphData>(name);
-                                            if (graph != null)
-                                            {
-                                                EditorGUILayout.LabelField("Nodes", graph.NodeCount.ToString());
-                                                EditorGUILayout.LabelField("Edges", graph.EdgeCount.ToString());
-                                                
-                                                // 图数据预览
-                                                ShowGraphPreview(graph, name);
-                                            }
-                                            break;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                EditorGUILayout.LabelField("Status", "Not Loaded", EditorStyles.miniLabel);
-                                EditorGUILayout.LabelField("Type", metadata?.Kind.ToString() ?? "Unknown");
-                                EditorGUILayout.LabelField("File Path", metadata?.FilePath ?? "N/A");
-                                
-                                EditorGUILayout.BeginHorizontal();
-                                GUILayout.FlexibleSpace();
-                                if (GUILayout.Button("Load Now", GUILayout.Width(80)))
-                                {
-                                    // 手动加载这个数据集
-                                    store.Get<IDataSet>(name);
-                                    EditorUtility.SetDirty(component);
-                                }
-                                EditorGUILayout.EndHorizontal();
-                            }
+        private void DrawDatasetItem(DataCoreStore store, string name)
+        {
+            if (!datasetFoldouts.ContainsKey(name))
+                datasetFoldouts[name] = false;
 
-                            if (isLoaded)
-                            {
-                                EditorGUILayout.BeginHorizontal();
-                                GUILayout.FlexibleSpace();
-                                if (GUILayout.Button("Delete", GUILayout.Width(60)))
-                                {
-                                    if (EditorUtility.DisplayDialog("Delete Dataset", $"Are you sure you want to delete '{name}'?", "Delete", "Cancel"))
-                                    {
-                                        store?.Delete(name);
-                                        datasetFoldouts.Remove(name);
-                                        EditorUtility.SetDirty(component);
-                                    }
-                                }
-                                EditorGUILayout.EndHorizontal();
-                            }
-                            else
-                            {
-                                EditorGUILayout.BeginHorizontal();
-                                GUILayout.FlexibleSpace();
-                                if (GUILayout.Button("Delete Metadata", GUILayout.Width(100)))
-                                {
-                                    if (EditorUtility.DisplayDialog("Delete Dataset Metadata", $"Are you sure you want to delete metadata for '{name}'?", "Delete", "Cancel"))
-                                    {
-                                        store?.Delete(name);
-                                        datasetFoldouts.Remove(name);
-                                        EditorUtility.SetDirty(component);
-                                    }
-                                }
-                                EditorGUILayout.EndHorizontal();
-                            }
-                            
-                            EditorGUI.indentLevel--;
-                        }
-                        EditorGUILayout.Space();
+            EditorGUILayout.BeginVertical(GUI.skin.box);
+            
+            EditorGUILayout.BeginHorizontal();
+            datasetFoldouts[name] = EditorGUILayout.Foldout(datasetFoldouts[name], name, true);
+            
+            if (GUILayout.Button("Preview", GUILayout.Width(60)))
+            {
+                DataCorePreviewWindow.ShowWindow(component, name);
+            }
+            
+            if (GUILayout.Button("Delete", GUILayout.Width(60)))
+            {
+                if (EditorUtility.DisplayDialog("Delete Dataset", $"Are you sure you want to delete '{name}'?", "Delete", "Cancel"))
+                {
+                    store.Delete(name);
+                    datasetFoldouts.Remove(name);
+                    EditorUtility.SetDirty(component);
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            if (datasetFoldouts[name])
+            {
+                EditorGUI.indentLevel++;
+                
+                if (store.TryGet(name, out var ds))
+                {
+                    EditorGUILayout.LabelField("Type", ds.Kind.ToString());
+                    
+                    if (ds is ITabularDataset tabular)
+                    {
+                        EditorGUILayout.LabelField("Rows", tabular.RowCount.ToString());
+                        EditorGUILayout.LabelField("Columns", tabular.ColumnCount.ToString());
+                        ShowTabularPreview(tabular, name);
+                    }
+                    else if (ds is IGraphDataset graph)
+                    {
+                        EditorGUILayout.LabelField("Nodes", graph.NodeCount.ToString());
+                        EditorGUILayout.LabelField("Edges", graph.EdgeCount.ToString());
+                        ShowGraphPreview(graph, name);
                     }
                 }
-
-                EditorGUILayout.EndScrollView();
-
-                // Create new dataset buttons
-                EditorGUILayout.LabelField("Create New Dataset", EditorStyles.boldLabel);
-                EditorGUILayout.BeginHorizontal();
-                CreateDataset("Tabular", "NewTabular");
-                EditorGUILayout.Space();
-                CreateDataset("Graph", "NewGraph");
-                EditorGUILayout.EndHorizontal();
-                EditorGUILayout.Space();
+                
+                EditorGUI.indentLevel--;
             }
-
-            EditorGUILayout.Space();
-
-            // Actions
-            EditorGUILayout.LabelField("Actions", EditorStyles.boldLabel);
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Save All"))
-            {
-                SaveAllDatasets();
-            }
-            if (GUILayout.Button("Load All"))
-            {
-                LoadAllDatasets();
-            }
-            if (GUILayout.Button("Run Tests"))
-            {
-                RunSelfTest();
-            }
-            if (GUILayout.Button("Session Tests"))
-            {
-                RunSessionTests();
-            }
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space();
-
-            // Sessions section
-            showSessions = EditorGUILayout.Foldout(showSessions, "Sessions", true);
-            if (showSessions)
-            {
-                ShowSessionsPanel();
-            }
-
-            EditorGUILayout.Space();
-
-            // Preview Settings
-            EditorGUILayout.LabelField("Preview Settings", EditorStyles.boldLabel);
-            EditorGUILayout.BeginVertical(GUI.skin.box);
-            
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Max Preview Rows", GUILayout.Width(120));
-            previewMaxRows = EditorGUILayout.IntSlider(previewMaxRows, 5, 50);
-            EditorGUILayout.EndHorizontal();
-            
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Max Preview Nodes", GUILayout.Width(120));
-            previewMaxNodes = EditorGUILayout.IntSlider(previewMaxNodes, 10, 100);
-            EditorGUILayout.EndHorizontal();
             
             EditorGUILayout.EndVertical();
+        }
 
+        private void ShowTabularPreview(ITabularDataset tabular, string datasetName)
+        {
+            if (!datasetPreviewFoldouts.ContainsKey(datasetName))
+                datasetPreviewFoldouts[datasetName] = false;
+
+            datasetPreviewFoldouts[datasetName] = EditorGUILayout.Foldout(datasetPreviewFoldouts[datasetName], "Data Preview", true);
+            
+            if (datasetPreviewFoldouts[datasetName])
+            {
+                EditorGUI.indentLevel++;
+                
+                var data = tabular.Query().Page(1, previewMaxRows).ToDictionaries().ToList();
+                if (data.Count == 0)
+                {
+                    EditorGUILayout.LabelField("No data to display");
+                }
+                else
+                {
+                    var columns = data.First().Keys.ToList();
+                    
+                    previewScrollPosition = EditorGUILayout.BeginScrollView(previewScrollPosition, GUILayout.Height(150));
+                    
+                    // 表头
+                    EditorGUILayout.BeginHorizontal();
+                    foreach (var col in columns)
+                    {
+                        EditorGUILayout.LabelField(col, EditorStyles.boldLabel, GUILayout.Width(80));
+                    }
+                    EditorGUILayout.EndHorizontal();
+                    
+                    // 数据行
+                    foreach (var row in data)
+                    {
+                        EditorGUILayout.BeginHorizontal();
+                        foreach (var col in columns)
+                        {
+                            var value = row.TryGetValue(col, out var v) ? v?.ToString() ?? "" : "";
+                            var display = value.Length > 10 ? value.Substring(0, 10) + "..." : value;
+                            EditorGUILayout.LabelField(display, GUILayout.Width(80));
+                        }
+                        EditorGUILayout.EndHorizontal();
+                    }
+                    
+                    EditorGUILayout.EndScrollView();
+                    
+                    if (tabular.RowCount > previewMaxRows)
+                    {
+                        EditorGUILayout.LabelField($"... and {tabular.RowCount - previewMaxRows} more rows");
+                    }
+                }
+                
+                EditorGUI.indentLevel--;
+            }
+        }
+
+        private void ShowGraphPreview(IGraphDataset graph, string datasetName)
+        {
+            if (!datasetPreviewFoldouts.ContainsKey(datasetName))
+                datasetPreviewFoldouts[datasetName] = false;
+
+            datasetPreviewFoldouts[datasetName] = EditorGUILayout.Foldout(datasetPreviewFoldouts[datasetName], "Graph Preview", true);
+            
+            if (datasetPreviewFoldouts[datasetName])
+            {
+                EditorGUI.indentLevel++;
+                
+                previewScrollPosition = EditorGUILayout.BeginScrollView(previewScrollPosition, GUILayout.Height(150));
+                
+                // 显示节点
+                EditorGUILayout.LabelField("Nodes:", EditorStyles.boldLabel);
+                var nodeIds = graph.GetNodeIds().Take(previewMaxNodes).ToList();
+                foreach (var nodeId in nodeIds)
+                {
+                    EditorGUILayout.LabelField($"  {nodeId}");
+                }
+                
+                if (graph.NodeCount > previewMaxNodes)
+                {
+                    EditorGUILayout.LabelField($"  ... and {graph.NodeCount - previewMaxNodes} more");
+                }
+                
+                EditorGUILayout.Space();
+                
+                // 显示边
+                EditorGUILayout.LabelField("Edges:", EditorStyles.boldLabel);
+                var edges = graph.GetEdges().Take(previewMaxNodes).ToList();
+                foreach (var edge in edges)
+                {
+                    EditorGUILayout.LabelField($"  {edge.From} → {edge.To}");
+                }
+                
+                if (graph.EdgeCount > previewMaxNodes)
+                {
+                    EditorGUILayout.LabelField($"  ... and {graph.EdgeCount - previewMaxNodes} more");
+                }
+                
+                EditorGUILayout.EndScrollView();
+                
+                EditorGUI.indentLevel--;
+            }
+        }
+
+        private void DrawCsvImportSection()
+        {
             EditorGUILayout.Space();
-
-            // CSV Import Section
-            EditorGUILayout.LabelField("CSV Import", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Import CSV", EditorStyles.boldLabel);
             
             EditorGUILayout.BeginVertical(GUI.skin.box);
             
-            // CSV File selection
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("CSV File", GUILayout.Width(80));
-            csvFilePath = EditorGUILayout.TextField(csvFilePath);
+            csvFilePath = EditorGUILayout.TextField("CSV File", csvFilePath);
             if (GUILayout.Button("Browse", GUILayout.Width(60)))
             {
                 var path = EditorUtility.OpenFilePanel("Select CSV File", "", "csv");
                 if (!string.IsNullOrEmpty(path))
                 {
                     csvFilePath = path;
-                    // 自动设置数据集名称
-                    var fileName = System.IO.Path.GetFileNameWithoutExtension(path);
-                    csvDatasetName = fileName;
+                    csvDatasetName = System.IO.Path.GetFileNameWithoutExtension(path);
                 }
             }
             EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space();
-
-            // Dataset configuration
+            
+            csvDatasetName = EditorGUILayout.TextField("Dataset Name", csvDatasetName);
+            csvHasHeader = EditorGUILayout.Toggle("Has Header", csvHasHeader);
+            
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Dataset Name", GUILayout.Width(80));
-            csvDatasetName = EditorGUILayout.TextField(csvDatasetName);
+            EditorGUILayout.PrefixLabel("Delimiter");
+            csvDelimiter = EditorGUILayout.TextField(csvDelimiter.ToString(), GUILayout.Width(30)).FirstOrDefault();
+            if (csvDelimiter == '\0') csvDelimiter = ',';
             EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Has Header", GUILayout.Width(80));
-            csvHasHeader = EditorGUILayout.Toggle(csvHasHeader);
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Delimiter", GUILayout.Width(80));
-            csvDelimiter = EditorGUILayout.TextField(csvDelimiter.ToString(), GUILayout.Width(30))[0];
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space();
-
-            // Import button
+            
             EditorGUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Import CSV", GUILayout.Width(120), GUILayout.Height(25)))
+            if (GUILayout.Button("Import CSV", GUILayout.Width(100)))
             {
                 ImportCsv();
             }
-            GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
             
             EditorGUILayout.EndVertical();
-
-            serializedObject.ApplyModifiedProperties();
         }
 
-        private void SaveAllDatasets()
+        private void ImportCsv()
         {
-#if DATACORE_APACHE_ARROW
-            var store = component.GetStore();
-            var path = component.GetPersistencePath();
-            
-            foreach (var name in store.Names)
+            if (string.IsNullOrEmpty(csvFilePath))
             {
-                var ds = store.Get<IDataSet>(name);
-                var filePath = $"{path}/{name}.{(ds.Kind == DataSetKind.Tabular ? "arrow" : "dcgraph")}";
-                store.Save(name, filePath);
+                EditorUtility.DisplayDialog("Import CSV", "Please select a CSV file first.", "OK");
+                return;
             }
             
-            Debug.Log($"Saved {store.Names.Count} datasets to {path}");
-#else
-            Debug.LogWarning("Cannot save datasets: Apache Arrow persistence is disabled. Define DATACORE_APACHE_ARROW to enable.");
-#endif
-        }
-
-        private void LoadAllDatasets()
-        {
+            if (string.IsNullOrEmpty(csvDatasetName))
+            {
+                EditorUtility.DisplayDialog("Import CSV", "Please enter a dataset name.", "OK");
+                return;
+            }
+            
             try
             {
-                component.LoadAll();
-                EditorUtility.DisplayDialog("Load All", "All datasets have been loaded", "OK");
+                var tabular = component.ImportCsvToTabular(csvFilePath, csvDatasetName, csvHasHeader, csvDelimiter);
+                EditorUtility.DisplayDialog("Import CSV", $"Successfully imported {tabular.RowCount} rows.", "OK");
                 EditorUtility.SetDirty(component);
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                EditorUtility.DisplayDialog("Load All Error", $"Failed to load datasets: {ex.Message}", "OK");
+                EditorUtility.DisplayDialog("Import CSV Error", ex.Message, "OK");
             }
+        }
+
+        private void DrawCreateDatasetSection()
+        {
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Create Dataset", EditorStyles.boldLabel);
+            
+            EditorGUILayout.BeginVertical(GUI.skin.box);
+            
+            // 创建表格数据集
+            EditorGUILayout.BeginHorizontal();
+            newTabularName = EditorGUILayout.TextField("Tabular Name", newTabularName);
+            if (GUILayout.Button("Create", GUILayout.Width(60)))
+            {
+                if (!string.IsNullOrEmpty(newTabularName))
+                {
+                    component.CreateTabularDataset(newTabularName);
+                    EditorUtility.SetDirty(component);
+                    newTabularName = "NewTabular";
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            // 创建图数据集
+            EditorGUILayout.BeginHorizontal();
+            newGraphName = EditorGUILayout.TextField("Graph Name", newGraphName);
+            if (GUILayout.Button("Create", GUILayout.Width(60)))
+            {
+                if (!string.IsNullOrEmpty(newGraphName))
+                {
+                    component.CreateGraphDataset(newGraphName);
+                    EditorUtility.SetDirty(component);
+                    newGraphName = "NewGraph";
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawActionsSection()
+        {
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Actions", EditorStyles.boldLabel);
+            
+            EditorGUILayout.BeginHorizontal();
+            
+            if (GUILayout.Button("Checkpoint"))
+            {
+                component.Checkpoint();
+                EditorUtility.DisplayDialog("Checkpoint", "Data flushed to disk.", "OK");
+            }
+            
+            if (GUILayout.Button("Clear All"))
+            {
+                if (EditorUtility.DisplayDialog("Clear All", "Are you sure you want to delete all datasets?", "Yes", "No"))
+                {
+                    component.ClearAll();
+                    datasetFoldouts.Clear();
+                    EditorUtility.SetDirty(component);
+                }
+            }
+            
+            if (GUILayout.Button("Run Self Test"))
+            {
+                RunSelfTest();
+            }
+            
+            EditorGUILayout.EndHorizontal();
         }
 
         private void RunSelfTest()
@@ -327,642 +392,5 @@ namespace AroAro.DataCore.Editor
             test.RunTests();
             DestroyImmediate(go);
         }
-
-        private void RunSessionTests()
-        {
-            var go = new GameObject("Session Test Runner");
-            var test = go.AddComponent<DataCoreSelfTest>();
-            test.RunTests();
-            DestroyImmediate(go);
-        }
-
-        private void ImportCsv()
-        {
-            if (string.IsNullOrEmpty(csvFilePath))
-            {
-                EditorUtility.DisplayDialog("CSV Import Error", "Please select a CSV file first.", "OK");
-                return;
-            }
-
-            if (string.IsNullOrEmpty(csvDatasetName))
-            {
-                EditorUtility.DisplayDialog("CSV Import Error", "Please enter a dataset name.", "OK");
-                return;
-            }
-
-            try
-            {
-                // 检测文件大小决定是否使用快速模式
-                var fileInfo = new System.IO.FileInfo(csvFilePath);
-                bool useFastMode = fileInfo.Length > 1024 * 1024; // 大于1MB的文件使用快速模式
-                
-                component.ImportCsvToTabular(csvFilePath, csvDatasetName, csvHasHeader, csvDelimiter, useFastMode);
-                EditorUtility.DisplayDialog("CSV Import Success", $"Successfully imported CSV to dataset '{csvDatasetName}' ({(useFastMode ? "Fast Mode" : "Standard Mode")})", "OK");
-                EditorUtility.SetDirty(component);
-            }
-            catch (System.Exception ex)
-            {
-                EditorUtility.DisplayDialog("CSV Import Error", $"Failed to import CSV: {ex.Message}", "OK");
-            }
-        }
-
-        private string newTabularName = "NewTabular";
-        private string newGraphName = "NewGraph";
-
-        private void CreateDataset(string type, string defaultName)
-        {
-            // 使用垂直布局改善排版
-            EditorGUILayout.BeginVertical(GUI.skin.box);
-            
-            if (type == "Tabular")
-            {
-                EditorGUILayout.LabelField("Create Tabular Dataset", EditorStyles.boldLabel);
-                EditorGUILayout.Space();
-                
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField("Name", GUILayout.Width(40));
-                newTabularName = EditorGUILayout.TextField(newTabularName);
-                EditorGUILayout.EndHorizontal();
-                
-                EditorGUILayout.Space();
-                
-                if (GUILayout.Button($"Create {newTabularName}", GUILayout.Height(25)))
-                {
-                    component.CreateTabularDataset(newTabularName);
-                    EditorUtility.SetDirty(component);
-                    newTabularName = "NewTabular"; // 重置为默认值
-                }
-            }
-            else
-            {
-                EditorGUILayout.LabelField("Create Graph Dataset", EditorStyles.boldLabel);
-                EditorGUILayout.Space();
-                
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField("Name", GUILayout.Width(40));
-                newGraphName = EditorGUILayout.TextField(newGraphName);
-                EditorGUILayout.EndHorizontal();
-                
-                EditorGUILayout.Space();
-                
-                if (GUILayout.Button($"Create {newGraphName}", GUILayout.Height(25)))
-                {
-                    component.CreateGraphDataset(newGraphName);
-                    EditorUtility.SetDirty(component);
-                    newGraphName = "NewGraph"; // 重置为默认值
-                }
-            }
-            
-            EditorGUILayout.EndVertical();
-        }
-
-        /// <summary>
-        /// 显示表格数据预览
-        /// </summary>
-        private void ShowTabularPreview(AroAro.DataCore.Tabular.TabularData tabular, string datasetName)
-        {
-            EditorGUILayout.BeginHorizontal();
-            if (!datasetPreviewFoldouts.ContainsKey(datasetName))
-                datasetPreviewFoldouts[datasetName] = false;
-
-            datasetPreviewFoldouts[datasetName] = EditorGUILayout.Foldout(datasetPreviewFoldouts[datasetName], "Data Preview", true);
-            
-            if (GUILayout.Button("Open Full Preview", GUILayout.Width(120)))
-            {
-                DataCorePreviewWindow.ShowWindow(target as DataCoreEditorComponent, datasetName);
-            }
-            EditorGUILayout.EndHorizontal();
-            
-            if (datasetPreviewFoldouts[datasetName])
-            {
-                EditorGUI.indentLevel++;
-                
-                // 显示列信息
-                EditorGUILayout.LabelField("Columns:", EditorStyles.boldLabel);
-                foreach (var columnName in tabular.ColumnNames)
-                {
-                    EditorGUILayout.LabelField($"  {columnName}");
-                }
-                
-                EditorGUILayout.Space();
-                
-                // 显示数据预览
-                EditorGUILayout.LabelField($"First {Math.Min(previewMaxRows, tabular.RowCount)} rows:", EditorStyles.boldLabel);
-                previewScrollPosition = EditorGUILayout.BeginScrollView(previewScrollPosition, GUILayout.Height(200));
-                
-                // 显示表头
-                EditorGUILayout.BeginHorizontal();
-                foreach (var columnName in tabular.ColumnNames)
-                {
-                    EditorGUILayout.LabelField(columnName, EditorStyles.boldLabel, GUILayout.Width(100));
-                }
-                EditorGUILayout.EndHorizontal();
-                
-                // 显示数据行
-                int rowsToShow = Math.Min(previewMaxRows, tabular.RowCount);
-                for (int i = 0; i < rowsToShow; i++)
-                {
-                    EditorGUILayout.BeginHorizontal();
-                    foreach (var columnName in tabular.ColumnNames)
-                    {
-                        bool valueDisplayed = false;
-                        
-                        // 先尝试获取数值列
-                        try
-                        {
-                            var numericData = tabular.GetNumericColumn(columnName);
-                            if (i < (int)numericData.size)
-                            {
-                                var value = numericData.Data<double>()[i];
-                                EditorGUILayout.LabelField(value.ToString("F2"), GUILayout.Width(100));
-                                valueDisplayed = true;
-                            }
-                        }
-                        catch
-                        {
-                            // 数值列获取失败，继续尝试字符串列
-                        }
-                        
-                        // 如果数值列没有显示成功，尝试字符串列
-                        if (!valueDisplayed)
-                        {
-                            try
-                            {
-                                var stringData = tabular.GetStringColumn(columnName);
-                                if (i < stringData.Length)
-                                {
-                                    var value = stringData[i] ?? "";
-                                    EditorGUILayout.LabelField(value.Length > 20 ? value.Substring(0, 20) + "..." : value, GUILayout.Width(100));
-                                    valueDisplayed = true;
-                                }
-                            }
-                            catch
-                            {
-                                // 字符串列获取也失败
-                            }
-                        }
-                        
-                        // 如果两种列类型都获取失败，显示N/A
-                        if (!valueDisplayed)
-                        {
-                            EditorGUILayout.LabelField("N/A", GUILayout.Width(100));
-                        }
-                    }
-                    EditorGUILayout.EndHorizontal();
-                }
-                
-                EditorGUILayout.EndScrollView();
-                
-                EditorGUI.indentLevel--;
-            }
-        }
-
-        /// <summary>
-        /// 显示图数据预览
-        /// </summary>
-        private void ShowGraphPreview(AroAro.DataCore.Graph.GraphData graph, string datasetName)
-        {
-            EditorGUILayout.BeginHorizontal();
-            if (!datasetPreviewFoldouts.ContainsKey(datasetName))
-                datasetPreviewFoldouts[datasetName] = false;
-
-            datasetPreviewFoldouts[datasetName] = EditorGUILayout.Foldout(datasetPreviewFoldouts[datasetName], "Graph Preview", true);
-            
-            if (GUILayout.Button("Open Full Preview", GUILayout.Width(120)))
-            {
-                DataCorePreviewWindow.ShowWindow(target as DataCoreEditorComponent, datasetName);
-            }
-            EditorGUILayout.EndHorizontal();
-            
-            if (datasetPreviewFoldouts[datasetName])
-            {
-                EditorGUI.indentLevel++;
-                
-                // 显示节点预览
-                EditorGUILayout.LabelField("Nodes:", EditorStyles.boldLabel);
-                previewScrollPosition = EditorGUILayout.BeginScrollView(previewScrollPosition, GUILayout.Height(150));
-                
-                int nodesToShow = Math.Min(previewMaxNodes, graph.NodeCount);
-                var nodeIds = graph.GetNodeIds().Take(nodesToShow).ToList();
-                
-                foreach (var nodeId in nodeIds)
-                {
-                    var node = graph.GetNode(nodeId);
-                    EditorGUILayout.BeginHorizontal();
-                    EditorGUILayout.LabelField($"Node: {node.Id}", GUILayout.Width(120));
-                    
-                    if (node.Properties.Count > 0)
-                    {
-                        var props = string.Join(", ", node.Properties.Select(kv => $"{kv.Key}:{kv.Value}"));
-                        EditorGUILayout.LabelField(props.Length > 50 ? props.Substring(0, 50) + "..." : props);
-                    }
-                    else
-                    {
-                        EditorGUILayout.LabelField("No properties");
-                    }
-                    
-                    EditorGUILayout.EndHorizontal();
-                }
-                
-                if (graph.NodeCount > nodesToShow)
-                {
-                    EditorGUILayout.LabelField($"... and {graph.NodeCount - nodesToShow} more nodes");
-                }
-                
-                EditorGUILayout.EndScrollView();
-                
-                EditorGUILayout.Space();
-                
-                // 显示边预览
-                EditorGUILayout.LabelField("Edges:", EditorStyles.boldLabel);
-                previewScrollPosition = EditorGUILayout.BeginScrollView(previewScrollPosition, GUILayout.Height(150));
-                
-                int edgesToShow = Math.Min(previewMaxNodes, graph.EdgeCount);
-                var edges = graph.Edges().Take(edgesToShow).ToList();
-                
-                foreach (var edge in edges)
-                {
-                    EditorGUILayout.BeginHorizontal();
-                    EditorGUILayout.LabelField($"{edge.From} → {edge.To}", GUILayout.Width(120));
-                    
-                    if (edge.Properties.Count > 0)
-                    {
-                        var props = string.Join(", ", edge.Properties.Select(kv => $"{kv.Key}:{kv.Value}"));
-                        EditorGUILayout.LabelField(props.Length > 50 ? props.Substring(0, 50) + "..." : props);
-                    }
-                    else
-                    {
-                        EditorGUILayout.LabelField("No properties");
-                    }
-                    
-                    EditorGUILayout.EndHorizontal();
-                }
-                
-                if (graph.EdgeCount > edgesToShow)
-                {
-                    EditorGUILayout.LabelField($"... and {graph.EdgeCount - edgesToShow} more edges");
-                }
-                
-                EditorGUILayout.EndScrollView();
-                
-                EditorGUI.indentLevel--;
-            }
-        }
-
-        /// <summary>
-        /// 显示 Session 面板
-        /// </summary>
-        private void ShowSessionsPanel()
-        {
-            var store = component.GetStore();
-            var sessionManager = store.SessionManager;
-            var sessionIds = sessionManager.SessionIds;
-
-            // 创建新会话
-            EditorGUILayout.BeginVertical(GUI.skin.box);
-            EditorGUILayout.LabelField("Create New Session", EditorStyles.boldLabel);
-            EditorGUILayout.BeginHorizontal();
-            newSessionName = EditorGUILayout.TextField("Session Name", newSessionName);
-            if (GUILayout.Button("Create", GUILayout.Width(60)))
-            {
-                if (!string.IsNullOrEmpty(newSessionName))
-                {
-                    var session = sessionManager.CreateSession(newSessionName);
-                    Debug.Log($"Created session: {session.Name} (ID: {session.Id})");
-                    newSessionName = "NewSession";
-                    EditorUtility.SetDirty(component);
-                }
-            }
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.EndVertical();
-
-            EditorGUILayout.Space();
-
-            // 显示现有会话
-            if (sessionIds.Count == 0)
-            {
-                EditorGUILayout.LabelField("No active sessions", EditorStyles.centeredGreyMiniLabel);
-            }
-            else
-            {
-                EditorGUILayout.LabelField($"Active Sessions ({sessionIds.Count})", EditorStyles.boldLabel);
-                sessionScrollPosition = EditorGUILayout.BeginScrollView(sessionScrollPosition, GUILayout.Height(300));
-
-                foreach (var sessionId in sessionIds)
-                {
-                    try
-                    {
-                        var session = sessionManager.GetSession(sessionId);
-                        
-                        if (!sessionFoldouts.ContainsKey(sessionId))
-                            sessionFoldouts[sessionId] = false;
-
-                        // Session 标题行
-                        EditorGUILayout.BeginVertical(GUI.skin.box);
-                        EditorGUILayout.BeginHorizontal();
-                        
-                        var sessionTitle = $"{session.Name} (ID: {session.Id.Substring(0, 8)}...)";
-                        sessionFoldouts[sessionId] = EditorGUILayout.Foldout(sessionFoldouts[sessionId], sessionTitle, true);
-                        
-                        GUILayout.FlexibleSpace();
-                        
-                        // Session 信息
-                        EditorGUILayout.LabelField($"Datasets: {session.DatasetCount}", EditorStyles.miniLabel, GUILayout.Width(80));
-                        EditorGUILayout.LabelField($"Created: {session.CreatedAt:HH:mm:ss}", EditorStyles.miniLabel, GUILayout.Width(100));
-                        
-                        // 关闭会话按钮
-                        if (GUILayout.Button("Close", GUILayout.Width(60)))
-                        {
-                            if (EditorUtility.DisplayDialog("Close Session", $"Are you sure you want to close session '{session.Name}'?", "Close", "Cancel"))
-                            {
-                                sessionManager.CloseSession(sessionId);
-                                sessionFoldouts.Remove(sessionId);
-                                EditorUtility.SetDirty(component);
-                            }
-                        }
-                        
-                        EditorGUILayout.EndHorizontal();
-
-                        if (sessionFoldouts[sessionId])
-                        {
-                            EditorGUI.indentLevel++;
-                            ShowSessionDetails(session);
-                            EditorGUI.indentLevel--;
-                        }
-                        
-                        EditorGUILayout.EndVertical();
-                        EditorGUILayout.Space();
-                    }
-                    catch (Exception ex)
-                    {
-                        EditorGUILayout.HelpBox($"Error loading session {sessionId}: {ex.Message}", MessageType.Error);
-                    }
-                }
-
-                EditorGUILayout.EndScrollView();
-
-                // 批量操作
-                EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button("Close All Sessions"))
-                {
-                    if (EditorUtility.DisplayDialog("Close All Sessions", "Are you sure you want to close all sessions?", "Close All", "Cancel"))
-                    {
-                        sessionManager.CloseAllSessions();
-                        sessionFoldouts.Clear();
-                        EditorUtility.SetDirty(component);
-                    }
-                }
-                if (GUILayout.Button("Cleanup Idle Sessions"))
-                {
-                    var idleTimeout = TimeSpan.FromMinutes(30);
-                    var cleanedCount = sessionManager.CleanupIdleSessions(idleTimeout);
-                    Debug.Log($"Cleaned up {cleanedCount} idle sessions");
-                    EditorUtility.SetDirty(component);
-                }
-                EditorGUILayout.EndHorizontal();
-            }
-        }
-
-        /// <summary>
-        /// 显示会话详细信息
-        /// </summary>
-        private void ShowSessionDetails(ISession session)
-        {
-            EditorGUILayout.LabelField("Session Details", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("ID", session.Id);
-            EditorGUILayout.LabelField("Name", session.Name);
-            EditorGUILayout.LabelField("Created", session.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss"));
-            EditorGUILayout.LabelField("Last Activity", session.LastActivityAt.ToString("yyyy-MM-dd HH:mm:ss"));
-            EditorGUILayout.LabelField("Dataset Count", session.DatasetCount.ToString());
-            
-            // DataFrame统计信息
-            if (session is AroAro.DataCore.Session.Session concreteSession)
-            {
-                EditorGUILayout.LabelField("DataFrame Count", concreteSession.DataFrameCount.ToString());
-                
-                // DataFrame快速操作
-                if (concreteSession.DataFrameCount > 0)
-                {
-                    EditorGUILayout.Space();
-                    EditorGUILayout.LabelField("DataFrame Operations", EditorStyles.boldLabel);
-                    
-                    EditorGUILayout.BeginHorizontal();
-                    if (GUILayout.Button("Show DataFrame Stats"))
-                    {
-                        ShowDataFrameStatistics(concreteSession);
-                    }
-                    if (GUILayout.Button("Create DataFrame"))
-                    {
-                        ShowCreateDataFrameDialog(concreteSession);
-                    }
-                    EditorGUILayout.EndHorizontal();
-                }
-            }
-
-            EditorGUILayout.Space();
-
-            // 显示会话中的数据集
-            var datasetNames = session.DatasetNames;
-            if (datasetNames.Count == 0)
-            {
-                EditorGUILayout.LabelField("No datasets in this session", EditorStyles.centeredGreyMiniLabel);
-            }
-            else
-            {
-                EditorGUILayout.LabelField("Datasets in Session", EditorStyles.boldLabel);
-                
-                foreach (var datasetName in datasetNames)
-                {
-                    var datasetKey = $"{session.Id}_{datasetName}";
-                    if (!sessionDatasetFoldouts.ContainsKey(datasetKey))
-                        sessionDatasetFoldouts[datasetKey] = false;
-
-                    EditorGUILayout.BeginVertical(GUI.skin.box);
-                    EditorGUILayout.BeginHorizontal();
-                    
-                    sessionDatasetFoldouts[datasetKey] = EditorGUILayout.Foldout(sessionDatasetFoldouts[datasetKey], datasetName, true);
-                    
-                    GUILayout.FlexibleSpace();
-                    
-                    try
-                    {
-                        var dataset = session.GetDataset(datasetName);
-                        EditorGUILayout.LabelField(dataset.Kind.ToString(), EditorStyles.miniLabel, GUILayout.Width(80));
-                        
-                        // 移除数据集按钮
-                        if (GUILayout.Button("Remove", GUILayout.Width(60)))
-                        {
-                            if (EditorUtility.DisplayDialog("Remove Dataset", $"Remove dataset '{datasetName}' from session?", "Remove", "Cancel"))
-                            {
-                                session.RemoveDataset(datasetName);
-                                sessionDatasetFoldouts.Remove(datasetKey);
-                                EditorUtility.SetDirty(component);
-                            }
-                        }
-                        
-                        // 持久化按钮
-                        if (GUILayout.Button("Persist", GUILayout.Width(60)))
-                        {
-                            try
-                            {
-                                if (session.PersistDataset(datasetName))
-                                {
-                                    Debug.Log($"Persisted dataset '{datasetName}' from session");
-                                }
-                                else
-                                {
-                                    EditorUtility.DisplayDialog("Persist Failed", $"Failed to persist dataset '{datasetName}'", "OK");
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                EditorUtility.DisplayDialog("Persist Error", $"Error persisting dataset: {ex.Message}", "OK");
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        EditorGUILayout.LabelField("Error", EditorStyles.miniLabel, GUILayout.Width(80));
-                    }
-                    
-                    EditorGUILayout.EndHorizontal();
-
-                    if (sessionDatasetFoldouts[datasetKey])
-                    {
-                        EditorGUI.indentLevel++;
-                        try
-                        {
-                            var dataset = session.GetDataset(datasetName);
-                            ShowDatasetDetails(dataset);
-                        }
-                        catch (Exception ex)
-                        {
-                            EditorGUILayout.HelpBox($"Error loading dataset: {ex.Message}", MessageType.Error);
-                        }
-                        EditorGUI.indentLevel--;
-                    }
-                    
-                    EditorGUILayout.EndVertical();
-                    EditorGUILayout.Space();
-                }
-
-                // 会话操作
-                EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button("Clear Session"))
-                {
-                    if (EditorUtility.DisplayDialog("Clear Session", $"Clear all datasets from session '{session.Name}'?", "Clear", "Cancel"))
-                    {
-                        session.Clear();
-                        sessionDatasetFoldouts.Clear();
-                        EditorUtility.SetDirty(component);
-                    }
-                }
-                EditorGUILayout.EndHorizontal();
-            }
-        }
-
-        /// <summary>
-        /// 显示数据集详细信息
-        /// </summary>
-        private void ShowDatasetDetails(IDataSet dataset)
-        {
-            EditorGUILayout.LabelField("Dataset ID", dataset.Id);
-            EditorGUILayout.LabelField("Kind", dataset.Kind.ToString());
-
-            switch (dataset.Kind)
-            {
-                case DataSetKind.Tabular:
-                    var tabular = dataset as Tabular.TabularData;
-                    if (tabular != null)
-                    {
-                        EditorGUILayout.LabelField("Rows", tabular.RowCount.ToString());
-                        EditorGUILayout.LabelField("Columns", string.Join(", ", tabular.ColumnNames));
-                    }
-                    break;
-                case DataSetKind.Graph:
-                    var graph = dataset as Graph.GraphData;
-                    if (graph != null)
-                    {
-                        EditorGUILayout.LabelField("Nodes", graph.NodeCount.ToString());
-                        EditorGUILayout.LabelField("Edges", graph.EdgeCount.ToString());
-                    }
-                    break;
-            }
-        }
-
-        #region DataFrame UI Methods
-
-        /// <summary>
-        /// 显示DataFrame统计信息
-        /// </summary>
-        private void ShowDataFrameStatistics(AroAro.DataCore.Session.Session session)
-        {
-            var dfNames = session.DataFrameNames;
-            var message = "DataFrame Statistics for Session '" + session.Name + "'\n\n";
-            message += "Total DataFrames: " + session.DataFrameCount + "\n\n";
-
-            foreach (var dfName in dfNames)
-            {
-                try
-                {
-                    var stats = session.GetDataFrameStatistics(dfName);
-                    message += "DataFrame: " + dfName + "\n";
-                    message += "  Rows: " + stats["RowCount"] + "\n";
-                    message += "  Columns: " + stats["ColumnCount"] + "\n";
-                    
-                    if (stats.ContainsKey("MemoryUsage"))
-                    {
-                        message += "  Memory: " + FormatMemory((long)stats["MemoryUsage"]) + "\n";
-                    }
-                    
-                    message += "\n";
-                }
-                catch (Exception ex)
-                {
-                    message += "DataFrame: " + dfName + " - Error: " + ex.Message + "\n\n";
-                }
-            }
-
-            EditorUtility.DisplayDialog("DataFrame Statistics", message, "OK");
-        }
-
-        /// <summary>
-        /// 显示创建DataFrame对话框
-        /// </summary>
-        private void ShowCreateDataFrameDialog(AroAro.DataCore.Session.Session session)
-        {
-            var dfName = EditorUtility.SaveFilePanel("Create DataFrame", "", "NewDataFrame", "");
-            if (!string.IsNullOrEmpty(dfName))
-            {
-                try
-                {
-                    var df = session.CreateDataFrame(dfName);
-                    EditorUtility.DisplayDialog("Success", "DataFrame '" + dfName + "' created successfully", "OK");
-                    EditorUtility.SetDirty(component);
-                }
-                catch (Exception ex)
-                {
-                    EditorUtility.DisplayDialog("Error", "Failed to create DataFrame: " + ex.Message, "OK");
-                }
-            }
-        }
-
-        /// <summary>
-        /// 格式化内存大小
-        /// </summary>
-        private string FormatMemory(long bytes)
-        {
-            string[] sizes = { "B", "KB", "MB", "GB" };
-            int order = 0;
-            double len = bytes;
-            while (len >= 1024 && order < sizes.Length - 1)
-            {
-                order++;
-                len /= 1024;
-            }
-            return len.ToString("0.##") + " " + sizes[order];
-        }
-
-        #endregion
     }
 }

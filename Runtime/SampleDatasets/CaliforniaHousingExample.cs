@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Linq;
 using NumSharp;
 
 namespace AroAro.DataCore.SampleDatasets
@@ -39,27 +40,25 @@ namespace AroAro.DataCore.SampleDatasets
             loader.RunSampleQueries();
 
             // Example: Access the dataset directly
-            if (DataCoreEditorComponent.Instance != null && 
-                DataCoreEditorComponent.Instance.GetStore().TryGet("california-housing", out var dataset))
+            if (DataCoreEditorComponent.Instance != null)
             {
-                var housingData = dataset as Tabular.TabularData;
+                var store = DataCoreEditorComponent.Instance.GetStore();
+                var housingData = store.GetTabular("california-housing");
+                
                 if (housingData != null)
                 {
                     // Custom query: Find houses with high value and high income
                     var luxuryHomes = housingData.Query()
-                        .Where("median_house_value", Tabular.TabularOp.Gt, 400000)
-                        .Where("median_income", Tabular.TabularOp.Gt, 6.0)
-                        .ToRowIndices();
+                        .WhereGreaterThan("median_house_value", 400000)
+                        .WhereGreaterThan("median_income", 6.0)
+                        .ToDictionaries()
+                        .ToList();
 
-                    Debug.Log($"Luxury homes (value > $400k, income > $60k): {luxuryHomes.Length} properties");
+                    Debug.Log($"Luxury homes (value > $400k, income > $60k): {luxuryHomes.Count} properties");
 
                     // Get specific data for analysis
-                    var houseValues = housingData.GetNumericColumn("median_house_value");
-                    var incomes = housingData.GetNumericColumn("median_income");
-
-                    // Calculate correlation (simple example)
-                    var avgValue = np.mean(houseValues);
-                    var avgIncome = np.mean(incomes);
+                    var avgValue = housingData.Mean("median_house_value");
+                    var avgIncome = housingData.Mean("median_income");
                     Debug.Log($"Average house value: ${avgValue:F2}");
                     Debug.Log($"Average income: ${avgIncome:F2}");
                 }
@@ -98,26 +97,6 @@ namespace AroAro.DataCore.SampleDatasets
             if (loader != null)
             {
                 loader.RunSampleQueries();
-            }
-        }
-
-        [ContextMenu("Persist Dataset")]
-        private void PersistDataset()
-        {
-            if (DataCoreEditorComponent.Instance != null)
-            {
-                DataCoreEditorComponent.Instance.PersistDataset("california-housing");
-                Debug.Log("Dataset persisted and will survive play mode transitions");
-            }
-        }
-
-        [ContextMenu("Load Persisted Dataset")]
-        private void LoadPersistedDataset()
-        {
-            if (DataCoreEditorComponent.Instance != null)
-            {
-                DataCoreEditorComponent.Instance.LoadPersistedDataset("california-housing");
-                Invoke(nameof(RunExampleQueries), 0.5f);
             }
         }
     }

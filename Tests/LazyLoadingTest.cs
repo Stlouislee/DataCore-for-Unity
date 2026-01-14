@@ -2,6 +2,9 @@ using UnityEngine;
 
 namespace AroAro.DataCore.Tests
 {
+    /// <summary>
+    /// LiteDB 后端测试 - 测试数据集的创建、访问和删除
+    /// </summary>
     public class LazyLoadingTest : MonoBehaviour
     {
         private DataCoreEditorComponent dataCore;
@@ -15,80 +18,80 @@ namespace AroAro.DataCore.Tests
                 return;
             }
             
-            TestLazyLoading();
+            TestLiteDbBackend();
         }
         
-        private void TestLazyLoading()
+        private void TestLiteDbBackend()
         {
             var store = dataCore.GetStore();
             
             // 测试1：检查Names属性是否正常工作
             Debug.Log($"Total datasets: {store.Names.Count}");
             
-            // 测试2：尝试访问数据集（应该触发延迟加载）
+            // 测试2：创建和访问数据集
+            var testName = "lazy-load-test";
+            if (!store.HasDataset(testName))
+            {
+                var tabular = store.CreateTabular(testName);
+                tabular.AddNumericColumn("x", new double[] { 1, 2, 3 });
+                tabular.AddStringColumn("name", new[] { "a", "b", "c" });
+                Debug.Log($"Created test dataset: {testName}");
+            }
+            
+            // 测试3：访问数据集
             foreach (var name in store.Names)
             {
-                var metadata = store.GetMetadata(name);
-                Debug.Log($"Dataset: {name}, Loaded: {metadata?.IsLoaded ?? false}");
-                
                 // 尝试访问数据集
                 if (store.TryGet(name, out var dataset))
                 {
-                    Debug.Log($"Successfully loaded: {name}, Type: {dataset.Kind}");
+                    Debug.Log($"Successfully accessed: {name}, Type: {dataset.Kind}");
                     
-                    // 检查元数据是否更新
-                    var updatedMetadata = store.GetMetadata(name);
-                    Debug.Log($"After access - Loaded: {updatedMetadata?.IsLoaded ?? false}");
+                    if (dataset is ITabularDataset tabular)
+                    {
+                        Debug.Log($"  Rows: {tabular.RowCount}, Columns: {tabular.ColumnCount}");
+                    }
+                    else if (dataset is IGraphDataset graph)
+                    {
+                        Debug.Log($"  Nodes: {graph.NodeCount}, Edges: {graph.EdgeCount}");
+                    }
                 }
                 else
                 {
-                    Debug.LogError($"Failed to load dataset: {name}");
+                    Debug.LogError($"Failed to access dataset: {name}");
                 }
             }
             
-            // 测试3：保存所有数据集（应该不会抛出异常）
+            // 测试4：检查点（强制写入）
             try
             {
-                dataCore.SaveAll();
-                Debug.Log("SaveAll completed successfully");
+                store.Checkpoint();
+                Debug.Log("Checkpoint completed successfully");
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"SaveAll failed: {ex.Message}");
+                Debug.LogError($"Checkpoint failed: {ex.Message}");
             }
             
-            // 测试4：删除数据集
-            if (store.Names.Count > 0)
+            // 测试5：删除测试数据集
+            if (store.HasDataset(testName))
             {
-                var firstName = new System.Collections.Generic.List<string>(store.Names)[0];
-                if (store.Delete(firstName))
+                if (store.Delete(testName))
                 {
-                    Debug.Log($"Successfully deleted dataset: {firstName}");
+                    Debug.Log($"Successfully deleted dataset: {testName}");
                 }
                 else
                 {
-                    Debug.LogError($"Failed to delete dataset: {firstName}");
+                    Debug.LogError($"Failed to delete dataset: {testName}");
                 }
             }
             
-            Debug.Log("Lazy loading test completed");
+            Debug.Log("LiteDB backend test completed");
         }
         
         private void OnDestroy()
         {
-            // 测试自动保存功能
-            if (dataCore != null)
-            {
-                try
-                {
-                    dataCore.SaveAll();
-                    Debug.Log("Auto-save on destroy completed");
-                }
-                catch (System.Exception ex)
-                {
-                    Debug.LogError($"Auto-save on destroy failed: {ex.Message}");
-                }
-            }
+            // LiteDB 自动持久化，无需手动保存
+            Debug.Log("LazyLoadingTest destroyed - LiteDB auto-persists data");
         }
     }
 }

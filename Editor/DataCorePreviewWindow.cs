@@ -40,11 +40,11 @@ namespace AroAro.DataCore.Editor
 
             _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
             
-            if (_dataset is Tabular.TabularData tabular)
+            if (_dataset is ITabularDataset tabular)
             {
                 ShowTabularPreview(tabular);
             }
-            else if (_dataset is Graph.GraphData graph)
+            else if (_dataset is IGraphDataset graph)
             {
                 ShowGraphPreview(graph);
             }
@@ -58,16 +58,27 @@ namespace AroAro.DataCore.Editor
             }
         }
 
-        private void ShowTabularPreview(Tabular.TabularData tabular)
+        private void ShowTabularPreview(ITabularDataset tabular)
         {
             EditorGUILayout.LabelField("Tabular Data Preview", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField($"Rows: {tabular.RowCount}, Columns: {tabular.ColumnNames.Count}");
+            EditorGUILayout.LabelField($"Rows: {tabular.RowCount}, Columns: {tabular.ColumnCount}");
             
             EditorGUILayout.Space();
             
+            // 获取数据
+            var data = tabular.Query().Page(1, _maxRowsToShow).ToDictionaries().ToList();
+            if (data.Count == 0)
+            {
+                EditorGUILayout.LabelField("No data to display");
+                return;
+            }
+
+            // 获取列名
+            var columns = data.First().Keys.ToList();
+            
             // 显示列信息
             EditorGUILayout.LabelField("Columns:", EditorStyles.boldLabel);
-            foreach (var columnName in tabular.ColumnNames)
+            foreach (var columnName in columns)
             {
                 EditorGUILayout.LabelField($"  {columnName}");
             }
@@ -75,11 +86,11 @@ namespace AroAro.DataCore.Editor
             EditorGUILayout.Space();
             
             // 显示数据表格
-            EditorGUILayout.LabelField($"First {_maxRowsToShow} rows:", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField($"Showing {data.Count} rows:", EditorStyles.boldLabel);
             
             // 表头
             EditorGUILayout.BeginHorizontal();
-            foreach (var columnName in tabular.ColumnNames)
+            foreach (var columnName in columns)
             {
                 EditorGUILayout.LabelField(columnName, EditorStyles.boldLabel, GUILayout.Width(120));
             }
@@ -88,54 +99,14 @@ namespace AroAro.DataCore.Editor
             EditorGUILayout.Space();
             
             // 数据行
-            int rowsToShow = Math.Min(_maxRowsToShow, tabular.RowCount);
-            for (int i = 0; i < rowsToShow; i++)
+            foreach (var row in data)
             {
                 EditorGUILayout.BeginHorizontal();
-                foreach (var columnName in tabular.ColumnNames)
+                foreach (var columnName in columns)
                 {
-                    bool valueDisplayed = false;
-                    
-                    // 先尝试数值列
-                    try
-                    {
-                        var numericData = tabular.GetNumericColumn(columnName);
-                        if (i < (int)numericData.size)
-                        {
-                            var value = numericData.Data<double>()[i];
-                            EditorGUILayout.LabelField(value.ToString("F4"), GUILayout.Width(120));
-                            valueDisplayed = true;
-                        }
-                    }
-                    catch
-                    {
-                        // 数值列获取失败，继续尝试字符串列
-                    }
-                    
-                    // 如果数值列没有显示成功，尝试字符串列
-                    if (!valueDisplayed)
-                    {
-                        try
-                        {
-                            var stringData = tabular.GetStringColumn(columnName);
-                            if (i < stringData.Length)
-                            {
-                                var value = stringData[i] ?? "";
-                                EditorGUILayout.LabelField(value.Length > 15 ? value.Substring(0, 15) + "..." : value, GUILayout.Width(120));
-                                valueDisplayed = true;
-                            }
-                        }
-                        catch
-                        {
-                            // 字符串列获取也失败
-                        }
-                    }
-                    
-                    // 如果两种列类型都获取失败，显示N/A
-                    if (!valueDisplayed)
-                    {
-                        EditorGUILayout.LabelField("N/A", GUILayout.Width(120));
-                    }
+                    var value = row.TryGetValue(columnName, out var v) ? v?.ToString() ?? "" : "";
+                    var displayValue = value.Length > 15 ? value.Substring(0, 15) + "..." : value;
+                    EditorGUILayout.LabelField(displayValue, GUILayout.Width(120));
                 }
                 EditorGUILayout.EndHorizontal();
             }
@@ -146,7 +117,7 @@ namespace AroAro.DataCore.Editor
             }
         }
 
-        private void ShowGraphPreview(Graph.GraphData graph)
+        private void ShowGraphPreview(IGraphDataset graph)
         {
             EditorGUILayout.LabelField("Graph Data Preview", EditorStyles.boldLabel);
             EditorGUILayout.LabelField($"Nodes: {graph.NodeCount}, Edges: {graph.EdgeCount}");
@@ -155,19 +126,18 @@ namespace AroAro.DataCore.Editor
             
             // 显示节点
             EditorGUILayout.LabelField("Nodes:", EditorStyles.boldLabel);
-            int nodesToShow = Math.Min(_maxNodesToShow, graph.NodeCount);
-            var nodeIds = graph.GetNodeIds().Take(nodesToShow).ToList();
+            var nodeIds = graph.GetNodeIds().Take(_maxNodesToShow).ToList();
             
             foreach (var nodeId in nodeIds)
             {
-                var node = graph.GetNode(nodeId);
+                var properties = graph.GetNodeProperties(nodeId);
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                EditorGUILayout.LabelField($"Node: {node.Id}", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField($"Node: {nodeId}", EditorStyles.boldLabel);
                 
-                if (node.Properties.Count > 0)
+                if (properties != null && properties.Count > 0)
                 {
                     EditorGUI.indentLevel++;
-                    foreach (var prop in node.Properties)
+                    foreach (var prop in properties)
                     {
                         EditorGUILayout.LabelField($"{prop.Key}: {prop.Value}");
                     }
@@ -189,27 +159,12 @@ namespace AroAro.DataCore.Editor
             
             // 显示边
             EditorGUILayout.LabelField("Edges:", EditorStyles.boldLabel);
-            int edgesToShow = Math.Min(_maxNodesToShow, graph.EdgeCount);
-            var edges = graph.Edges().Take(edgesToShow).ToList();
+            var edges = graph.GetEdges().Take(_maxNodesToShow).ToList();
             
             foreach (var edge in edges)
             {
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
                 EditorGUILayout.LabelField($"Edge: {edge.From} → {edge.To}", EditorStyles.boldLabel);
-                
-                if (edge.Properties.Count > 0)
-                {
-                    EditorGUI.indentLevel++;
-                    foreach (var prop in edge.Properties)
-                    {
-                        EditorGUILayout.LabelField($"{prop.Key}: {prop.Value}");
-                    }
-                    EditorGUI.indentLevel--;
-                }
-                else
-                {
-                    EditorGUILayout.LabelField("No properties");
-                }
                 EditorGUILayout.EndVertical();
             }
             

@@ -113,17 +113,23 @@ namespace AroAro.DataCore.SampleDatasets
             var store = DataCoreEditorComponent.Instance.GetStore();
             
             // Remove existing dataset if it exists
-            if (store.TryGet(datasetName, out _))
+            if (store.HasDataset(datasetName))
             {
                 store.Delete(datasetName);
             }
 
             try
             {
-                var dataset = CreateDataset(datasetName);
-                store.Register(dataset);
+                // Create tabular dataset in the store
+                var tabular = store.CreateTabular(datasetName);
+                var data = GetSampleData();
                 
-                UnityEngine.Debug.Log($"✅ Loaded California housing dataset with {dataset.RowCount} rows");
+                foreach (var column in data)
+                {
+                    tabular.AddNumericColumn(column.Key, np.array(column.Value));
+                }
+                
+                UnityEngine.Debug.Log($"✅ Loaded California housing dataset with {tabular.RowCount} rows");
                 return true;
             }
             catch (System.Exception ex)

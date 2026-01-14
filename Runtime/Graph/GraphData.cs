@@ -1,173 +1,453 @@
 using System;
 using System.Collections.Generic;
-using AroAro.DataCore.Events;
+using System.Linq;
 
 namespace AroAro.DataCore.Graph
 {
-    public sealed class GraphData : IDataSet
+    /// <summary>
+    /// 内存中的图数据类 - 用于Session内部的图操作
+    /// 这是一个轻量级的内存实现，不支持持久化
+    /// </summary>
+    public class GraphData : IGraphDataset
     {
-        private readonly Dictionary<string, Node> _nodes = new(StringComparer.Ordinal);
-        private readonly Dictionary<(string From, string To), Edge> _edges = new();
+        private readonly string _name;
         private readonly string _id;
+        private readonly Dictionary<string, Dictionary<string, object>> _nodes = new();
+        private readonly Dictionary<string, Dictionary<string, object>> _edgeProperties = new();
+        private readonly Dictionary<string, HashSet<string>> _outAdjacency = new();
+        private readonly Dictionary<string, HashSet<string>> _inAdjacency = new();
 
         public GraphData(string name)
         {
-            Name = string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("Name required", nameof(name)) : name;
+            _name = name ?? throw new ArgumentNullException(nameof(name));
             _id = Guid.NewGuid().ToString("N");
         }
 
-        public string Name { get; }
+        #region IDataSet Implementation
+
+        public string Name => _name;
         public DataSetKind Kind => DataSetKind.Graph;
         public string Id => _id;
 
-        public int NodeCount => _nodes.Count;
-        public int EdgeCount => _edges.Count;
-
-        public IDataSet WithName(string name)
+        public IDataSet WithName(string newName)
         {
-            var g = new GraphData(name);
-            foreach (var n in _nodes.Values)
-                g._nodes[n.Id] = n.Clone();
-            foreach (var e in _edges.Values)
-                g._edges[(e.From, e.To)] = e.Clone();
-            return g;
+            var copy = new GraphData(newName);
+            
+            // Copy nodes
+            foreach (var kvp in _nodes)
+            {
+                copy._nodes[kvp.Key] = new Dictionary<string, object>(kvp.Value);
+                copy._outAdjacency[kvp.Key] = new HashSet<string>(_outAdjacency[kvp.Key]);
+                copy._inAdjacency[kvp.Key] = new HashSet<string>(_inAdjacency[kvp.Key]);
+            }
+            
+            // Copy edge properties
+            foreach (var kvp in _edgeProperties)
+            {
+                copy._edgeProperties[kvp.Key] = new Dictionary<string, object>(kvp.Value);
+            }
+            
+            return copy;
         }
 
-        public void AddNode(string id, Dictionary<string, string> properties = null)
-        {
-            if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Node id required", nameof(id));
-            if (_nodes.ContainsKey(id)) throw new InvalidOperationException($"Node already exists: {id}");
-            _nodes[id] = new Node(id, properties);
+        #endregion
 
-            DataCoreEventManager.RaiseDatasetModified(this, "AddNode", id);
+        #region IGraphDataset Implementation
+
+        public int NodeCount => _nodes.Count;
+        public int EdgeCount => _edgeProperties.Count;
+
+        public void AddNode(string id, IDictionary<string, object> properties = null)
+        {
+            if (string.IsNullOrEmpty(id))
+                throw new ArgumentNullException(nameof(id));
+            
+            if (_nodes.ContainsKey(id))
+                throw new ArgumentException($"Node '{id}' already exists");
+
+            _nodes[id] = properties != null 
+                ? new Dictionary<string, object>(properties) 
+                : new Dictionary<string, object>();
+            _outAdjacency[id] = new HashSet<string>();
+            _inAdjacency[id] = new HashSet<string>();
         }
 
         public bool RemoveNode(string id)
         {
-            if (!_nodes.Remove(id)) return false;
+            if (!_nodes.ContainsKey(id))
+                return false;
 
-            // remove incident edges
-            var toRemove = new List<(string, string)>();
-            foreach (var k in _edges.Keys)
+            // Remove all edges connected to this node
+            var outEdgesToRemove = _outAdjacency[id].ToList();
+            foreach (var toId in outEdgesToRemove)
             {
-                if (k.From == id || k.To == id)
-                    toRemove.Add((k.From, k.To));
+                RemoveEdge(id, toId);
             }
-            for (var i = 0; i < toRemove.Count; i++)
-                _edges.Remove(toRemove[i]);
 
-            DataCoreEventManager.RaiseDatasetModified(this, "RemoveNode", id);
+            var inEdgesToRemove = _inAdjacency[id].ToList();
+            foreach (var fromId in inEdgesToRemove)
+            {
+                RemoveEdge(fromId, id);
+            }
 
+            _nodes.Remove(id);
+            _outAdjacency.Remove(id);
+            _inAdjacency.Remove(id);
             return true;
         }
 
         public bool HasNode(string id) => _nodes.ContainsKey(id);
 
-        public Node GetNode(string id)
+        public IDictionary<string, object> GetNodeProperties(string id)
         {
-            if (!_nodes.TryGetValue(id, out var n))
-                throw new KeyNotFoundException($"Node not found: {id}");
-            return n;
+            if (!_nodes.TryGetValue(id, out var props))
+                throw new KeyNotFoundException($"Node '{id}' not found");
+            return new Dictionary<string, object>(props);
         }
 
-        public void AddEdge(string from, string to, Dictionary<string, string> properties = null)
+        public void UpdateNodeProperties(string id, IDictionary<string, object> properties)
         {
-            if (string.IsNullOrWhiteSpace(from)) throw new ArgumentException("From required", nameof(from));
-            if (string.IsNullOrWhiteSpace(to)) throw new ArgumentException("To required", nameof(to));
-            if (!_nodes.ContainsKey(from)) throw new InvalidOperationException($"Missing node: {from}");
-            if (!_nodes.ContainsKey(to)) throw new InvalidOperationException($"Missing node: {to}");
+            if (!_nodes.ContainsKey(id))
+                throw new KeyNotFoundException($"Node '{id}' not found");
 
-            var key = (From: from, To: to);
-            if (_edges.ContainsKey(key)) throw new InvalidOperationException($"Edge already exists: {from}->{to}");
-            _edges[key] = new Edge(from, to, properties);
-
-            DataCoreEventManager.RaiseDatasetModified(this, "AddEdge", new { from, to });
-        }
-
-        public bool RemoveEdge(string from, string to)
-        {
-            var removed = _edges.Remove((from, to));
-            if (removed)
+            foreach (var kvp in properties)
             {
-                DataCoreEventManager.RaiseDatasetModified(this, "RemoveEdge", new { from, to });
+                _nodes[id][kvp.Key] = kvp.Value;
             }
-            return removed;
         }
 
-        public bool HasEdge(string from, string to) => _edges.ContainsKey((from, to));
+        public IEnumerable<string> GetNodeIds() => _nodes.Keys;
 
-        public IEnumerable<string> NeighborsOut(string from)
+        public void AddEdge(string fromId, string toId, IDictionary<string, object> properties = null)
         {
-            foreach (var e in _edges.Values)
-                if (e.From == from)
-                    yield return e.To;
+            if (!_nodes.ContainsKey(fromId))
+                throw new ArgumentException($"Source node '{fromId}' not found");
+            if (!_nodes.ContainsKey(toId))
+                throw new ArgumentException($"Target node '{toId}' not found");
+
+            var edgeKey = GetEdgeKey(fromId, toId);
+            if (_edgeProperties.ContainsKey(edgeKey))
+                throw new ArgumentException($"Edge from '{fromId}' to '{toId}' already exists");
+
+            _edgeProperties[edgeKey] = properties != null 
+                ? new Dictionary<string, object>(properties) 
+                : new Dictionary<string, object>();
+            _outAdjacency[fromId].Add(toId);
+            _inAdjacency[toId].Add(fromId);
         }
 
-        public IEnumerable<string> NeighborsIn(string to)
+        public bool RemoveEdge(string fromId, string toId)
         {
-            foreach (var e in _edges.Values)
-                if (e.To == to)
-                    yield return e.From;
+            var edgeKey = GetEdgeKey(fromId, toId);
+            if (!_edgeProperties.ContainsKey(edgeKey))
+                return false;
+
+            _edgeProperties.Remove(edgeKey);
+            _outAdjacency[fromId].Remove(toId);
+            _inAdjacency[toId].Remove(fromId);
+            return true;
         }
 
-        public IEnumerable<Edge> Edges()
+        public bool HasEdge(string fromId, string toId)
         {
-            foreach (var e in _edges.Values)
-                yield return e;
+            var edgeKey = GetEdgeKey(fromId, toId);
+            return _edgeProperties.ContainsKey(edgeKey);
         }
 
-        public IEnumerable<string> GetNodeIds()
+        public IDictionary<string, object> GetEdgeProperties(string fromId, string toId)
         {
-            foreach (var nodeId in _nodes.Keys)
-                yield return nodeId;
+            var edgeKey = GetEdgeKey(fromId, toId);
+            if (!_edgeProperties.TryGetValue(edgeKey, out var props))
+                throw new KeyNotFoundException($"Edge from '{fromId}' to '{toId}' not found");
+            return new Dictionary<string, object>(props);
         }
 
-        public GraphQuery Query() => new GraphQuery(this);
-
-        public sealed class Node
+        public void UpdateEdgeProperties(string fromId, string toId, IDictionary<string, object> properties)
         {
-            internal Node(string id, Dictionary<string, string> properties)
+            var edgeKey = GetEdgeKey(fromId, toId);
+            if (!_edgeProperties.ContainsKey(edgeKey))
+                throw new KeyNotFoundException($"Edge from '{fromId}' to '{toId}' not found");
+
+            foreach (var kvp in properties)
             {
-                Id = id;
-                Properties = properties != null
-                    ? new Dictionary<string, string>(properties, StringComparer.Ordinal)
-                    : new Dictionary<string, string>(StringComparer.Ordinal);
+                _edgeProperties[edgeKey][kvp.Key] = kvp.Value;
             }
-
-            public string Id { get; }
-            public Dictionary<string, string> Properties { get; }
-
-            internal Node Clone() => new Node(Id, Properties);
         }
 
-        public sealed class Edge
+        public IEnumerable<(string From, string To)> GetEdges()
         {
-            internal Edge(string from, string to, Dictionary<string, string> properties)
+            return _edgeProperties.Keys.Select(ParseEdgeKey);
+        }
+
+        public IEnumerable<string> GetOutNeighbors(string nodeId)
+        {
+            if (!_outAdjacency.TryGetValue(nodeId, out var neighbors))
+                throw new KeyNotFoundException($"Node '{nodeId}' not found");
+            return neighbors;
+        }
+
+        public IEnumerable<string> GetInNeighbors(string nodeId)
+        {
+            if (!_inAdjacency.TryGetValue(nodeId, out var neighbors))
+                throw new KeyNotFoundException($"Node '{nodeId}' not found");
+            return neighbors;
+        }
+
+        public IEnumerable<string> GetNeighbors(string nodeId)
+        {
+            var outNeighbors = GetOutNeighbors(nodeId);
+            var inNeighbors = GetInNeighbors(nodeId);
+            return outNeighbors.Union(inNeighbors);
+        }
+
+        public int GetOutDegree(string nodeId)
+        {
+            if (!_outAdjacency.TryGetValue(nodeId, out var neighbors))
+                throw new KeyNotFoundException($"Node '{nodeId}' not found");
+            return neighbors.Count;
+        }
+
+        public int GetInDegree(string nodeId)
+        {
+            if (!_inAdjacency.TryGetValue(nodeId, out var neighbors))
+                throw new KeyNotFoundException($"Node '{nodeId}' not found");
+            return neighbors.Count;
+        }
+
+        public IGraphQuery Query()
+        {
+            return new InMemoryGraphQuery(this);
+        }
+
+        public int AddNodes(IEnumerable<(string Id, IDictionary<string, object> Properties)> nodes)
+        {
+            int count = 0;
+            foreach (var (id, props) in nodes)
             {
-                From = from;
-                To = to;
-                Properties = properties != null
-                    ? new Dictionary<string, string>(properties, StringComparer.Ordinal)
-                    : new Dictionary<string, string>(StringComparer.Ordinal);
+                AddNode(id, props);
+                count++;
+            }
+            return count;
+        }
+
+        public int AddEdges(IEnumerable<(string From, string To, IDictionary<string, object> Properties)> edges)
+        {
+            int count = 0;
+            foreach (var (from, to, props) in edges)
+            {
+                AddEdge(from, to, props);
+                count++;
+            }
+            return count;
+        }
+
+        public void Clear()
+        {
+            _nodes.Clear();
+            _edgeProperties.Clear();
+            _outAdjacency.Clear();
+            _inAdjacency.Clear();
+        }
+
+        #endregion
+
+        #region Private Helper Methods
+
+        private static string GetEdgeKey(string fromId, string toId) => $"{fromId}\0{toId}";
+
+        private static (string From, string To) ParseEdgeKey(string key)
+        {
+            var parts = key.Split('\0');
+            return (parts[0], parts[1]);
+        }
+
+        #endregion
+
+        /// <summary>
+        /// 简单的内存图查询实现
+        /// </summary>
+        private class InMemoryGraphQuery : IGraphQuery
+        {
+            private readonly GraphData _source;
+            private string _startNode;
+            private int _maxDepth = int.MaxValue;
+            private bool _traverseOut = true;
+            private bool _traverseIn = false;
+            private List<Func<string, bool>> _nodeFilters = new();
+            private List<Func<string, string, bool>> _edgeFilters = new();
+
+            public InMemoryGraphQuery(GraphData source)
+            {
+                _source = source;
             }
 
-            public string From { get; }
-            public string To { get; }
-            public Dictionary<string, string> Properties { get; }
+            public IGraphQuery WhereNodeProperty(string property, QueryOp op, object value)
+            {
+                _nodeFilters.Add(nodeId =>
+                {
+                    var props = _source.GetNodeProperties(nodeId);
+                    if (!props.TryGetValue(property, out var propValue))
+                        return false;
+                    return CompareValues(propValue, op, value);
+                });
+                return this;
+            }
 
-            internal Edge Clone() => new Edge(From, To, Properties);
-        }
+            public IGraphQuery WhereNodeHasProperty(string property)
+            {
+                _nodeFilters.Add(nodeId =>
+                {
+                    var props = _source.GetNodeProperties(nodeId);
+                    return props.ContainsKey(property);
+                });
+                return this;
+            }
 
-        internal IEnumerable<Node> NodesInternal()
-        {
-            foreach (var n in _nodes.Values)
-                yield return n;
-        }
+            public IGraphQuery WhereEdgeProperty(string property, QueryOp op, object value)
+            {
+                _edgeFilters.Add((from, to) =>
+                {
+                    var props = _source.GetEdgeProperties(from, to);
+                    if (!props.TryGetValue(property, out var propValue))
+                        return false;
+                    return CompareValues(propValue, op, value);
+                });
+                return this;
+            }
 
-        internal IEnumerable<Edge> EdgesInternal()
-        {
-            foreach (var e in _edges.Values)
-                yield return e;
+            public IGraphQuery From(string nodeId)
+            {
+                _startNode = nodeId;
+                return this;
+            }
+
+            public IGraphQuery TraverseOut()
+            {
+                _traverseOut = true;
+                _traverseIn = false;
+                return this;
+            }
+
+            public IGraphQuery TraverseIn()
+            {
+                _traverseIn = true;
+                _traverseOut = false;
+                return this;
+            }
+
+            public IGraphQuery MaxDepth(int depth)
+            {
+                _maxDepth = depth;
+                return this;
+            }
+
+            public IEnumerable<string> ToNodeIds()
+            {
+                if (string.IsNullOrEmpty(_startNode))
+                {
+                    var nodes = _source.GetNodeIds();
+                    return ApplyNodeFilters(nodes);
+                }
+
+                return BFS();
+            }
+
+            public IEnumerable<(string From, string To)> ToEdges()
+            {
+                var edges = _source.GetEdges();
+                return ApplyEdgeFilters(edges);
+            }
+
+            public int CountNodes() => ToNodeIds().Count();
+
+            public int CountEdges() => ToEdges().Count();
+
+            private IEnumerable<string> ApplyNodeFilters(IEnumerable<string> nodes)
+            {
+                foreach (var filter in _nodeFilters)
+                {
+                    nodes = nodes.Where(filter);
+                }
+                return nodes;
+            }
+
+            private IEnumerable<(string From, string To)> ApplyEdgeFilters(IEnumerable<(string From, string To)> edges)
+            {
+                foreach (var filter in _edgeFilters)
+                {
+                    edges = edges.Where(e => filter(e.From, e.To));
+                }
+                return edges;
+            }
+
+            private IEnumerable<string> BFS()
+            {
+                var visited = new HashSet<string> { _startNode };
+                var queue = new Queue<(string node, int depth)>();
+                queue.Enqueue((_startNode, 0));
+
+                while (queue.Count > 0)
+                {
+                    var (current, depth) = queue.Dequeue();
+
+                    // Apply node filters
+                    bool passesFilter = _nodeFilters.All(f => f(current));
+                    if (passesFilter)
+                        yield return current;
+
+                    if (depth >= _maxDepth)
+                        continue;
+
+                    IEnumerable<string> neighbors;
+                    if (_traverseOut && _traverseIn)
+                        neighbors = _source.GetNeighbors(current);
+                    else if (_traverseOut)
+                        neighbors = _source.GetOutNeighbors(current);
+                    else
+                        neighbors = _source.GetInNeighbors(current);
+
+                    foreach (var neighbor in neighbors)
+                    {
+                        if (visited.Contains(neighbor))
+                            continue;
+
+                        // Check edge filters
+                        bool edgePassesFilter = _edgeFilters.All(f => f(current, neighbor));
+                        if (!edgePassesFilter)
+                            continue;
+
+                        visited.Add(neighbor);
+                        queue.Enqueue((neighbor, depth + 1));
+                    }
+                }
+            }
+
+            private static bool CompareValues(object left, QueryOp op, object right)
+            {
+                if (left == null || right == null)
+                    return false;
+
+                return op switch
+                {
+                    QueryOp.Eq => Equals(left, right),
+                    QueryOp.Neq => !Equals(left, right),
+                    QueryOp.Gt => CompareNumeric(left, right) > 0,
+                    QueryOp.Gte => CompareNumeric(left, right) >= 0,
+                    QueryOp.Lt => CompareNumeric(left, right) < 0,
+                    QueryOp.Lte => CompareNumeric(left, right) <= 0,
+                    QueryOp.Contains => left.ToString().Contains(right.ToString()),
+                    QueryOp.StartsWith => left.ToString().StartsWith(right.ToString()),
+                    QueryOp.EndsWith => left.ToString().EndsWith(right.ToString()),
+                    _ => false
+                };
+            }
+
+            private static int CompareNumeric(object left, object right)
+            {
+                var leftVal = Convert.ToDouble(left);
+                var rightVal = Convert.ToDouble(right);
+                return leftVal.CompareTo(rightVal);
+            }
         }
     }
 }

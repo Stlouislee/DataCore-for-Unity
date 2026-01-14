@@ -342,16 +342,14 @@ namespace AroAro.DataCore.Editor
             switch (dataset.Kind)
             {
                 case DataSetKind.Tabular:
-                    var tabular = dataset as Tabular.TabularData;
-                    if (tabular != null)
+                    if (dataset is ITabularDataset tabular)
                     {
                         EditorGUILayout.LabelField("Rows", tabular.RowCount.ToString());
-                        EditorGUILayout.LabelField("Columns", string.Join(", ", tabular.ColumnNames));
+                        EditorGUILayout.LabelField("Columns", tabular.ColumnCount.ToString());
                     }
                     break;
                 case DataSetKind.Graph:
-                    var graph = dataset as Graph.GraphData;
-                    if (graph != null)
+                    if (dataset is IGraphDataset graph)
                     {
                         EditorGUILayout.LabelField("Nodes", graph.NodeCount.ToString());
                         EditorGUILayout.LabelField("Edges", graph.EdgeCount.ToString());

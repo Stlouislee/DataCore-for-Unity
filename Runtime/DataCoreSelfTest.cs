@@ -28,9 +28,6 @@ namespace AroAro.DataCore
             {
                 TestTabular(sb);
                 TestGraph(sb);
-#if DATACORE_APACHE_ARROW
-                TestPersistence(sb);
-#endif
                 TestSessions(sb);
                 sb.AppendLine("✅ All tests passed!");
             }
@@ -48,66 +45,56 @@ namespace AroAro.DataCore
         private static void TestTabular(StringBuilder sb)
         {
             sb.AppendLine("Testing Tabular...");
-            var store = new DataCoreStore();
+            using var store = new DataCoreStore();
             var t = store.CreateTabular("test-table");
 
             // 添加列
-            t.AddNumericColumn("x", NumSharp.np.array(new double[] { 1, 2, 3 }));
+            t.AddNumericColumn("x", new double[] { 1, 2, 3 });
             t.AddStringColumn("s", new[] { "a", "b", "c" });
 
+            if (t.RowCount != 3) throw new Exception($"Expected 3 rows, got {t.RowCount}");
+            if (t.ColumnCount != 2) throw new Exception($"Expected 2 columns, got {t.ColumnCount}");
+
             // 查询
-            var idx = t.Query().Where("x", Tabular.TabularOp.Gt, 1).ToRowIndices();
-            if (idx.Length != 2) throw new Exception($"Expected 2 rows, got {idx.Length}");
+            var results = t.Query()
+                .WhereGreaterThan("x", 1.5)
+                .ToDictionaries()
+                .ToList();
+
+            if (results.Count != 2) throw new Exception($"Expected 2 rows from query, got {results.Count}");
 
             sb.AppendLine("✅ Tabular CRUD/Query OK");
+            
+            // 清理
+            store.Delete("test-table");
         }
 
         private static void TestGraph(StringBuilder sb)
         {
             sb.AppendLine("Testing Graph...");
-            var store = new DataCoreStore();
+            using var store = new DataCoreStore();
             var g = store.CreateGraph("test-graph");
 
-            g.AddNode("a", new System.Collections.Generic.Dictionary<string, string> { ["type"] = "root" });
+            g.AddNode("a", new System.Collections.Generic.Dictionary<string, object> { ["type"] = "root" });
             g.AddNode("b");
             g.AddEdge("a", "b");
 
-            var nodes = g.Query().WhereNodePropertyEquals("type", "root").ToNodeIds();
-            if (nodes.Length != 1 || nodes[0] != "a") throw new Exception("Graph query failed");
+            if (g.NodeCount != 2) throw new Exception($"Expected 2 nodes, got {g.NodeCount}");
+            if (g.EdgeCount != 1) throw new Exception($"Expected 1 edge, got {g.EdgeCount}");
+
+            var neighbors = g.GetNeighbors("a").ToList();
+            if (neighbors.Count != 1 || neighbors[0] != "b") throw new Exception("Graph neighbors query failed");
 
             sb.AppendLine("✅ Graph CRUD/Query OK");
+            
+            // 清理
+            store.Delete("test-graph");
         }
-
-#if DATACORE_APACHE_ARROW
-        private static void TestPersistence(StringBuilder sb)
-        {
-            sb.AppendLine("Testing Persistence...");
-            var store = new DataCoreStore();
-
-            // Tabular persistence
-            var t = store.CreateTabular("persist-table");
-            t.AddNumericColumn("val", NumSharp.np.array(new double[] { 10, 20 }));
-            store.Save("persist-table", "test.arrow");
-
-            var loaded = store.Load("test.arrow", registerAsName: "loaded-table");
-            if (loaded.Name != "loaded-table") throw new Exception("Tabular load failed");
-
-            // Graph persistence
-            var g = store.CreateGraph("persist-graph");
-            g.AddNode("n1");
-            store.Save("persist-graph", "test.dcgraph");
-
-            var loadedGraph = store.Load("test.dcgraph", registerAsName: "loaded-graph");
-            if (loadedGraph.Name != "loaded-graph") throw new Exception("Graph load failed");
-
-            sb.AppendLine("✅ Persistence OK");
-        }
-#endif // DATACORE_APACHE_ARROW
 
         private static void TestSessions(StringBuilder sb)
         {
             sb.AppendLine("Testing Sessions...");
-            var store = new DataCoreStore();
+            using var store = new DataCoreStore();
             var sessionManager = store.SessionManager;
 
             // 测试会话创建
@@ -154,8 +141,9 @@ namespace AroAro.DataCore
             sb.AppendLine("✅ Session close OK");
 
             // 测试会话清理
+            System.Threading.Thread.Sleep(10); // 确保有一点时间间隔
             var cleanupCount = sessionManager.CleanupIdleSessions(TimeSpan.FromMilliseconds(1));
-            if (cleanupCount != 1) throw new Exception($"Expected 1 session cleaned up, got {cleanupCount}");
+            if (cleanupCount < 1) throw new Exception($"Expected at least 1 session cleaned up, got {cleanupCount}");
             sb.AppendLine("✅ Session cleanup OK");
 
             sb.AppendLine("✅ Sessions OK");

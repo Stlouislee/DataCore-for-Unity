@@ -1,85 +1,140 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using UnityEngine;
-using NumSharp;
-using AroAro.DataCore.Tabular;
 
 namespace AroAro.DataCore.Import
 {
     /// <summary>
-    /// Utility for importing CSV data into TabularData
+    /// Utility for importing CSV data into ITabularDataset
     /// </summary>
     public static class CsvImporter
     {
         /// <summary>
-        /// Parses a CSV string into a TabularData object.
-        /// Assumes the first row is the header.
-        /// Tries to parse columns as doubles, falls back to strings if parsing fails.
+        /// 解析 CSV 文本并导入到现有的表格数据集中
         /// </summary>
-        /// <param name="csvText">The raw CSV text content</param>
-        /// <param name="datasetName">Name for the resulting dataset</param>
-        /// <returns>TabularData object or null if parsing fails</returns>
-        public static TabularData Parse(string csvText, string datasetName)
+        /// <param name="csvText">CSV 文本内容</param>
+        /// <param name="tabular">目标表格数据集</param>
+        /// <param name="hasHeader">是否包含表头</param>
+        /// <param name="delimiter">分隔符</param>
+        public static void ImportToTabular(string csvText, ITabularDataset tabular, bool hasHeader = true, char delimiter = ',')
         {
             if (string.IsNullOrWhiteSpace(csvText))
             {
                 Debug.LogError("CSV text is empty");
-                return null;
+                return;
             }
 
             var lines = csvText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length < 2)
+            if (lines.Length < (hasHeader ? 2 : 1))
             {
-                Debug.LogError("CSV must have at least a header and one data row");
-                return null;
+                Debug.LogError("CSV must have at least one data row");
+                return;
             }
 
-            var headers = lines[0].Trim().Replace("\"", "").Split(',');
-            var columnData = new Dictionary<string, List<string>>();
+            int dataStartIndex = hasHeader ? 1 : 0;
+            string[] headers;
             
+            if (hasHeader)
+            {
+                headers = lines[0].Trim().Replace("\"", "").Split(delimiter);
+            }
+            else
+            {
+                // 自动生成列名
+                var firstLine = lines[0].Trim().Split(delimiter);
+                headers = new string[firstLine.Length];
+                for (int i = 0; i < firstLine.Length; i++)
+                {
+                    headers[i] = $"Column{i + 1}";
+                }
+            }
+
+            var columnData = new Dictionary<string, List<string>>();
             foreach (var header in headers)
             {
                 columnData[header] = new List<string>();
             }
 
-            // Read all data as strings first
-            for (int i = 1; i < lines.Length; i++)
+            // 读取数据
+            for (int i = dataStartIndex; i < lines.Length; i++)
             {
                 var line = lines[i].Trim();
                 if (string.IsNullOrEmpty(line)) continue;
 
-                // Simple CSV split (doesn't handle commas inside quotes yet)
-                // For a robust solution, a proper CSV parser state machine is needed.
-                // This is a basic implementation for the sample requirement.
-                var values = line.Split(',');
+                var values = line.Split(delimiter);
                 
-                // Handle potential mismatch in column count
                 for (int j = 0; j < headers.Length; j++)
                 {
-                    string val = (j < values.Length) ? values[j] : "";
+                    string val = (j < values.Length) ? values[j].Trim().Trim('"') : "";
                     columnData[headers[j]].Add(val);
                 }
             }
 
-            var dataset = new TabularData(datasetName);
-
-            // Infer types and populate dataset
+            // 推断类型并添加列
             foreach (var header in headers)
             {
                 var rawValues = columnData[header];
                 if (IsNumeric(rawValues, out var doubleValues))
                 {
-                    dataset.AddNumericColumn(header, np.array(doubleValues.ToArray()));
+                    tabular.AddNumericColumn(header, doubleValues.ToArray());
                 }
                 else
                 {
-                    dataset.AddStringColumn(header, rawValues.ToArray());
+                    tabular.AddStringColumn(header, rawValues.ToArray());
                 }
             }
+        }
 
-            return dataset;
+        /// <summary>
+        /// 从 CSV 文件解析数据并创建新的表格数据集
+        /// </summary>
+        /// <param name="store">数据存储</param>
+        /// <param name="csvPath">CSV 文件路径</param>
+        /// <param name="datasetName">数据集名称</param>
+        /// <param name="hasHeader">是否包含表头</param>
+        /// <param name="delimiter">分隔符</param>
+        /// <returns>创建的表格数据集</returns>
+        public static ITabularDataset ImportFromFile(IDataStore store, string csvPath, string datasetName, bool hasHeader = true, char delimiter = ',')
+        {
+            if (!File.Exists(csvPath))
+            {
+                Debug.LogError($"CSV file not found: {csvPath}");
+                return null;
+            }
+
+            var csvText = File.ReadAllText(csvPath);
+            var tabular = store.CreateTabular(datasetName);
+            ImportToTabular(csvText, tabular, hasHeader, delimiter);
+            return tabular;
+        }
+
+        /// <summary>
+        /// 从 CSV 文本解析数据并创建新的表格数据集
+        /// </summary>
+        /// <param name="store">数据存储</param>
+        /// <param name="csvText">CSV 文本内容</param>
+        /// <param name="datasetName">数据集名称</param>
+        /// <param name="hasHeader">是否包含表头</param>
+        /// <param name="delimiter">分隔符</param>
+        /// <returns>创建的表格数据集</returns>
+        public static ITabularDataset ImportFromText(IDataStore store, string csvText, string datasetName, bool hasHeader = true, char delimiter = ',')
+        {
+            var tabular = store.CreateTabular(datasetName);
+            ImportToTabular(csvText, tabular, hasHeader, delimiter);
+            return tabular;
+        }
+
+        /// <summary>
+        /// 使用 DataCoreStore 从 CSV 文本创建表格数据集
+        /// </summary>
+        public static ITabularDataset ImportFromText(DataCoreStore store, string csvText, string datasetName, bool hasHeader = true, char delimiter = ',')
+        {
+            var tabular = store.CreateTabular(datasetName);
+            ImportToTabular(csvText, tabular, hasHeader, delimiter);
+            return tabular;
         }
 
         private static bool IsNumeric(List<string> values, out List<double> doubleValues)
@@ -89,7 +144,7 @@ namespace AroAro.DataCore.Import
             {
                 if (string.IsNullOrWhiteSpace(val))
                 {
-                    doubleValues.Add(0.0); // Handle missing values as 0 for numeric columns? Or maybe NaN? Using 0 for now to match previous logic.
+                    doubleValues.Add(double.NaN);
                     continue;
                 }
 
@@ -99,7 +154,7 @@ namespace AroAro.DataCore.Import
                 }
                 else
                 {
-                    return false; // Found a non-numeric value
+                    return false;
                 }
             }
             return true;

@@ -1,27 +1,24 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using NumSharp;
 
 namespace AroAro.DataCore.Examples
 {
     /// <summary>
-    /// DataCore 使用示例 - 展示抽象化的存储后端 API
+    /// DataCore 使用示例 - 展示 LiteDB 后端 API
     /// 
-    /// 用户代码只需要使用 AroAro.DataCore 命名空间，
-    /// 不需要关心底层是 LiteDB 还是内存存储。
+    /// 所有数据自动持久化到 LiteDB 数据库
     /// </summary>
     public static class DataCoreUsageExample
     {
         /// <summary>
-        /// 演示如何使用 LiteDB 后端
+        /// 基础使用示例
         /// </summary>
-        public static void LiteDbExample()
+        public static void BasicExample()
         {
-            // 方式1: 使用工厂方法创建 LiteDB 存储
+            // 创建数据存储（自动持久化到 LiteDB）
             using var store = DataStoreFactory.CreateLiteDb("data/mydata.db");
             
-            // 检查存储后端类型
             Console.WriteLine($"Storage Backend: {store.Backend}"); // 输出: LiteDb
             
             // 创建表格数据集
@@ -34,7 +31,7 @@ namespace AroAro.DataCore.Examples
             
             // 基本统计
             Console.WriteLine($"Row Count: {tabular.RowCount}");
-            Console.WriteLine($"Average Price: {tabular.Mean("Price"):F2}");
+            Console.WriteLine($"Average Price: {tabular.Average("Price"):F2}");
             Console.WriteLine($"Total Quantity: {tabular.Sum("Quantity")}");
             
             // 查询
@@ -43,17 +40,29 @@ namespace AroAro.DataCore.Examples
                 .OrderByDescending("Price")
                 .ToDictionaries();
             
+            Console.WriteLine("Expensive products:");
             foreach (var row in expensiveProducts)
             {
                 Console.WriteLine($"  {row["Product"]}: ${row["Price"]}");
             }
+        }
+        
+        /// <summary>
+        /// 图数据示例
+        /// </summary>
+        public static void GraphExample()
+        {
+            using var store = DataStoreFactory.CreateLiteDb("data/social.db");
             
             // 创建图数据集
             var graph = store.CreateGraph("social_network");
+            
+            // 添加节点
             graph.AddNode("Alice", new Dictionary<string, object> { { "age", 30 }, { "city", "NYC" } });
             graph.AddNode("Bob", new Dictionary<string, object> { { "age", 25 }, { "city", "LA" } });
             graph.AddNode("Carol", new Dictionary<string, object> { { "age", 35 }, { "city", "NYC" } });
             
+            // 添加边
             graph.AddEdge("Alice", "Bob");
             graph.AddEdge("Bob", "Carol");
             graph.AddEdge("Alice", "Carol");
@@ -61,57 +70,66 @@ namespace AroAro.DataCore.Examples
             Console.WriteLine($"Node Count: {graph.NodeCount}");
             Console.WriteLine($"Edge Count: {graph.EdgeCount}");
             Console.WriteLine($"Alice's neighbors: {string.Join(", ", graph.GetNeighbors("Alice"))}");
+            
+            // 图遍历
+            var reachable = graph.Query()
+                .From("Alice")
+                .MaxDepth(2)
+                .ToNodeIds();
+            
+            Console.WriteLine($"Nodes reachable from Alice: {string.Join(", ", reachable)}");
         }
         
         /// <summary>
-        /// 演示如何使用内存后端 (适合测试)
+        /// DataCoreStore 简化 API 示例
         /// </summary>
-        public static void MemoryExample()
+        public static void DataCoreStoreExample()
         {
-            // 使用内存存储 (不需要文件路径)
-            using var store = DataStoreFactory.CreateMemory();
+            // 使用 DataCoreStore 简化 API
+            using var store = new DataCoreStore("data/unified.db");
             
-            Console.WriteLine($"Storage Backend: {store.Backend}"); // 输出: Memory
-            
-            var tabular = store.CreateTabular("test_data");
-            tabular.AddNumericColumn("Values", np.array(new double[] { 1, 2, 3, 4, 5 }));
-            
-            Console.WriteLine($"Mean: {tabular.Mean("Values")}"); // 输出: 3.0
-            
-            // 内存存储适合单元测试
-        }
-        
-        /// <summary>
-        /// 演示如何通过枚举动态选择后端
-        /// </summary>
-        public static void DynamicBackendSelection(StorageBackend backend, string path = null)
-        {
-            // 根据配置动态选择后端
-            using var store = DataStoreFactory.Create(backend, path);
-            
-            Console.WriteLine($"Using backend: {store.Backend}");
-            
-            // 以下代码对所有后端都通用
-            var tabular = store.GetOrCreateTabular("unified_data");
+            // 创建表格
+            var tabular = store.CreateTabular("my_table");
             tabular.AddNumericColumn("X", new double[] { 1, 2, 3 });
             tabular.AddNumericColumn("Y", new double[] { 4, 5, 6 });
             
-            var sum = tabular.Query()
+            // 查询
+            var results = tabular.Query()
                 .WhereGreaterThan("X", 1)
-                .Sum("Y");
+                .ToDictionaries()
+                .ToList();
             
-            Console.WriteLine($"Sum of Y where X > 1: {sum}");
+            Console.WriteLine($"Rows where X > 1: {results.Count}");
+            
+            // 创建图
+            var graph = store.CreateGraph("my_graph");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddEdge("A", "B");
+            
+            // 事务支持
+            store.ExecuteInTransaction(() =>
+            {
+                var t = store.GetOrCreateTabular("accounts");
+                t.AddRow(new Dictionary<string, object>
+                {
+                    { "AccountId", "A001" },
+                    { "Balance", 1000.0 }
+                });
+            });
+            
+            Console.WriteLine("All operations persisted to LiteDB");
         }
         
         /// <summary>
-        /// 演示 CSV 导入导出
+        /// CSV 导入导出示例
         /// </summary>
         public static void CsvExample()
         {
-            using var store = DataStoreFactory.CreateMemory();
+            using var store = new DataCoreStore("data/csv_test.db");
             var tabular = store.CreateTabular("csv_data");
             
-            // 导入 CSV
+            // 导入 CSV 内容
             var csvContent = @"Name,Age,Score
 Alice,30,95.5
 Bob,25,88.0
@@ -120,7 +138,6 @@ Carol,35,92.3";
             tabular.ImportFromCsv(csvContent);
             
             Console.WriteLine($"Imported {tabular.RowCount} rows");
-            Console.WriteLine($"Columns: {string.Join(", ", tabular.ColumnNames)}");
             
             // 导出 CSV
             var exported = tabular.ExportToCsv();
@@ -129,75 +146,22 @@ Carol,35,92.3";
         }
         
         /// <summary>
-        /// 演示图查询
+        /// 会话管理示例
         /// </summary>
-        public static void GraphAlgorithmExample()
+        public static void SessionExample()
         {
-            using var store = DataStoreFactory.CreateMemory();
-            var graph = store.CreateGraph("traversal_demo");
+            using var store = new DataCoreStore("data/session_test.db");
+            var sessionManager = store.SessionManager;
             
-            // 构建图
-            graph.AddNode("A");
-            graph.AddNode("B");
-            graph.AddNode("C");
-            graph.AddNode("D");
-            graph.AddNode("E");
+            // 创建会话
+            using var session = sessionManager.CreateSession("MySession");
+            Console.WriteLine($"Session created: {session.Name}");
             
-            graph.AddEdge("A", "B");
-            graph.AddEdge("A", "C");
-            graph.AddEdge("B", "D");
-            graph.AddEdge("C", "D");
-            graph.AddEdge("D", "E");
+            // 在会话中创建临时数据集
+            var tempData = session.CreateDataset("TempData", DataSetKind.Tabular);
+            Console.WriteLine($"Temp dataset created: {tempData.Name}");
             
-            // 图查询 - 从 A 节点遍历
-            Console.WriteLine("Traversal from A:");
-            var reachable = graph.Query()
-                .From("A")
-                .MaxDepth(3)
-                .ToNodeIds();
-            
-            foreach (var node in reachable)
-            {
-                Console.Write($"{node} -> ");
-            }
-            Console.WriteLine();
-            
-            // 查询度数大于 1 的节点
-            var hubNodes = graph.Query()
-                .WhereNodeHasProperty("id")
-                .ToNodeIds();
-            Console.WriteLine($"Hub nodes count: {hubNodes.Count()}");
-        }
-        
-        /// <summary>
-        /// 演示事务支持 (仅 LiteDB)
-        /// </summary>
-        public static void TransactionExample()
-        {
-            using var store = DataStoreFactory.CreateLiteDb("data/transaction_test.db");
-            
-            // 使用事务确保原子性
-            store.ExecuteInTransaction(() =>
-            {
-                var tabular = store.GetOrCreateTabular("accounts");
-                
-                // 批量操作
-                tabular.AddRow(new Dictionary<string, object>
-                {
-                    { "AccountId", "A001" },
-                    { "Balance", 1000.0 }
-                });
-                
-                tabular.AddRow(new Dictionary<string, object>
-                {
-                    { "AccountId", "A002" },
-                    { "Balance", 2000.0 }
-                });
-                
-                // 如果中间发生异常，整个事务会回滚
-            });
-            
-            Console.WriteLine("Transaction committed successfully");
+            // 会话结束时数据自动清理
         }
     }
 }
