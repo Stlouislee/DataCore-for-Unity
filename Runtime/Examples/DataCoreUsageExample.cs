@@ -21,7 +21,7 @@ namespace AroAro.DataCore.Examples
             using var store = DataStoreFactory.CreateLiteDb("data/mydata.db");
             
             // 检查存储后端类型
-            Console.WriteLine($"Storage Backend: {store.StorageBackend}"); // 输出: LiteDb
+            Console.WriteLine($"Storage Backend: {store.Backend}"); // 输出: LiteDb
             
             // 创建表格数据集
             var tabular = store.CreateTabular("sales_data");
@@ -39,8 +39,8 @@ namespace AroAro.DataCore.Examples
             // 查询
             var expensiveProducts = tabular.Query()
                 .WhereGreaterThan("Price", 1.0)
-                .OrderBy("Price", descending: true)
-                .ToResults();
+                .OrderByDescending("Price")
+                .ToDictionaries();
             
             foreach (var row in expensiveProducts)
             {
@@ -53,13 +53,13 @@ namespace AroAro.DataCore.Examples
             graph.AddNode("Bob", new Dictionary<string, object> { { "age", 25 }, { "city", "LA" } });
             graph.AddNode("Carol", new Dictionary<string, object> { { "age", 35 }, { "city", "NYC" } });
             
-            graph.AddEdge("Alice", "Bob", weight: 0.8);
-            graph.AddEdge("Bob", "Carol", weight: 0.6);
-            graph.AddEdge("Alice", "Carol", weight: 0.9);
+            graph.AddEdge("Alice", "Bob");
+            graph.AddEdge("Bob", "Carol");
+            graph.AddEdge("Alice", "Carol");
             
             Console.WriteLine($"Node Count: {graph.NodeCount}");
             Console.WriteLine($"Edge Count: {graph.EdgeCount}");
-            Console.WriteLine($"Alice's neighbors: {string.Join(", ", graph.GetAllNeighbors("Alice"))}");
+            Console.WriteLine($"Alice's neighbors: {string.Join(", ", graph.GetNeighbors("Alice"))}");
         }
         
         /// <summary>
@@ -70,7 +70,7 @@ namespace AroAro.DataCore.Examples
             // 使用内存存储 (不需要文件路径)
             using var store = DataStoreFactory.CreateMemory();
             
-            Console.WriteLine($"Storage Backend: {store.StorageBackend}"); // 输出: Memory
+            Console.WriteLine($"Storage Backend: {store.Backend}"); // 输出: Memory
             
             var tabular = store.CreateTabular("test_data");
             tabular.AddNumericColumn("Values", np.array(new double[] { 1, 2, 3, 4, 5 }));
@@ -88,7 +88,7 @@ namespace AroAro.DataCore.Examples
             // 根据配置动态选择后端
             using var store = DataStoreFactory.Create(backend, path);
             
-            Console.WriteLine($"Using backend: {store.StorageBackend}");
+            Console.WriteLine($"Using backend: {store.Backend}");
             
             // 以下代码对所有后端都通用
             var tabular = store.GetOrCreateTabular("unified_data");
@@ -128,12 +128,12 @@ Carol,35,92.3";
         }
         
         /// <summary>
-        /// 演示图算法
+        /// 演示图查询
         /// </summary>
         public static void GraphAlgorithmExample()
         {
             using var store = DataStoreFactory.CreateMemory();
-            var graph = store.CreateGraph("traversal_demo", directed: false);
+            var graph = store.CreateGraph("traversal_demo");
             
             // 构建图
             graph.AddNode("A");
@@ -148,20 +148,24 @@ Carol,35,92.3";
             graph.AddEdge("C", "D");
             graph.AddEdge("D", "E");
             
-            // BFS 遍历
-            Console.WriteLine("BFS from A:");
-            foreach (var node in graph.BreadthFirstSearch("A"))
+            // 图查询 - 从 A 节点遍历
+            Console.WriteLine("Traversal from A:");
+            var reachable = graph.Query()
+                .From("A")
+                .MaxDepth(3)
+                .ToNodeIds();
+            
+            foreach (var node in reachable)
             {
                 Console.Write($"{node} -> ");
             }
             Console.WriteLine();
             
-            // 最短路径
-            var (found, path) = graph.FindShortestPath("A", "E");
-            if (found)
-            {
-                Console.WriteLine($"Shortest path A to E: {string.Join(" -> ", path)}");
-            }
+            // 查询度数大于 1 的节点
+            var hubNodes = graph.Query()
+                .WhereNodeHasProperty("id")
+                .ToNodeIds();
+            Console.WriteLine($"Hub nodes count: {hubNodes.Count()}");
         }
         
         /// <summary>

@@ -179,6 +179,7 @@ namespace AroAro.DataCore
             };
         }
 
+#if DATACORE_APACHE_ARROW
         public void Save(string datasetName, string path, Persistence.IStorageBackend storage = null)
         {
             if (!_dataSets.TryGetValue(datasetName, out var ds))
@@ -207,6 +208,7 @@ namespace AroAro.DataCore
             
             return ds;
         }
+#endif // DATACORE_APACHE_ARROW
 
         /// <summary>
         /// 延迟加载数据集
