@@ -28,7 +28,9 @@ namespace AroAro.DataCore
             {
                 TestTabular(sb);
                 TestGraph(sb);
+#if DATACORE_APACHE_ARROW
                 TestPersistence(sb);
+#endif
                 TestSessions(sb);
                 sb.AppendLine("✅ All tests passed!");
             }
@@ -76,6 +78,7 @@ namespace AroAro.DataCore
             sb.AppendLine("✅ Graph CRUD/Query OK");
         }
 
+#if DATACORE_APACHE_ARROW
         private static void TestPersistence(StringBuilder sb)
         {
             sb.AppendLine("Testing Persistence...");
@@ -99,6 +102,7 @@ namespace AroAro.DataCore
 
             sb.AppendLine("✅ Persistence OK");
         }
+#endif // DATACORE_APACHE_ARROW
 
         private static void TestSessions(StringBuilder sb)
         {

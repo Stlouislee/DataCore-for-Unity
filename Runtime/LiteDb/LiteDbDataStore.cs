@@ -399,6 +399,8 @@ namespace AroAro.DataCore.LiteDb
         public ObjectId Id { get; set; }
         public string Name { get; set; }
         public string DatasetId { get; set; }
+        public int NodeCount { get; set; }
+        public int EdgeCount { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime ModifiedAt { get; set; }
     }
@@ -415,8 +417,9 @@ namespace AroAro.DataCore.LiteDb
     {
         [BsonId]
         public ObjectId Id { get; set; }
-        public string FromId { get; set; }
-        public string ToId { get; set; }
+        public string FromNodeId { get; set; }
+        public string ToNodeId { get; set; }
+        public double Weight { get; set; }
         public BsonDocument Properties { get; set; } = new();
     }
 
