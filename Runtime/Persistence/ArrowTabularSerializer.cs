@@ -1,3 +1,4 @@
+#if DATACORE_APACHE_ARROW
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -149,3 +150,4 @@ namespace AroAro.DataCore.Persistence
         }
     }
 }
+#endif // DATACORE_APACHE_ARROW

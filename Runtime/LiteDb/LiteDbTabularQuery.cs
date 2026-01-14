@@ -46,38 +46,60 @@ namespace AroAro.DataCore.LiteDb
         }
 
         public ITabularQuery WhereEquals(string column, object value)
-            => Where(column, QueryOp.Equal, value);
+            => Where(column, QueryOp.Eq, value);
 
         public ITabularQuery WhereNotEquals(string column, object value)
-            => Where(column, QueryOp.NotEqual, value);
+            => Where(column, QueryOp.Ne, value);
 
         public ITabularQuery WhereGreaterThan(string column, double value)
-            => Where(column, QueryOp.GreaterThan, value);
+            => Where(column, QueryOp.Gt, value);
 
-        public ITabularQuery WhereGreaterOrEqual(string column, double value)
-            => Where(column, QueryOp.GreaterOrEqual, value);
+        public ITabularQuery WhereGreaterThanOrEqual(string column, double value)
+            => Where(column, QueryOp.Ge, value);
 
         public ITabularQuery WhereLessThan(string column, double value)
-            => Where(column, QueryOp.LessThan, value);
+            => Where(column, QueryOp.Lt, value);
 
-        public ITabularQuery WhereLessOrEqual(string column, double value)
-            => Where(column, QueryOp.LessOrEqual, value);
+        public ITabularQuery WhereLessThanOrEqual(string column, double value)
+            => Where(column, QueryOp.Le, value);
 
-        public ITabularQuery WhereBetween(string column, double minValue, double maxValue)
+        public ITabularQuery WhereBetween(string column, double min, double max)
         {
             _filters.Add(row =>
             {
                 if (!row.Data.TryGetValue(column, out var bsonValue) || !bsonValue.IsNumber)
                     return false;
                 var val = bsonValue.AsDouble;
-                return val >= minValue && val <= maxValue;
+                return val >= min && val <= max;
             });
             return this;
         }
 
-        public ITabularQuery WhereIn(string column, IEnumerable<object> values)
+        public ITabularQuery WhereContains(string column, string value)
         {
-            var valueSet = new HashSet<object>(values);
+            _filters.Add(row =>
+            {
+                if (!row.Data.TryGetValue(column, out var bsonValue) || !bsonValue.IsString)
+                    return false;
+                return bsonValue.AsString?.Contains(value) ?? false;
+            });
+            return this;
+        }
+
+        public ITabularQuery WhereStartsWith(string column, string value)
+        {
+            _filters.Add(row =>
+            {
+                if (!row.Data.TryGetValue(column, out var bsonValue) || !bsonValue.IsString)
+                    return false;
+                return bsonValue.AsString?.StartsWith(value) ?? false;
+            });
+            return this;
+        }
+
+        public ITabularQuery WhereIn<T>(string column, IEnumerable<T> values)
+        {
+            var valueSet = new HashSet<object>(values.Cast<object>());
             _filters.Add(row =>
             {
                 if (!row.Data.TryGetValue(column, out var bsonValue))
@@ -88,53 +110,7 @@ namespace AroAro.DataCore.LiteDb
             return this;
         }
 
-        public ITabularQuery WhereNotIn(string column, IEnumerable<object> values)
-        {
-            var valueSet = new HashSet<object>(values);
-            _filters.Add(row =>
-            {
-                if (!row.Data.TryGetValue(column, out var bsonValue))
-                    return true;
-                var val = ConvertFromBsonValue(bsonValue);
-                return !valueSet.Contains(val);
-            });
-            return this;
-        }
-
-        public ITabularQuery WhereContains(string column, string substring)
-        {
-            _filters.Add(row =>
-            {
-                if (!row.Data.TryGetValue(column, out var bsonValue) || !bsonValue.IsString)
-                    return false;
-                return bsonValue.AsString?.Contains(substring) ?? false;
-            });
-            return this;
-        }
-
-        public ITabularQuery WhereStartsWith(string column, string prefix)
-        {
-            _filters.Add(row =>
-            {
-                if (!row.Data.TryGetValue(column, out var bsonValue) || !bsonValue.IsString)
-                    return false;
-                return bsonValue.AsString?.StartsWith(prefix) ?? false;
-            });
-            return this;
-        }
-
-        public ITabularQuery WhereEndsWith(string column, string suffix)
-        {
-            _filters.Add(row =>
-            {
-                if (!row.Data.TryGetValue(column, out var bsonValue) || !bsonValue.IsString)
-                    return false;
-                return bsonValue.AsString?.EndsWith(suffix) ?? false;
-            });
-            return this;
-        }
-
-        public ITabularQuery WhereNull(string column)
+        public ITabularQuery WhereIsNull(string column)
         {
             _filters.Add(row =>
             {
@@ -145,7 +121,7 @@ namespace AroAro.DataCore.LiteDb
             return this;
         }
 
-        public ITabularQuery WhereNotNull(string column)
+        public ITabularQuery WhereIsNotNull(string column)
         {
             _filters.Add(row =>
             {
@@ -156,10 +132,17 @@ namespace AroAro.DataCore.LiteDb
             return this;
         }
 
-        public ITabularQuery OrderBy(string column, bool descending = false)
+        public ITabularQuery OrderBy(string column)
         {
             _orderByColumn = column;
-            _orderDescending = descending;
+            _orderDescending = false;
+            return this;
+        }
+
+        public ITabularQuery OrderByDescending(string column)
+        {
+            _orderByColumn = column;
+            _orderDescending = true;
             return this;
         }
 
@@ -175,6 +158,13 @@ namespace AroAro.DataCore.LiteDb
             return this;
         }
 
+        public ITabularQuery Page(int pageNumber, int pageSize)
+        {
+            _skip = (pageNumber - 1) * pageSize;
+            _limit = pageSize;
+            return this;
+        }
+
         #endregion
 
         #region 执行查询
@@ -184,7 +174,12 @@ namespace AroAro.DataCore.LiteDb
             return ExecuteFilters().Count();
         }
 
-        public IEnumerable<Dictionary<string, object>> ToResults()
+        public bool Any()
+        {
+            return ExecuteFilters().Any();
+        }
+
+        public List<Dictionary<string, object>> ToDictionaries()
         {
             var rows = ExecuteFilters();
 
@@ -199,22 +194,24 @@ namespace AroAro.DataCore.LiteDb
 
             var columns = _selectColumns.Count > 0 ? _selectColumns : _dataset.ColumnNames.ToList();
 
+            var result = new List<Dictionary<string, object>>();
             foreach (var row in rows)
             {
-                var result = new Dictionary<string, object>();
+                var dict = new Dictionary<string, object>();
                 foreach (var col in columns)
                 {
                     if (row.Data.TryGetValue(col, out var bsonValue))
                     {
-                        result[col] = ConvertFromBsonValue(bsonValue);
+                        dict[col] = ConvertFromBsonValue(bsonValue);
                     }
                     else
                     {
-                        result[col] = null;
+                        dict[col] = null;
                     }
                 }
-                yield return result;
+                result.Add(dict);
             }
+            return result;
         }
 
         public int[] ToRowIndices()
@@ -233,7 +230,32 @@ namespace AroAro.DataCore.LiteDb
 
         public Dictionary<string, object> FirstOrDefault()
         {
-            return ToResults().FirstOrDefault();
+            var rows = ExecuteFilters();
+
+            if (!string.IsNullOrEmpty(_orderByColumn))
+            {
+                rows = _orderDescending
+                    ? rows.OrderByDescending(r => GetSortValue(r, _orderByColumn))
+                    : rows.OrderBy(r => GetSortValue(r, _orderByColumn));
+            }
+
+            var row = rows.FirstOrDefault();
+            if (row == null) return null;
+
+            var columns = _selectColumns.Count > 0 ? _selectColumns : _dataset.ColumnNames.ToList();
+            var dict = new Dictionary<string, object>();
+            foreach (var col in columns)
+            {
+                if (row.Data.TryGetValue(col, out var bsonValue))
+                {
+                    dict[col] = ConvertFromBsonValue(bsonValue);
+                }
+                else
+                {
+                    dict[col] = null;
+                }
+            }
+            return dict;
         }
 
         #endregion
@@ -247,7 +269,7 @@ namespace AroAro.DataCore.LiteDb
                 .Sum();
         }
 
-        public double Mean(string column)
+        public double Average(string column)
         {
             var values = ExecuteFilters()
                 .Select(r => r.Data.TryGetValue(column, out var v) && v.IsNumber ? v.AsDouble : (double?)null)
@@ -280,12 +302,6 @@ namespace AroAro.DataCore.LiteDb
             return values.Count > 0 ? values.Min() : 0.0;
         }
 
-        public IEnumerable<IGrouping<object, Dictionary<string, object>>> GroupBy(string column)
-        {
-            var results = ToResults().ToList();
-            return results.GroupBy(r => r.ContainsKey(column) ? r[column] : null);
-        }
-
         #endregion
 
         #region 内部方法
@@ -306,25 +322,25 @@ namespace AroAro.DataCore.LiteDb
         {
             switch (op)
             {
-                case QueryOp.Equal:
+                case QueryOp.Eq:
                     return BsonValueEquals(bsonValue, value);
 
-                case QueryOp.NotEqual:
+                case QueryOp.Ne:
                     return !BsonValueEquals(bsonValue, value);
 
-                case QueryOp.GreaterThan:
+                case QueryOp.Gt:
                     if (!bsonValue.IsNumber) return false;
                     return bsonValue.AsDouble > Convert.ToDouble(value);
 
-                case QueryOp.GreaterOrEqual:
+                case QueryOp.Ge:
                     if (!bsonValue.IsNumber) return false;
                     return bsonValue.AsDouble >= Convert.ToDouble(value);
 
-                case QueryOp.LessThan:
+                case QueryOp.Lt:
                     if (!bsonValue.IsNumber) return false;
                     return bsonValue.AsDouble < Convert.ToDouble(value);
 
-                case QueryOp.LessOrEqual:
+                case QueryOp.Le:
                     if (!bsonValue.IsNumber) return false;
                     return bsonValue.AsDouble <= Convert.ToDouble(value);
 
@@ -339,12 +355,6 @@ namespace AroAro.DataCore.LiteDb
                 case QueryOp.EndsWith:
                     if (!bsonValue.IsString) return false;
                     return bsonValue.AsString?.EndsWith(value?.ToString()) ?? false;
-
-                case QueryOp.IsNull:
-                    return bsonValue.IsNull;
-
-                case QueryOp.IsNotNull:
-                    return !bsonValue.IsNull;
 
                 default:
                     return false;

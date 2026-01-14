@@ -13,8 +13,10 @@ namespace AroAro.DataCore.LiteDb
         private readonly LiteDbGraphDataset _dataset;
         private readonly List<Func<GraphNode, bool>> _nodeFilters;
         private readonly List<Func<GraphEdge, bool>> _edgeFilters;
-        private int _skip;
-        private int _limit = int.MaxValue;
+        private string _startNodeId;
+        private bool _traverseOut;
+        private bool _traverseIn;
+        private int _maxDepth = int.MaxValue;
 
         internal LiteDbGraphQuery(LiteDbGraphDataset dataset)
         {
@@ -23,7 +25,7 @@ namespace AroAro.DataCore.LiteDb
             _edgeFilters = new List<Func<GraphEdge, bool>>();
         }
 
-        #region IGraphQuery 实现
+        #region IGraphQuery 实现 - 节点过滤
 
         public IGraphQuery WhereNodeProperty(string property, QueryOp op, object value)
         {
@@ -36,60 +38,15 @@ namespace AroAro.DataCore.LiteDb
             return this;
         }
 
-        public IGraphQuery WhereNodeId(string nodeId)
+        public IGraphQuery WhereNodeHasProperty(string property)
         {
-            _nodeFilters.Add(node => node.NodeId == nodeId);
+            _nodeFilters.Add(node => node.Properties.ContainsKey(property) && !node.Properties[property].IsNull);
             return this;
         }
 
-        public IGraphQuery WhereNodeIdIn(IEnumerable<string> nodeIds)
-        {
-            var idSet = new HashSet<string>(nodeIds);
-            _nodeFilters.Add(node => idSet.Contains(node.NodeId));
-            return this;
-        }
+        #endregion
 
-        public IGraphQuery WhereHasOutgoingEdge()
-        {
-            _nodeFilters.Add(node => _dataset.GetOutDegree(node.NodeId) > 0);
-            return this;
-        }
-
-        public IGraphQuery WhereHasIncomingEdge()
-        {
-            _nodeFilters.Add(node => _dataset.GetInDegree(node.NodeId) > 0);
-            return this;
-        }
-
-        public IGraphQuery WhereDegreeGreaterThan(int degree)
-        {
-            _nodeFilters.Add(node => _dataset.GetDegree(node.NodeId) > degree);
-            return this;
-        }
-
-        public IGraphQuery WhereDegreeLessThan(int degree)
-        {
-            _nodeFilters.Add(node => _dataset.GetDegree(node.NodeId) < degree);
-            return this;
-        }
-
-        public IGraphQuery WhereEdgeWeight(QueryOp op, double value)
-        {
-            _edgeFilters.Add(edge =>
-            {
-                return op switch
-                {
-                    QueryOp.Equal => Math.Abs(edge.Weight - value) < 0.0001,
-                    QueryOp.NotEqual => Math.Abs(edge.Weight - value) >= 0.0001,
-                    QueryOp.GreaterThan => edge.Weight > value,
-                    QueryOp.GreaterOrEqual => edge.Weight >= value,
-                    QueryOp.LessThan => edge.Weight < value,
-                    QueryOp.LessOrEqual => edge.Weight <= value,
-                    _ => false
-                };
-            });
-            return this;
-        }
+        #region IGraphQuery 实现 - 边过滤
 
         public IGraphQuery WhereEdgeProperty(string property, QueryOp op, object value)
         {
@@ -102,97 +59,127 @@ namespace AroAro.DataCore.LiteDb
             return this;
         }
 
-        public IGraphQuery Skip(int count)
+        #endregion
+
+        #region IGraphQuery 实现 - 遍历
+
+        public IGraphQuery From(string nodeId)
         {
-            _skip = Math.Max(0, count);
+            _startNodeId = nodeId;
             return this;
         }
 
-        public IGraphQuery Limit(int count)
+        public IGraphQuery TraverseOut()
         {
-            _limit = Math.Max(0, count);
+            _traverseOut = true;
+            return this;
+        }
+
+        public IGraphQuery TraverseIn()
+        {
+            _traverseIn = true;
+            return this;
+        }
+
+        public IGraphQuery MaxDepth(int depth)
+        {
+            _maxDepth = depth;
             return this;
         }
 
         #endregion
 
-        #region 执行查询
-
-        public int CountNodes() => ExecuteNodeFilters().Count();
-
-        public int CountEdges() => ExecuteEdgeFilters().Count();
-
-        public IEnumerable<(string nodeId, Dictionary<string, object> properties)> ToNodeResults()
-        {
-            var nodes = ExecuteNodeFilters()
-                .Skip(_skip)
-                .Take(_limit);
-
-            foreach (var node in nodes)
-            {
-                var props = new Dictionary<string, object>();
-                foreach (var kv in node.Properties)
-                {
-                    props[kv.Key] = ConvertFromBsonValue(kv.Value);
-                }
-                yield return (node.NodeId, props);
-            }
-        }
-
-        public IEnumerable<(string from, string to, double weight, Dictionary<string, object> properties)> ToEdgeResults()
-        {
-            var edges = ExecuteEdgeFilters()
-                .Skip(_skip)
-                .Take(_limit);
-
-            foreach (var edge in edges)
-            {
-                var props = new Dictionary<string, object>();
-                foreach (var kv in edge.Properties)
-                {
-                    props[kv.Key] = ConvertFromBsonValue(kv.Value);
-                }
-                yield return (edge.FromNodeId, edge.ToNodeId, edge.Weight, props);
-            }
-        }
+        #region IGraphQuery 实现 - 执行
 
         public IEnumerable<string> ToNodeIds()
         {
-            return ExecuteNodeFilters()
-                .Skip(_skip)
-                .Take(_limit)
-                .Select(n => n.NodeId);
+            if (!string.IsNullOrEmpty(_startNodeId))
+            {
+                return TraverseFromNode();
+            }
+
+            return ExecuteNodeFilters().Select(n => n.NodeId);
         }
 
-        public (string nodeId, Dictionary<string, object> properties)? FirstNodeOrDefault()
+        public IEnumerable<(string From, string To)> ToEdges()
         {
-            var node = ExecuteNodeFilters().FirstOrDefault();
-            if (node == null) return null;
-
-            var props = new Dictionary<string, object>();
-            foreach (var kv in node.Properties)
-            {
-                props[kv.Key] = ConvertFromBsonValue(kv.Value);
-            }
-            return (node.NodeId, props);
+            return ExecuteEdgeFilters().Select(e => (e.FromNodeId, e.ToNodeId));
         }
 
-        public (string from, string to, double weight, Dictionary<string, object> properties)? FirstEdgeOrDefault()
+        public int CountNodes()
         {
-            var edge = ExecuteEdgeFilters().FirstOrDefault();
-            if (edge == null) return null;
-
-            var props = new Dictionary<string, object>();
-            foreach (var kv in edge.Properties)
+            if (!string.IsNullOrEmpty(_startNodeId))
             {
-                props[kv.Key] = ConvertFromBsonValue(kv.Value);
+                return TraverseFromNode().Count();
             }
-            return (edge.FromNodeId, edge.ToNodeId, edge.Weight, props);
+            return ExecuteNodeFilters().Count();
+        }
+
+        public int CountEdges()
+        {
+            return ExecuteEdgeFilters().Count();
         }
 
         #endregion
 
         #region 内部方法
+
+        private IEnumerable<string> TraverseFromNode()
+        {
+            if (!_dataset.HasNode(_startNodeId))
+                yield break;
+
+            var visited = new HashSet<string>();
+            var queue = new Queue<(string nodeId, int depth)>();
+            
+            queue.Enqueue((_startNodeId, 0));
+            visited.Add(_startNodeId);
+
+            while (queue.Count > 0)
+            {
+                var (current, depth) = queue.Dequeue();
+                
+                // 检查节点是否通过过滤器
+                var node = _dataset.GetAllNodesInternal().FirstOrDefault(n => n.NodeId == current);
+                if (node != null)
+                {
+                    bool passesFilter = true;
+                    foreach (var filter in _nodeFilters)
+                    {
+                        if (!filter(node))
+                        {
+                            passesFilter = false;
+                            break;
+                        }
+                    }
+                    if (passesFilter)
+                        yield return current;
+                }
+
+                if (depth >= _maxDepth)
+                    continue;
+
+                IEnumerable<string> neighbors = Enumerable.Empty<string>();
+                
+                if (_traverseOut)
+                    neighbors = neighbors.Concat(_dataset.GetOutNeighbors(current));
+                
+                if (_traverseIn)
+                    neighbors = neighbors.Concat(_dataset.GetInNeighbors(current));
+                
+                if (!_traverseOut && !_traverseIn)
+                    neighbors = _dataset.GetNeighbors(current);
+
+                foreach (var neighbor in neighbors.Distinct())
+                {
+                    if (!visited.Contains(neighbor))
+                    {
+                        visited.Add(neighbor);
+                        queue.Enqueue((neighbor, depth + 1));
+                    }
+                }
+            }
+        }
 
         private IEnumerable<GraphNode> ExecuteNodeFilters()
         {
@@ -222,25 +209,25 @@ namespace AroAro.DataCore.LiteDb
         {
             switch (op)
             {
-                case QueryOp.Equal:
+                case QueryOp.Eq:
                     return BsonValueEquals(bsonValue, value);
 
-                case QueryOp.NotEqual:
+                case QueryOp.Ne:
                     return !BsonValueEquals(bsonValue, value);
 
-                case QueryOp.GreaterThan:
+                case QueryOp.Gt:
                     if (!bsonValue.IsNumber) return false;
                     return bsonValue.AsDouble > Convert.ToDouble(value);
 
-                case QueryOp.GreaterOrEqual:
+                case QueryOp.Ge:
                     if (!bsonValue.IsNumber) return false;
                     return bsonValue.AsDouble >= Convert.ToDouble(value);
 
-                case QueryOp.LessThan:
+                case QueryOp.Lt:
                     if (!bsonValue.IsNumber) return false;
                     return bsonValue.AsDouble < Convert.ToDouble(value);
 
-                case QueryOp.LessOrEqual:
+                case QueryOp.Le:
                     if (!bsonValue.IsNumber) return false;
                     return bsonValue.AsDouble <= Convert.ToDouble(value);
 
@@ -255,12 +242,6 @@ namespace AroAro.DataCore.LiteDb
                 case QueryOp.EndsWith:
                     if (!bsonValue.IsString) return false;
                     return bsonValue.AsString?.EndsWith(value?.ToString()) ?? false;
-
-                case QueryOp.IsNull:
-                    return bsonValue.IsNull;
-
-                case QueryOp.IsNotNull:
-                    return !bsonValue.IsNull;
 
                 default:
                     return false;
@@ -282,18 +263,6 @@ namespace AroAro.DataCore.LiteDb
                 return bsonValue.AsBoolean == b;
 
             return bsonValue.ToString() == value.ToString();
-        }
-
-        private object ConvertFromBsonValue(BsonValue value)
-        {
-            if (value.IsNull) return null;
-            if (value.IsDouble) return value.AsDouble;
-            if (value.IsInt32) return value.AsInt32;
-            if (value.IsInt64) return value.AsInt64;
-            if (value.IsBoolean) return value.AsBoolean;
-            if (value.IsDateTime) return value.AsDateTime;
-            if (value.IsString) return value.AsString;
-            return value.ToString();
         }
 
         #endregion

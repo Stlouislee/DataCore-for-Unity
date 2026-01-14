@@ -44,23 +44,22 @@ namespace AroAro.DataCore.LiteDb
 
         public int NodeCount => _metadata.NodeCount;
         public int EdgeCount => _metadata.EdgeCount;
-        public bool IsDirected => _metadata.IsDirected;
 
         #endregion
 
         #region 节点操作
 
-        public void AddNode(string nodeId, IDictionary<string, object> properties = null)
+        public void AddNode(string id, IDictionary<string, object> properties = null)
         {
-            if (string.IsNullOrWhiteSpace(nodeId))
-                throw new ArgumentException("Node ID cannot be null or empty", nameof(nodeId));
+            if (string.IsNullOrWhiteSpace(id))
+                throw new ArgumentException("Node ID cannot be null or empty", nameof(id));
 
-            if (_nodes.Exists(n => n.NodeId == nodeId))
-                throw new InvalidOperationException($"Node '{nodeId}' already exists");
+            if (_nodes.Exists(n => n.NodeId == id))
+                throw new InvalidOperationException($"Node '{id}' already exists");
 
             var node = new GraphNode
             {
-                NodeId = nodeId,
+                NodeId = id,
                 Properties = ConvertToBsonDocument(properties)
             };
 
@@ -69,13 +68,13 @@ namespace AroAro.DataCore.LiteDb
             UpdateMetadata();
         }
 
-        public int AddNodes(IEnumerable<(string nodeId, IDictionary<string, object> properties)> nodes)
+        public int AddNodes(IEnumerable<(string Id, IDictionary<string, object> Properties)> nodes)
         {
             int count = 0;
             var nodeList = nodes.Select(n => new GraphNode
             {
-                NodeId = n.nodeId,
-                Properties = ConvertToBsonDocument(n.properties)
+                NodeId = n.Id,
+                Properties = ConvertToBsonDocument(n.Properties)
             }).ToList();
 
             if (nodeList.Count > 0)
@@ -89,10 +88,11 @@ namespace AroAro.DataCore.LiteDb
             return count;
         }
 
-        public bool UpdateNodeProperties(string nodeId, IDictionary<string, object> properties)
+        public void UpdateNodeProperties(string id, IDictionary<string, object> properties)
         {
-            var node = _nodes.FindOne(n => n.NodeId == nodeId);
-            if (node == null) return false;
+            var node = _nodes.FindOne(n => n.NodeId == id);
+            if (node == null) 
+                throw new KeyNotFoundException($"Node '{id}' not found");
 
             foreach (var kv in properties)
             {
@@ -101,16 +101,15 @@ namespace AroAro.DataCore.LiteDb
 
             _nodes.Update(node);
             UpdateMetadata();
-            return true;
         }
 
-        public bool RemoveNode(string nodeId)
+        public bool RemoveNode(string id)
         {
-            var node = _nodes.FindOne(n => n.NodeId == nodeId);
+            var node = _nodes.FindOne(n => n.NodeId == id);
             if (node == null) return false;
 
             // 删除相关边
-            var relatedEdges = _edges.Find(e => e.FromNodeId == nodeId || e.ToNodeId == nodeId).ToList();
+            var relatedEdges = _edges.Find(e => e.FromNodeId == id || e.ToNodeId == id).ToList();
             foreach (var edge in relatedEdges)
             {
                 _edges.Delete(edge.Id);
@@ -123,14 +122,14 @@ namespace AroAro.DataCore.LiteDb
             return true;
         }
 
-        public bool HasNode(string nodeId)
+        public bool HasNode(string id)
         {
-            return _nodes.Exists(n => n.NodeId == nodeId);
+            return _nodes.Exists(n => n.NodeId == id);
         }
 
-        public Dictionary<string, object> GetNodeProperties(string nodeId)
+        public IDictionary<string, object> GetNodeProperties(string id)
         {
-            var node = _nodes.FindOne(n => n.NodeId == nodeId);
+            var node = _nodes.FindOne(n => n.NodeId == id);
             if (node == null) return null;
 
             var result = new Dictionary<string, object>();
@@ -141,45 +140,32 @@ namespace AroAro.DataCore.LiteDb
             return result;
         }
 
-        public IEnumerable<string> GetAllNodeIds()
+        public IEnumerable<string> GetNodeIds()
         {
             return _nodes.FindAll().Select(n => n.NodeId);
-        }
-
-        public IEnumerable<(string nodeId, Dictionary<string, object> properties)> GetAllNodes()
-        {
-            foreach (var node in _nodes.FindAll())
-            {
-                var props = new Dictionary<string, object>();
-                foreach (var kv in node.Properties)
-                {
-                    props[kv.Key] = ConvertFromBsonValue(kv.Value);
-                }
-                yield return (node.NodeId, props);
-            }
         }
 
         #endregion
 
         #region 边操作
 
-        public void AddEdge(string fromNodeId, string toNodeId, IDictionary<string, object> properties = null, double weight = 1.0)
+        public void AddEdge(string fromId, string toId, IDictionary<string, object> properties = null)
         {
-            if (string.IsNullOrWhiteSpace(fromNodeId))
-                throw new ArgumentException("From node ID cannot be null or empty", nameof(fromNodeId));
-            if (string.IsNullOrWhiteSpace(toNodeId))
-                throw new ArgumentException("To node ID cannot be null or empty", nameof(toNodeId));
+            if (string.IsNullOrWhiteSpace(fromId))
+                throw new ArgumentException("From node ID cannot be null or empty", nameof(fromId));
+            if (string.IsNullOrWhiteSpace(toId))
+                throw new ArgumentException("To node ID cannot be null or empty", nameof(toId));
 
-            if (!HasNode(fromNodeId))
-                throw new InvalidOperationException($"Node '{fromNodeId}' does not exist");
-            if (!HasNode(toNodeId))
-                throw new InvalidOperationException($"Node '{toNodeId}' does not exist");
+            if (!HasNode(fromId))
+                throw new InvalidOperationException($"Node '{fromId}' does not exist");
+            if (!HasNode(toId))
+                throw new InvalidOperationException($"Node '{toId}' does not exist");
 
             var edge = new GraphEdge
             {
-                FromNodeId = fromNodeId,
-                ToNodeId = toNodeId,
-                Weight = weight,
+                FromNodeId = fromId,
+                ToNodeId = toId,
+                Weight = 1.0,
                 Properties = ConvertToBsonDocument(properties)
             };
 
@@ -188,15 +174,15 @@ namespace AroAro.DataCore.LiteDb
             UpdateMetadata();
         }
 
-        public int AddEdges(IEnumerable<(string from, string to, IDictionary<string, object> properties, double weight)> edges)
+        public int AddEdges(IEnumerable<(string From, string To, IDictionary<string, object> Properties)> edges)
         {
             int count = 0;
             var edgeList = edges.Select(e => new GraphEdge
             {
-                FromNodeId = e.from,
-                ToNodeId = e.to,
-                Weight = e.weight,
-                Properties = ConvertToBsonDocument(e.properties)
+                FromNodeId = e.From,
+                ToNodeId = e.To,
+                Weight = 1.0,
+                Properties = ConvertToBsonDocument(e.Properties)
             }).ToList();
 
             if (edgeList.Count > 0)
@@ -210,9 +196,9 @@ namespace AroAro.DataCore.LiteDb
             return count;
         }
 
-        public bool RemoveEdge(string fromNodeId, string toNodeId)
+        public bool RemoveEdge(string fromId, string toId)
         {
-            var edge = _edges.FindOne(e => e.FromNodeId == fromNodeId && e.ToNodeId == toNodeId);
+            var edge = _edges.FindOne(e => e.FromNodeId == fromId && e.ToNodeId == toId);
             if (edge == null) return false;
 
             _edges.Delete(edge.Id);
@@ -221,29 +207,14 @@ namespace AroAro.DataCore.LiteDb
             return true;
         }
 
-        public bool HasEdge(string fromNodeId, string toNodeId)
+        public bool HasEdge(string fromId, string toId)
         {
-            if (IsDirected)
-            {
-                return _edges.Exists(e => e.FromNodeId == fromNodeId && e.ToNodeId == toNodeId);
-            }
-            else
-            {
-                return _edges.Exists(e =>
-                    (e.FromNodeId == fromNodeId && e.ToNodeId == toNodeId) ||
-                    (e.FromNodeId == toNodeId && e.ToNodeId == fromNodeId));
-            }
+            return _edges.Exists(e => e.FromNodeId == fromId && e.ToNodeId == toId);
         }
 
-        public double GetEdgeWeight(string fromNodeId, string toNodeId)
+        public IDictionary<string, object> GetEdgeProperties(string fromId, string toId)
         {
-            var edge = _edges.FindOne(e => e.FromNodeId == fromNodeId && e.ToNodeId == toNodeId);
-            return edge?.Weight ?? 0.0;
-        }
-
-        public Dictionary<string, object> GetEdgeProperties(string fromNodeId, string toNodeId)
-        {
-            var edge = _edges.FindOne(e => e.FromNodeId == fromNodeId && e.ToNodeId == toNodeId);
+            var edge = _edges.FindOne(e => e.FromNodeId == fromId && e.ToNodeId == toId);
             if (edge == null) return null;
 
             var result = new Dictionary<string, object>();
@@ -254,17 +225,24 @@ namespace AroAro.DataCore.LiteDb
             return result;
         }
 
-        public IEnumerable<(string from, string to, double weight, Dictionary<string, object> properties)> GetAllEdges()
+        public void UpdateEdgeProperties(string fromId, string toId, IDictionary<string, object> properties)
         {
-            foreach (var edge in _edges.FindAll())
+            var edge = _edges.FindOne(e => e.FromNodeId == fromId && e.ToNodeId == toId);
+            if (edge == null)
+                throw new KeyNotFoundException($"Edge from '{fromId}' to '{toId}' not found");
+
+            foreach (var kv in properties)
             {
-                var props = new Dictionary<string, object>();
-                foreach (var kv in edge.Properties)
-                {
-                    props[kv.Key] = ConvertFromBsonValue(kv.Value);
-                }
-                yield return (edge.FromNodeId, edge.ToNodeId, edge.Weight, props);
+                edge.Properties[kv.Key] = ConvertToBsonValue(kv.Value);
             }
+
+            _edges.Update(edge);
+            UpdateMetadata();
+        }
+
+        public IEnumerable<(string From, string To)> GetEdges()
+        {
+            return _edges.FindAll().Select(e => (e.FromNodeId, e.ToNodeId));
         }
 
         #endregion
@@ -281,7 +259,7 @@ namespace AroAro.DataCore.LiteDb
             return _edges.Find(e => e.ToNodeId == nodeId).Select(e => e.FromNodeId).Distinct();
         }
 
-        public IEnumerable<string> GetAllNeighbors(string nodeId)
+        public IEnumerable<string> GetNeighbors(string nodeId)
         {
             var outNeighbors = GetOutNeighbors(nodeId);
             var inNeighbors = GetInNeighbors(nodeId);
@@ -296,118 +274,6 @@ namespace AroAro.DataCore.LiteDb
         public int GetInDegree(string nodeId)
         {
             return _edges.Count(e => e.ToNodeId == nodeId);
-        }
-
-        public int GetDegree(string nodeId)
-        {
-            if (IsDirected)
-            {
-                return GetOutDegree(nodeId) + GetInDegree(nodeId);
-            }
-            else
-            {
-                return _edges.Count(e => e.FromNodeId == nodeId || e.ToNodeId == nodeId);
-            }
-        }
-
-        #endregion
-
-        #region 图算法
-
-        public IEnumerable<string> BreadthFirstSearch(string startNodeId)
-        {
-            if (!HasNode(startNodeId))
-                throw new ArgumentException($"Node '{startNodeId}' not found");
-
-            var visited = new HashSet<string>();
-            var queue = new Queue<string>();
-
-            queue.Enqueue(startNodeId);
-            visited.Add(startNodeId);
-
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-                yield return current;
-
-                foreach (var neighbor in GetAllNeighbors(current))
-                {
-                    if (!visited.Contains(neighbor))
-                    {
-                        visited.Add(neighbor);
-                        queue.Enqueue(neighbor);
-                    }
-                }
-            }
-        }
-
-        public IEnumerable<string> DepthFirstSearch(string startNodeId)
-        {
-            if (!HasNode(startNodeId))
-                throw new ArgumentException($"Node '{startNodeId}' not found");
-
-            var visited = new HashSet<string>();
-            var stack = new Stack<string>();
-
-            stack.Push(startNodeId);
-
-            while (stack.Count > 0)
-            {
-                var current = stack.Pop();
-
-                if (visited.Contains(current))
-                    continue;
-
-                visited.Add(current);
-                yield return current;
-
-                foreach (var neighbor in GetAllNeighbors(current).Reverse())
-                {
-                    if (!visited.Contains(neighbor))
-                    {
-                        stack.Push(neighbor);
-                    }
-                }
-            }
-        }
-
-        public (bool found, IEnumerable<string> path) FindShortestPath(string fromNodeId, string toNodeId)
-        {
-            if (!HasNode(fromNodeId) || !HasNode(toNodeId))
-                return (false, null);
-
-            if (fromNodeId == toNodeId)
-                return (true, new[] { fromNodeId });
-
-            var visited = new HashSet<string>();
-            var queue = new Queue<string>();
-            var parent = new Dictionary<string, string>();
-
-            queue.Enqueue(fromNodeId);
-            visited.Add(fromNodeId);
-
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-
-                foreach (var neighbor in GetAllNeighbors(current))
-                {
-                    if (!visited.Contains(neighbor))
-                    {
-                        visited.Add(neighbor);
-                        parent[neighbor] = current;
-                        queue.Enqueue(neighbor);
-
-                        if (neighbor == toNodeId)
-                        {
-                            var path = ReconstructPath(parent, fromNodeId, toNodeId);
-                            return (true, path);
-                        }
-                    }
-                }
-            }
-
-            return (false, null);
         }
 
         #endregion
@@ -482,20 +348,6 @@ namespace AroAro.DataCore.LiteDb
             if (value.IsDateTime) return value.AsDateTime;
             if (value.IsString) return value.AsString;
             return value.ToString();
-        }
-
-        private List<string> ReconstructPath(Dictionary<string, string> parent, string from, string to)
-        {
-            var path = new List<string>();
-            var current = to;
-            while (current != from)
-            {
-                path.Add(current);
-                current = parent[current];
-            }
-            path.Add(from);
-            path.Reverse();
-            return path;
         }
 
         #endregion
