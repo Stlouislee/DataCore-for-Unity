@@ -409,7 +409,8 @@ namespace AroAro.DataCore.Tests
                 });
             }
             
-            // 创建概念之间的关系
+            // 创建概念之间的关系 - 使用批量操作
+            var conceptEdges = new List<(string From, string To, IDictionary<string, object> Properties)>();
             for (int i = 1; i <= 100; i++)
             {
                 var relCount = Random.Range(1, 5);
@@ -421,17 +422,25 @@ namespace AroAro.DataCore.Tests
                         var from = $"concept_{i}";
                         var to = $"concept_{targetId}";
                         
-                        if (!graph.HasEdge(from, to))
+                        // 检查是否已经在列表中
+                        if (!conceptEdges.Any(e => e.From == from && e.To == to))
                         {
                             var relType = GetRandomRelationType();
-                            graph.AddEdge(from, to, new Dictionary<string, object>
+                            conceptEdges.Add((from, to, new Dictionary<string, object>
                             {
                                 ["relationship"] = relType,
                                 ["strength"] = Random.Range(0.1f, 1.0f)
-                            });
+                            }));
                         }
                     }
                 }
+            }
+            
+            // 批量添加概念关系边
+            if (conceptEdges.Count > 0)
+            {
+                graph.AddEdges(conceptEdges);
+                Debug.Log($"Added {conceptEdges.Count} concept relationships");
             }
             
             // 添加科学家节点
@@ -457,6 +466,8 @@ namespace AroAro.DataCore.Tests
                 ("Gauss", "Mathematics", 1855)
             };
             
+            var scientistEdges = new List<(string From, string To, IDictionary<string, object> Properties)>();
+            
             foreach (var (name, field, year) in scientists)
             {
                 var scientistId = $"scientist_{name}";
@@ -470,25 +481,32 @@ namespace AroAro.DataCore.Tests
                     ["awards"] = Random.Range(1, 10)
                 });
                 
-                graph.AddEdge(scientistId, $"subject_{field}", new Dictionary<string, object>
+                scientistEdges.Add((scientistId, $"subject_{field}", new Dictionary<string, object>
                 {
                     ["relationship"] = "contributed_to"
-                });
+                }));
                 
                 // 连接到相关概念
                 var conceptCount = Random.Range(3, 8);
                 for (int i = 0; i < conceptCount; i++)
                 {
                     var conceptId = $"concept_{Random.Range(1, 101)}";
-                    if (graph.HasNode(conceptId) && !graph.HasEdge(scientistId, conceptId))
+                    if (graph.HasNode(conceptId))
                     {
-                        graph.AddEdge(scientistId, conceptId, new Dictionary<string, object>
+                        scientistEdges.Add((scientistId, conceptId, new Dictionary<string, object>
                         {
                             ["relationship"] = "discovered",
                             ["year"] = Random.Range(year - 50, year)
-                        });
+                        }));
                     }
                 }
+            }
+            
+            // 批量添加科学家相关的边
+            if (scientistEdges.Count > 0)
+            {
+                graph.AddEdges(scientistEdges);
+                Debug.Log($"Added {scientists.Length} scientists and {scientistEdges.Count} relationships");
             }
         }
 
@@ -890,7 +908,7 @@ namespace AroAro.DataCore.Tests
                 Debug.Log($"Top 5 nodes by out-degree:");
                 foreach (var nodeId in topNodes)
                 {
-                    var outDegree = graph.GetOutDegree(id);
+                    var outDegree = graph.GetOutDegree(nodeId);
                     var inDegree = graph.GetInDegree(nodeId);
                     var props = graph.GetNodeProperties(nodeId);
                     var nodeName = props.ContainsKey("name") ? props["name"] : nodeId;
