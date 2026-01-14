@@ -287,8 +287,8 @@ namespace AroAro.DataCore.LiteDb
             if (metadata == null) return false;
 
             // 删除数据
-            _database.DropCollection($"graph_nodes_{metadata.Id}");
-            _database.DropCollection($"graph_edges_{metadata.Id}");
+            _database.DropCollection($"graph_{metadata.Id}_nodes");
+            _database.DropCollection($"graph_{metadata.Id}_edges");
 
             return meta.Delete(metadata.Id);
         }

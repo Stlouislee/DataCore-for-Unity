@@ -351,19 +351,23 @@ namespace AroAro.DataCore.Tests
                 ["Chemistry"] = new[] { "Organic", "Inorganic", "Physical", "Analytical", "Biochemistry" }
             };
             
-            // 创建学科节点
+            // 批量准备所有节点和边
+            var allNodes = new List<(string Id, IDictionary<string, object> Properties)>();
+            var allEdges = new List<(string From, string To, IDictionary<string, object> Properties)>();
+            
+            // 1. 创建学科节点
             foreach (var subject in subjects.Keys)
             {
-                graph.AddNode($"subject_{subject}", new Dictionary<string, object>
+                allNodes.Add(($"subject_{subject}", new Dictionary<string, object>
                 {
                     ["type"] = "subject",
                     ["name"] = subject,
                     ["level"] = "domain",
                     ["field_size"] = Random.Range(1000, 100000)
-                });
+                }));
             }
             
-            // 创建子学科节点并连接
+            // 2. 创建子学科节点和边
             foreach (var kvp in subjects)
             {
                 var parentId = $"subject_{kvp.Key}";
@@ -371,29 +375,29 @@ namespace AroAro.DataCore.Tests
                 foreach (var subfield in kvp.Value)
                 {
                     var subfieldId = $"subfield_{subfield}";
-                    graph.AddNode(subfieldId, new Dictionary<string, object>
+                    allNodes.Add((subfieldId, new Dictionary<string, object>
                     {
                         ["type"] = "subfield",
                         ["name"] = subfield,
                         ["parent_subject"] = kvp.Key,
                         ["level"] = "subfield"
-                    });
+                    }));
                     
-                    graph.AddEdge(parentId, subfieldId, new Dictionary<string, object>
+                    allEdges.Add((parentId, subfieldId, new Dictionary<string, object>
                     {
                         ["relationship"] = "contains"
-                    });
+                    }));
                 }
             }
             
-            // 创建概念节点
+            // 3. 创建概念节点和到子学科的边
             var allSubfields = subjects.Values.SelectMany(x => x).ToArray();
             for (int i = 1; i <= 100; i++)
             {
                 var subfield = allSubfields[Random.Range(0, allSubfields.Length)];
                 var conceptId = $"concept_{i}";
                 
-                graph.AddNode(conceptId, new Dictionary<string, object>
+                allNodes.Add((conceptId, new Dictionary<string, object>
                 {
                     ["type"] = "concept",
                     ["name"] = $"Concept {i}",
@@ -401,15 +405,27 @@ namespace AroAro.DataCore.Tests
                     ["complexity"] = Random.Range(1, 10),
                     ["year_introduced"] = Random.Range(1900, 2024),
                     ["citations"] = Random.Range(10, 10000)
-                });
+                }));
                 
-                graph.AddEdge($"subfield_{subfield}", conceptId, new Dictionary<string, object>
+                allEdges.Add(($"subfield_{subfield}", conceptId, new Dictionary<string, object>
                 {
                     ["relationship"] = "contains_concept"
-                });
+                }));
             }
             
-            // 创建概念之间的关系 - 使用批量操作
+            // 批量添加所有节点
+            Debug.Log($"Adding {allNodes.Count} nodes...");
+            graph.AddNodes(allNodes);
+            
+            // 批量添加学科结构的边
+            Debug.Log($"Adding {allEdges.Count} structural edges...");
+            graph.AddEdges(allEdges);
+            
+            // 批量添加学科结构的边
+            Debug.Log($"Adding {allEdges.Count} structural edges...");
+            graph.AddEdges(allEdges);
+            
+            // 4. 创建概念之间的关系
             var conceptEdges = new List<(string From, string To, IDictionary<string, object> Properties)>();
             for (int i = 1; i <= 100; i++)
             {
@@ -439,11 +455,11 @@ namespace AroAro.DataCore.Tests
             // 批量添加概念关系边
             if (conceptEdges.Count > 0)
             {
+                Debug.Log($"Adding {conceptEdges.Count} concept relationships...");
                 graph.AddEdges(conceptEdges);
-                Debug.Log($"Added {conceptEdges.Count} concept relationships");
             }
             
-            // 添加科学家节点
+            // 5. 添加科学家节点
             AddScientistNodes(graph, allSubfields);
         }
 
