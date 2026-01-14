@@ -92,55 +92,43 @@ namespace AroAro.DataCore
         private void InitializeSampleDatasets()
         {
             // Auto-load CSVs from Resources/AroAro/DataCore/AutoLoad
-            var csvAssets = Resources.LoadAll<TextAsset>("AroAro/DataCore/AutoLoad");
+            // 逻辑：扫描 -> 用文件名作为 datasetName -> 若 DB 中不存在则导入
+            const string resourceFolder = "AroAro/DataCore/AutoLoad";
+            var csvAssets = Resources.LoadAll<TextAsset>(resourceFolder);
             if (csvAssets == null || csvAssets.Length == 0)
             {
-                Debug.Log("No auto-load datasets found in Resources/AroAro/DataCore/AutoLoad");
+                Debug.Log($"No auto-load datasets found in Resources/{resourceFolder}");
                 return;
-            }
-
-            // Verify store accessibility before starting
-            try 
-            {
-                var check = _store.Names; 
-            } 
-            catch (Exception ex) 
-            { 
-                Debug.LogError($"DataStore is not accessible ({ex.Message}). Skipping dataset auto-load."); 
-                return; 
             }
 
             foreach (var csvAsset in csvAssets)
             {
-                string datasetName = csvAsset.name;
+                if (csvAsset == null) continue;
 
-                try 
+                var datasetName = csvAsset.name;
+                if (string.IsNullOrWhiteSpace(datasetName))
+                    continue;
+
+                // 1) DB 中存在则跳过
+                if (_store.HasDataset(datasetName))
                 {
-                    // Check if dataset exists in DB
-                    if (_store.HasDataset(datasetName))
-                    {
-                        Debug.Log($"Dataset '{datasetName}' already exists in database, skipping import.");
-                        continue;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Error checking existence of '{datasetName}': {ex.Message}. Skipping.");
+                    Debug.Log($"Dataset '{datasetName}' already exists, skipping auto-import.");
                     continue;
                 }
 
-                Debug.Log($"Dataset '{datasetName}' not in DB. Importing from CSV Resource...");
+                // 2) DB 中不存在则从 CSV 导入
+                Debug.Log($"Auto-importing dataset '{datasetName}' from Resources/{resourceFolder}...");
                 try
                 {
                     var tabular = Import.CsvImporter.ImportFromText(_store, csvAsset.text, datasetName);
                     if (tabular != null)
                     {
-                        Debug.Log($"✅ Successfully imported dataset: {datasetName} ({tabular.RowCount} rows)");
+                        Debug.Log($"✅ Auto-imported dataset: {datasetName} ({tabular.RowCount} rows)");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error importing dataset {datasetName}: {ex.Message}");
+                    Debug.LogError($"Error auto-importing dataset '{datasetName}': {ex.Message}");
                 }
             }
         }
