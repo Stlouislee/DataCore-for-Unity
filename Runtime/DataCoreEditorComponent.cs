@@ -270,12 +270,16 @@ namespace AroAro.DataCore
 
                 try
                 {
+#if DATACORE_APACHE_ARROW
                     var extension = dataset.Kind == DataSetKind.Tabular ? ".arrow" : ".dcgraph";
                     var fileName = $"{name}{extension}";
                     var filePath = string.IsNullOrEmpty(persistencePath) ? fileName : $"{persistencePath}/{fileName}";
                     
                     store.Save(name, filePath);
                     Debug.Log($"Saved dataset '{name}' to {filePath}");
+#else
+                    Debug.LogWarning($"Cannot save dataset '{name}': Apache Arrow persistence is disabled. Define DATACORE_APACHE_ARROW to enable.");
+#endif
                 }
                 catch (System.Exception ex)
                 {
@@ -460,12 +464,16 @@ namespace AroAro.DataCore
 
             try
             {
+#if DATACORE_APACHE_ARROW
                 var extension = dataset.Kind == DataSetKind.Tabular ? ".arrow" : ".dcgraph";
                 var fileName = $"{name}{extension}";
                 var filePath = string.IsNullOrEmpty(persistencePath) ? fileName : $"{persistencePath}/{fileName}";
                 
                 store.Save(name, filePath);
                 Debug.Log($"Saved dataset '{name}' to {filePath}");
+#else
+                Debug.LogWarning($"Cannot save dataset '{name}': Apache Arrow persistence is disabled. Define DATACORE_APACHE_ARROW to enable.");
+#endif
             }
             catch (System.Exception ex)
             {
@@ -488,6 +496,7 @@ namespace AroAro.DataCore
         {
             try
             {
+#if DATACORE_APACHE_ARROW
                 var tabularPath = $"{persistencePath}/{name}.arrow";
                 var graphPath = $"{persistencePath}/{name}.dcgraph";
 
@@ -505,6 +514,9 @@ namespace AroAro.DataCore
                 {
                     Debug.LogWarning($"Persisted dataset '{name}' not found");
                 }
+#else
+                Debug.LogWarning($"Cannot load dataset '{name}': Apache Arrow persistence is disabled. Define DATACORE_APACHE_ARROW to enable.");
+#endif
             }
             catch (System.Exception ex)
             {

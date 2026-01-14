@@ -236,10 +236,15 @@ namespace AroAro.DataCore
                 }
                 else
                 {
+#if DATACORE_APACHE_ARROW
                     // 从文件加载
                     var dataset = Load(metadata.FilePath, registerAsName: metadata.Name);
                     metadata.IsLoaded = true;
                     return dataset;
+#else
+                    UnityEngine.Debug.LogError($"Cannot load dataset '{metadata.Name}' from file: Apache Arrow persistence is disabled. Define DATACORE_APACHE_ARROW to enable.");
+                    return null;
+#endif
                 }
             }
             catch (System.Exception ex)
