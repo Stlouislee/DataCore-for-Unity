@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using LiteDB;
@@ -338,6 +339,8 @@ namespace AroAro.DataCore.LiteDb
             if (string.IsNullOrEmpty(csvContent))
                 throw new ArgumentException("CSV content cannot be null or empty", nameof(csvContent));
 
+            // NOTE: This method is designed for fast/atomic initial imports.
+            // It builds complete row documents and does a single InsertBulk.
             var lines = csvContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
             if (lines.Length == 0) return;
 
@@ -366,31 +369,61 @@ namespace AroAro.DataCore.LiteDb
                     headers.Add($"Column{i}");
             }
 
+            // Normalize header count
+            for (int i = headers.Count; i < columnCount; i++)
+                headers.Add($"Column{i}");
+
+            // Overwrite existing content (rows + column schema)
+            _rows.DeleteAll();
+            _metadata.Columns.Clear();
+            _metadata.RowCount = 0;
+
             var columnTypes = new string[columnCount];
             for (int col = 0; col < columnCount; col++)
             {
                 columnTypes[col] = DetermineColumnType(dataRows, col);
+                EnsureColumn(headers[col], columnTypes[col]);
             }
 
-            for (int col = 0; col < columnCount; col++)
+            // Build row documents and insert once
+            var newRows = new List<TabularRow>(dataRows.Count);
+            for (int rowIndex = 0; rowIndex < dataRows.Count; rowIndex++)
             {
-                var colName = col < headers.Count ? headers[col] : $"Column{col}";
+                var rowValues = dataRows[rowIndex];
+                var doc = new BsonDocument();
 
-                if (columnTypes[col] == "Numeric")
+                for (int col = 0; col < columnCount; col++)
                 {
-                    var data = dataRows.Select(row =>
-                        col < row.Count && double.TryParse(row[col], out var d) ? d : 0.0
-                    ).ToArray();
-                    AddNumericColumn(colName, data);
+                    var colName = headers[col];
+                    var raw = col < rowValues.Count ? rowValues[col] : "";
+
+                    if (columnTypes[col] == "Numeric")
+                    {
+                        if (string.IsNullOrWhiteSpace(raw))
+                        {
+                            doc[colName] = new BsonValue(double.NaN);
+                        }
+                        else if (double.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out var d))
+                        {
+                            doc[colName] = new BsonValue(d);
+                        }
+                        else
+                        {
+                            doc[colName] = new BsonValue(double.NaN);
+                        }
+                    }
+                    else
+                    {
+                        doc[colName] = new BsonValue(raw ?? string.Empty);
+                    }
                 }
-                else
-                {
-                    var data = dataRows.Select(row =>
-                        col < row.Count ? row[col] : ""
-                    ).ToArray();
-                    AddStringColumn(colName, data);
-                }
+
+                newRows.Add(new TabularRow { RowIndex = rowIndex, Data = doc });
             }
+
+            _rows.InsertBulk(newRows);
+            _metadata.RowCount = dataRows.Count;
+            UpdateMetadata();
         }
 
         public string ExportToCsv(char delimiter = ',', bool includeHeader = true)
@@ -546,7 +579,7 @@ namespace AroAro.DataCore.LiteDb
                 var value = row[columnIndex];
                 if (string.IsNullOrEmpty(value)) continue;
                 totalCount++;
-                if (double.TryParse(value, out _)) numericCount++;
+                if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out _)) numericCount++;
             }
             return totalCount > 0 && numericCount * 1.0 / totalCount > 0.7 ? "Numeric" : "String";
         }

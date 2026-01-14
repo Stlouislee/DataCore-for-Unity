@@ -106,9 +106,12 @@ namespace AroAro.DataCore.Import
             }
 
             var csvText = File.ReadAllText(csvPath);
-            var tabular = store.CreateTabular(datasetName);
-            ImportToTabular(csvText, tabular, hasHeader, delimiter);
-            return tabular;
+            return store.ExecuteInTransaction(() =>
+            {
+                var tabular = store.CreateTabular(datasetName);
+                tabular.ImportFromCsv(csvText, hasHeader, delimiter);
+                return tabular;
+            });
         }
 
         /// <summary>
@@ -122,9 +125,12 @@ namespace AroAro.DataCore.Import
         /// <returns>创建的表格数据集</returns>
         public static ITabularDataset ImportFromText(IDataStore store, string csvText, string datasetName, bool hasHeader = true, char delimiter = ',')
         {
-            var tabular = store.CreateTabular(datasetName);
-            ImportToTabular(csvText, tabular, hasHeader, delimiter);
-            return tabular;
+            return store.ExecuteInTransaction(() =>
+            {
+                var tabular = store.CreateTabular(datasetName);
+                tabular.ImportFromCsv(csvText, hasHeader, delimiter);
+                return tabular;
+            });
         }
 
         /// <summary>
@@ -132,9 +138,13 @@ namespace AroAro.DataCore.Import
         /// </summary>
         public static ITabularDataset ImportFromText(DataCoreStore store, string csvText, string datasetName, bool hasHeader = true, char delimiter = ',')
         {
-            var tabular = store.CreateTabular(datasetName);
-            ImportToTabular(csvText, tabular, hasHeader, delimiter);
-            return tabular;
+            // Use the underlying IDataStore transaction to avoid leaving half-created datasets on failure.
+            return store.UnderlyingStore.ExecuteInTransaction(() =>
+            {
+                var tabular = store.CreateTabular(datasetName);
+                tabular.ImportFromCsv(csvText, hasHeader, delimiter);
+                return tabular;
+            });
         }
 
         private static bool IsNumeric(List<string> values, out List<double> doubleValues)
