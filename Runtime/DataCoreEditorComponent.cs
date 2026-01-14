@@ -77,7 +77,43 @@ namespace AroAro.DataCore
             }
 
             Debug.Log($"Initializing DataCoreStore at: {resolvedPath}");
-            _store = new DataCoreStore(resolvedPath);
+            
+            try
+            {
+                _store = new DataCoreStore(resolvedPath);
+            }
+            catch (Exception ex)
+            {
+                // LiteDB corruption error - attempt recovery by deleting the corrupted database
+                Debug.LogWarning($"Database initialization failed: {ex.Message}. Attempting recovery...");
+                
+                try
+                {
+                    // Delete corrupted database files
+                    if (File.Exists(resolvedPath))
+                    {
+                        File.Delete(resolvedPath);
+                        Debug.Log($"Deleted corrupted database: {resolvedPath}");
+                    }
+                    
+                    // Also delete the log file if it exists
+                    var logPath = resolvedPath + "-log";
+                    if (File.Exists(logPath))
+                    {
+                        File.Delete(logPath);
+                        Debug.Log($"Deleted database log: {logPath}");
+                    }
+                    
+                    // Try again with a fresh database
+                    _store = new DataCoreStore(resolvedPath);
+                    Debug.Log("Successfully created fresh database after recovery.");
+                }
+                catch (Exception recoveryEx)
+                {
+                    Debug.LogError($"Database recovery failed: {recoveryEx.Message}");
+                    throw;
+                }
+            }
         }
 
         private void InitializeSampleDatasets()
@@ -94,11 +130,43 @@ namespace AroAro.DataCore
             {
                 string datasetName = csvAsset.name;
                 
-                // 检查是否已存在
+                // 检查是否已存在且可用
+                bool needsReload = false;
                 if (_store.HasDataset(datasetName))
                 {
-                    Debug.Log($"Dataset '{datasetName}' already exists, skipping...");
-                    continue;
+                    try
+                    {
+                        // 尝试访问数据集以验证其可用性
+                        var existing = _store.GetTabular(datasetName);
+                        if (existing != null && existing.RowCount > 0)
+                        {
+                            Debug.Log($"Dataset '{datasetName}' already exists with {existing.RowCount} rows, skipping...");
+                            continue;
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"Dataset '{datasetName}' exists but is empty, will reload...");
+                            needsReload = true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"Dataset '{datasetName}' exists but is corrupted ({ex.Message}), will reload...");
+                        needsReload = true;
+                    }
+                    
+                    if (needsReload)
+                    {
+                        try
+                        {
+                            _store.Delete(datasetName);
+                            Debug.Log($"Deleted corrupted dataset '{datasetName}'");
+                        }
+                        catch (Exception delEx)
+                        {
+                            Debug.LogWarning($"Could not delete dataset '{datasetName}': {delEx.Message}");
+                        }
+                    }
                 }
 
                 Debug.Log($"Auto-loading dataset '{datasetName}' from Resources...");
