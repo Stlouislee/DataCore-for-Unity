@@ -59,17 +59,25 @@ namespace AroAro.DataCore.LiteDb
 
             if (_metadata.RowCount == 0)
             {
-                // 创建行
+                // 批量创建行 - 使用 InsertBulk 提速并保证事务安全性
+                var newRows = new List<TabularRow>(data.Length);
                 for (int i = 0; i < data.Length; i++)
                 {
-                    var row = new TabularRow { RowIndex = i, Data = new BsonDocument { { name, new BsonValue(data[i]) } } };
-                    _rows.Insert(row);
+                    var row = new TabularRow 
+                    { 
+                        RowIndex = i, 
+                        Data = new BsonDocument { { name, new BsonValue(data[i]) } } 
+                    };
+                    newRows.Add(row);
                 }
+                _rows.InsertBulk(newRows);
                 _metadata.RowCount = data.Length;
             }
             else
             {
                 // 更新现有行
+                // 注意：LiteDB 没有 UpdateBulk，所以我们只能查询出来修改后再 Update
+                // 对于大型数据集，这仍然比较慢，但为了保持逻辑简单暂时如此
                 var existingRows = _rows.FindAll().OrderBy(r => r.RowIndex).ToList();
                 for (int i = 0; i < Math.Min(existingRows.Count, data.Length); i++)
                 {
@@ -103,11 +111,18 @@ namespace AroAro.DataCore.LiteDb
 
             if (_metadata.RowCount == 0)
             {
+                // 批量创建行 - 使用 InsertBulk
+                var newRows = new List<TabularRow>(data.Length);
                 for (int i = 0; i < data.Length; i++)
                 {
-                    var row = new TabularRow { RowIndex = i, Data = new BsonDocument { { name, new BsonValue(data[i]) } } };
-                    _rows.Insert(row);
+                    var row = new TabularRow 
+                    { 
+                        RowIndex = i, 
+                        Data = new BsonDocument { { name, new BsonValue(data[i]) } } 
+                    };
+                    newRows.Add(row);
                 }
+                _rows.InsertBulk(newRows);
                 _metadata.RowCount = data.Length;
             }
             else

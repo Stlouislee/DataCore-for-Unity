@@ -71,10 +71,28 @@ namespace AroAro.DataCore.Editor
             {
                 EditorGUI.indentLevel++;
                 
-                var store = component.GetStore();
-                var names = store.Names.ToList();
+                DataCoreStore store = null;
+                List<string> names = new List<string>();
+
+                try
+                {
+                    store = component.GetStore();
+                    // Accessing Names can throw if store is disposed/corrupt
+                    if (store != null)
+                    {
+                        names = store.Names.ToList();
+                    }
+                }
+                catch
+                {
+                    // Ignore transient errors or disposed object exceptions during UI draw
+                }
                 
-                if (names.Count == 0)
+                if (store == null)
+                {
+                     EditorGUILayout.HelpBox("Store not initialized.", MessageType.Warning);
+                }
+                else if (names.Count == 0)
                 {
                     EditorGUILayout.HelpBox("No datasets loaded.", MessageType.Info);
                 }

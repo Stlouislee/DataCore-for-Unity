@@ -89,13 +89,6 @@ namespace AroAro.DataCore
             }
         }
 
-        public void RebuildDatabase()
-        {
-            Debug.LogWarning("Rebuilding DataCore database due to corruption...");
-            DeleteDatabaseFile();
-            InitializeStore();
-        }
-
         private void InitializeSampleDatasets()
         {
             // Auto-load CSVs from Resources/AroAro/DataCore/AutoLoad
@@ -106,83 +99,48 @@ namespace AroAro.DataCore
                 return;
             }
 
+            // Verify store accessibility before starting
+            try 
+            {
+                var check = _store.Names; 
+            } 
+            catch (Exception ex) 
+            { 
+                Debug.LogError($"DataStore is not accessible ({ex.Message}). Skipping dataset auto-load."); 
+                return; 
+            }
+
             foreach (var csvAsset in csvAssets)
             {
                 string datasetName = csvAsset.name;
-                bool dbNeedsRebuild = false;
 
                 try 
                 {
-                    // 检查是否已存在且可用
+                    // Check if dataset exists in DB
                     if (_store.HasDataset(datasetName))
                     {
-                         // 尝试访问数据集
-                        var existing = _store.GetTabular(datasetName);
-                        if (existing != null && existing.RowCount > 0)
-                        {
-                             // Looks healthy
-                            Debug.Log($"Dataset '{datasetName}' already exists with {existing.RowCount} rows, skipping...");
-                            continue;
-                        }
-                        
-                        // Empty or suspicious - try to delete
-                        Debug.LogWarning($"Dataset '{datasetName}' exists but is empty. Deleting and reloading...");
-                        _store.Delete(datasetName);
+                        Debug.Log($"Dataset '{datasetName}' already exists in database, skipping import.");
+                        continue;
                     }
                 }
                 catch (Exception ex)
                 {
-                    if (ex.Message.Contains("PAGE_SIZE") || ex.GetType().Name == "LiteException")
-                    {
-                        Debug.LogError($"CRITICAL: Database corruption detected checking '{datasetName}': {ex.Message}. Rebuilding database...");
-                        dbNeedsRebuild = true;
-                    }
-                    else
-                    {
-                        Debug.LogError($"Error checking dataset '{datasetName}': {ex.Message}. Trying to delete...");
-                        try { _store.Delete(datasetName); } catch {}
-                    }
+                    Debug.LogError($"Error checking existence of '{datasetName}': {ex.Message}. Skipping.");
+                    continue;
                 }
 
-                if (dbNeedsRebuild)
-                {
-                    RebuildDatabase();
-                    // After rebuild, all datasets are gone, so we just proceed to load
-                }
-
-                Debug.Log($"Auto-loading dataset '{datasetName}' from Resources...");
+                Debug.Log($"Dataset '{datasetName}' not in DB. Importing from CSV Resource...");
                 try
                 {
                     var tabular = Import.CsvImporter.ImportFromText(_store, csvAsset.text, datasetName);
                     if (tabular != null)
                     {
-                        Debug.Log($"✅ Successfully auto-loaded dataset: {datasetName} ({tabular.RowCount} rows)");
+                        Debug.Log($"✅ Successfully imported dataset: {datasetName} ({tabular.RowCount} rows)");
                     }
                 }
                 catch (Exception ex)
                 {
-                     if (ex.Message.Contains("PAGE_SIZE") || ex.GetType().Name == "LiteException")
-                    {
-                        // If import fails with corruption, we must rebuild and try once more
-                        if (!dbNeedsRebuild) // If we haven't already rebuilt
-                        {
-                             Debug.LogError($"CRITICAL: Database corruption detected importing '{datasetName}': {ex.Message}. Rebuilding database and retrying...");
-                             RebuildDatabase();
-                             try 
-                             {
-                                 Import.CsvImporter.ImportFromText(_store, csvAsset.text, datasetName);
-                                 Debug.Log($"✅ Successfully auto-loaded dataset after rebuild: {datasetName}");
-                             }
-                             catch (Exception retryEx)
-                             {
-                                 Debug.LogError($"Failed to import '{datasetName}' even after database rebuild: {retryEx.Message}");
-                             }
-                        }
-                    }
-                    else
-                    {
-                        Debug.LogError($"Error auto-loading dataset {datasetName}: {ex.Message}");
-                    }
+                    Debug.LogError($"Error importing dataset {datasetName}: {ex.Message}");
                 }
             }
         }
