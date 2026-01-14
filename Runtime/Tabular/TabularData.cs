@@ -475,11 +475,11 @@ namespace AroAro.DataCore.Tabular
                 bool match = op switch
                 {
                     QueryOp.Eq => Equals(cellValue, value),
-                    QueryOp.Neq => !Equals(cellValue, value),
+                    QueryOp.Ne => !Equals(cellValue, value),
                     QueryOp.Gt => Convert.ToDouble(cellValue) > Convert.ToDouble(value),
-                    QueryOp.Gte => Convert.ToDouble(cellValue) >= Convert.ToDouble(value),
+                    QueryOp.Ge => Convert.ToDouble(cellValue) >= Convert.ToDouble(value),
                     QueryOp.Lt => Convert.ToDouble(cellValue) < Convert.ToDouble(value),
-                    QueryOp.Lte => Convert.ToDouble(cellValue) <= Convert.ToDouble(value),
+                    QueryOp.Le => Convert.ToDouble(cellValue) <= Convert.ToDouble(value),
                     QueryOp.Contains => cellValue?.ToString().Contains(value?.ToString() ?? "") ?? false,
                     QueryOp.StartsWith => cellValue?.ToString().StartsWith(value?.ToString() ?? "") ?? false,
                     QueryOp.EndsWith => cellValue?.ToString().EndsWith(value?.ToString() ?? "") ?? false,
@@ -601,11 +601,11 @@ namespace AroAro.DataCore.Tabular
                 return op switch
                 {
                     QueryOp.Eq => WhereEquals(column, value),
-                    QueryOp.Neq => WhereNotEquals(column, value),
+                    QueryOp.Ne => WhereNotEquals(column, value),
                     QueryOp.Gt => WhereGreaterThan(column, Convert.ToDouble(value)),
-                    QueryOp.Gte => WhereGreaterThanOrEqual(column, Convert.ToDouble(value)),
+                    QueryOp.Ge => WhereGreaterThanOrEqual(column, Convert.ToDouble(value)),
                     QueryOp.Lt => WhereLessThan(column, Convert.ToDouble(value)),
-                    QueryOp.Lte => WhereLessThanOrEqual(column, Convert.ToDouble(value)),
+                    QueryOp.Le => WhereLessThanOrEqual(column, Convert.ToDouble(value)),
                     QueryOp.Contains => WhereContains(column, value?.ToString() ?? ""),
                     QueryOp.StartsWith => WhereStartsWith(column, value?.ToString() ?? ""),
                     _ => this

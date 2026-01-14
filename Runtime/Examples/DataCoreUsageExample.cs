@@ -31,7 +31,7 @@ namespace AroAro.DataCore.Examples
             
             // 基本统计
             Console.WriteLine($"Row Count: {tabular.RowCount}");
-            Console.WriteLine($"Average Price: {tabular.Average("Price"):F2}");
+            Console.WriteLine($"Average Price: {tabular.Query().Average("Price"):F2}");
             Console.WriteLine($"Total Quantity: {tabular.Sum("Quantity")}");
             
             // 查询

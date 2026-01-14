@@ -430,11 +430,11 @@ namespace AroAro.DataCore.Graph
                 return op switch
                 {
                     QueryOp.Eq => Equals(left, right),
-                    QueryOp.Neq => !Equals(left, right),
+                    QueryOp.Ne => !Equals(left, right),
                     QueryOp.Gt => CompareNumeric(left, right) > 0,
-                    QueryOp.Gte => CompareNumeric(left, right) >= 0,
+                    QueryOp.Ge => CompareNumeric(left, right) >= 0,
                     QueryOp.Lt => CompareNumeric(left, right) < 0,
-                    QueryOp.Lte => CompareNumeric(left, right) <= 0,
+                    QueryOp.Le => CompareNumeric(left, right) <= 0,
                     QueryOp.Contains => left.ToString().Contains(right.ToString()),
                     QueryOp.StartsWith => left.ToString().StartsWith(right.ToString()),
                     QueryOp.EndsWith => left.ToString().EndsWith(right.ToString()),
