@@ -734,6 +734,76 @@ namespace AroAro.DataCore.Tabular
                 }
                 return null;
             }
+
+            public double Sum(string column)
+            {
+                double sum = 0;
+                for (int i = 0; i < _source.RowCount; i++)
+                {
+                    var row = _source.GetRow(i);
+                    if (_filters.All(f => f(row)) && row.TryGetValue(column, out var value))
+                    {
+                        sum += Convert.ToDouble(value);
+                    }
+                }
+                return sum;
+            }
+
+            public double Average(string column)
+            {
+                double sum = 0;
+                int count = 0;
+                for (int i = 0; i < _source.RowCount; i++)
+                {
+                    var row = _source.GetRow(i);
+                    if (_filters.All(f => f(row)) && row.TryGetValue(column, out var value))
+                    {
+                        sum += Convert.ToDouble(value);
+                        count++;
+                    }
+                }
+                return count > 0 ? sum / count : 0;
+            }
+
+            public double Max(string column)
+            {
+                double max = double.MinValue;
+                bool found = false;
+                for (int i = 0; i < _source.RowCount; i++)
+                {
+                    var row = _source.GetRow(i);
+                    if (_filters.All(f => f(row)) && row.TryGetValue(column, out var value))
+                    {
+                        var val = Convert.ToDouble(value);
+                        if (!found || val > max)
+                        {
+                            max = val;
+                            found = true;
+                        }
+                    }
+                }
+                return found ? max : 0;
+            }
+
+            public double Min(string column)
+            {
+                double min = double.MaxValue;
+                bool found = false;
+                for (int i = 0; i < _source.RowCount; i++)
+                {
+                    var row = _source.GetRow(i);
+                    if (_filters.All(f => f(row)) && row.TryGetValue(column, out var value))
+                    {
+                        var val = Convert.ToDouble(value);
+                        if (!found || val < min)
+                        {
+                            min = val;
+                            found = true;
+                        }
+                    }
+                }
+                return found ? min : 0;
+            }
         }
     }
 }
