@@ -289,6 +289,7 @@ namespace AroAro.DataCore.Editor
 
         private void SaveAllDatasets()
         {
+#if DATACORE_APACHE_ARROW
             var store = component.GetStore();
             var path = component.GetPersistencePath();
             
@@ -300,6 +301,9 @@ namespace AroAro.DataCore.Editor
             }
             
             Debug.Log($"Saved {store.Names.Count} datasets to {path}");
+#else
+            Debug.LogWarning("Cannot save datasets: Apache Arrow persistence is disabled. Define DATACORE_APACHE_ARROW to enable.");
+#endif
         }
 
         private void LoadAllDatasets()
