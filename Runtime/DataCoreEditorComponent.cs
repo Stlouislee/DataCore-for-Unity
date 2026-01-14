@@ -89,6 +89,13 @@ namespace AroAro.DataCore
             }
         }
 
+        public void RebuildDatabase()
+        {
+            Debug.LogWarning("Rebuilding DataCore database due to corruption...");
+            DeleteDatabaseFile();
+            InitializeStore();
+        }
+
         private void InitializeSampleDatasets()
         {
             // Auto-load CSVs from Resources/AroAro/DataCore/AutoLoad
@@ -102,44 +109,45 @@ namespace AroAro.DataCore
             foreach (var csvAsset in csvAssets)
             {
                 string datasetName = csvAsset.name;
-                
-                // 检查是否已存在且可用
-                bool needsReload = false;
-                if (_store.HasDataset(datasetName))
+                bool dbNeedsRebuild = false;
+
+                try 
                 {
-                    try
+                    // 检查是否已存在且可用
+                    if (_store.HasDataset(datasetName))
                     {
-                        // 尝试访问数据集以验证其可用性
+                         // 尝试访问数据集
                         var existing = _store.GetTabular(datasetName);
                         if (existing != null && existing.RowCount > 0)
                         {
+                             // Looks healthy
                             Debug.Log($"Dataset '{datasetName}' already exists with {existing.RowCount} rows, skipping...");
                             continue;
                         }
-                        else
-                        {
-                            Debug.LogWarning($"Dataset '{datasetName}' exists but is empty, will reload...");
-                            needsReload = true;
-                        }
+                        
+                        // Empty or suspicious - try to delete
+                        Debug.LogWarning($"Dataset '{datasetName}' exists but is empty. Deleting and reloading...");
+                        _store.Delete(datasetName);
                     }
-                    catch (Exception ex)
+                }
+                catch (Exception ex)
+                {
+                    if (ex.Message.Contains("PAGE_SIZE") || ex.GetType().Name == "LiteException")
                     {
-                        Debug.LogWarning($"Dataset '{datasetName}' exists but is corrupted ({ex.Message}), will reload...");
-                        needsReload = true;
+                        Debug.LogError($"CRITICAL: Database corruption detected checking '{datasetName}': {ex.Message}. Rebuilding database...");
+                        dbNeedsRebuild = true;
                     }
-                    
-                    if (needsReload)
+                    else
                     {
-                        try
-                        {
-                            _store.Delete(datasetName);
-                            Debug.Log($"Deleted corrupted dataset '{datasetName}'");
-                        }
-                        catch (Exception delEx)
-                        {
-                            Debug.LogWarning($"Could not delete dataset '{datasetName}': {delEx.Message}");
-                        }
+                        Debug.LogError($"Error checking dataset '{datasetName}': {ex.Message}. Trying to delete...");
+                        try { _store.Delete(datasetName); } catch {}
                     }
+                }
+
+                if (dbNeedsRebuild)
+                {
+                    RebuildDatabase();
+                    // After rebuild, all datasets are gone, so we just proceed to load
                 }
 
                 Debug.Log($"Auto-loading dataset '{datasetName}' from Resources...");
@@ -153,7 +161,28 @@ namespace AroAro.DataCore
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error auto-loading dataset {datasetName}: {ex.Message}");
+                     if (ex.Message.Contains("PAGE_SIZE") || ex.GetType().Name == "LiteException")
+                    {
+                        // If import fails with corruption, we must rebuild and try once more
+                        if (!dbNeedsRebuild) // If we haven't already rebuilt
+                        {
+                             Debug.LogError($"CRITICAL: Database corruption detected importing '{datasetName}': {ex.Message}. Rebuilding database and retrying...");
+                             RebuildDatabase();
+                             try 
+                             {
+                                 Import.CsvImporter.ImportFromText(_store, csvAsset.text, datasetName);
+                                 Debug.Log($"✅ Successfully auto-loaded dataset after rebuild: {datasetName}");
+                             }
+                             catch (Exception retryEx)
+                             {
+                                 Debug.LogError($"Failed to import '{datasetName}' even after database rebuild: {retryEx.Message}");
+                             }
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogError($"Error auto-loading dataset {datasetName}: {ex.Message}");
+                    }
                 }
             }
         }
