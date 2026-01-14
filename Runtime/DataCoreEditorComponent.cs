@@ -84,35 +84,8 @@ namespace AroAro.DataCore
             }
             catch (Exception ex)
             {
-                // LiteDB corruption error - attempt recovery by deleting the corrupted database
-                Debug.LogWarning($"Database initialization failed: {ex.Message}. Attempting recovery...");
-                
-                try
-                {
-                    // Delete corrupted database files
-                    if (File.Exists(resolvedPath))
-                    {
-                        File.Delete(resolvedPath);
-                        Debug.Log($"Deleted corrupted database: {resolvedPath}");
-                    }
-                    
-                    // Also delete the log file if it exists
-                    var logPath = resolvedPath + "-log";
-                    if (File.Exists(logPath))
-                    {
-                        File.Delete(logPath);
-                        Debug.Log($"Deleted database log: {logPath}");
-                    }
-                    
-                    // Try again with a fresh database
-                    _store = new DataCoreStore(resolvedPath);
-                    Debug.Log("Successfully created fresh database after recovery.");
-                }
-                catch (Exception recoveryEx)
-                {
-                    Debug.LogError($"Database recovery failed: {recoveryEx.Message}");
-                    throw;
-                }
+                Debug.LogError($"Failed to initialize DataCoreStore: {ex.Message}");
+                throw;
             }
         }
 

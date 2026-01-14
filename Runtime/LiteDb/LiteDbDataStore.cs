@@ -29,16 +29,60 @@ namespace AroAro.DataCore.LiteDb
             DatabasePath = ResolvePath(dbPath ?? "DataCore/datacore.db");
             EnsureDirectory(DatabasePath);
 
+            // Handle 0-byte files which can crash LiteDB
+            if (File.Exists(DatabasePath))
+            {
+                try
+                {
+                    var info = new FileInfo(DatabasePath);
+                    if (info.Length == 0)
+                    {
+                        File.Delete(DatabasePath);
+#if UNITY_2019_1_OR_NEWER
+                        Debug.LogWarning($"[LiteDbDataStore] Deleted 0-byte database file: {DatabasePath}");
+#endif
+                    }
+                }
+                catch (Exception) { /* ignore access errors here, let LiteDB handle it */ }
+            }
+
             var connectionString = new ConnectionString
             {
                 Filename = DatabasePath,
-                Connection = ConnectionType.Direct,  // Direct is more reliable in Unity
+                Connection = ConnectionType.Direct,
                 Upgrade = true,
                 ReadOnly = _options.ReadOnly
             };
 
-            _database = new LiteDatabase(connectionString);
-            InitializeDatabase();
+            try
+            {
+                _database = new LiteDatabase(connectionString);
+                InitializeDatabase();
+            }
+            catch (Exception ex) when (ex.Message.Contains("PAGE_SIZE") || ex is LiteException)
+            {
+                // If corruption detected (PAGE_SIZE error), dispose, delete and retry once
+                _database?.Dispose();
+                _database = null;
+
+                try
+                {
+                    if (File.Exists(DatabasePath)) File.Delete(DatabasePath);
+                    // Also delete log file
+                    var logPath = DatabasePath + "-log";
+                    if (File.Exists(logPath)) File.Delete(logPath);
+
+#if UNITY_2019_1_OR_NEWER
+                    Debug.LogWarning($"[LiteDbDataStore] Database corruption detected ({ex.Message}). Deleted and retrying: {DatabasePath}");
+#endif
+                    _database = new LiteDatabase(connectionString);
+                    InitializeDatabase();
+                }
+                catch (Exception retryEx)
+                {
+                    throw new Exception($"Failed to initialize LiteDB after recovery attempt: {retryEx.Message}", retryEx);
+                }
+            }
         }
 
         #region IDataStore 实现
