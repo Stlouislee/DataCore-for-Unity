@@ -421,10 +421,6 @@ namespace AroAro.DataCore.Tests
             Debug.Log($"Adding {allEdges.Count} structural edges...");
             graph.AddEdges(allEdges);
             
-            // 批量添加学科结构的边
-            Debug.Log($"Adding {allEdges.Count} structural edges...");
-            graph.AddEdges(allEdges);
-            
             // 4. 创建概念之间的关系
             var conceptEdges = new List<(string From, string To, IDictionary<string, object> Properties)>();
             for (int i = 1; i <= 100; i++)

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns
+         http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+    
+    <!-- 定义属性键 -->
+    <key id="name" for="node" attr.name="name" attr.type="string">
+        <default>Unknown</default>
+    </key>
+    <key id="age" for="node" attr.name="age" attr.type="int"/>
+    <key id="weight" for="edge" attr.name="weight" attr.type="double"/>
+    <key id="type" for="edge" attr.name="type" attr.type="string">
+        <default>friend</default>
+    </key>
+    <key id="city" for="node" attr.name="city" attr.type="string">
+        <default>San Francisco</default>
+    </key>
+    
+    <graph id="social_network" edgedefault="directed">
+        
+        <!-- 节点定义 -->
+        <node id="alice">
+            <data key="name">Alice</data>
+            <data key="age">30</data>
+        </node>
+        
+        <node id="bob">
+            <data key="name">Bob</data>
+            <data key="age">25</data>
+            <data key="city">New York</data>
+        </node>
+        
+        <node id="carol">
+            <data key="age">35</data>
+            <!-- name will use default: Unknown -->
+            <!-- city will use default: San Francisco -->
+        </node>
+        
+        <node id="dave">
+            <data key="name">Dave</data>
+            <data key="age">28</data>
+        </node>
+        
+        <!-- 边定义 -->
+        <edge source="alice" target="bob">
+            <data key="weight">1.5</data>
+            <data key="type">friend</data>
+        </edge>
+        
+        <edge source="alice" target="carol">
+            <data key="weight">2.0</data>
+            <data key="type">colleague</data>
+        </edge>
+        
+        <edge source="bob" target="dave">
+            <data key="weight">0.8</data>
+            <!-- type will use default: friend -->
+        </edge>
+        
+        <edge source="carol" target="dave" directed="false">
+            <data key="weight">1.2</data>
+            <data key="type">family</data>
+        </edge>
+        
+        <edge source="dave" target="alice">
+            <data key="weight">1.0</data>
+            <data key="type">friend</data>
+        </edge>
+        
+    </graph>
+</graphml>

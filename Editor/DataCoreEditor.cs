@@ -22,6 +22,10 @@ namespace AroAro.DataCore.Editor
         private bool csvHasHeader = true;
         private char csvDelimiter = ',';
         
+        // GraphML 导入相关字段
+        private string graphmlFilePath = "";
+        private string graphmlDatasetName = "ImportedGraphML";
+        
         // 预览相关字段
         private Vector2 previewScrollPosition;
         private int previewMaxRows = 10;
@@ -53,6 +57,9 @@ namespace AroAro.DataCore.Editor
             
             // CSV 导入
             DrawCsvImportSection();
+            
+            // GraphML 导入
+            DrawGraphMLImportSection();
             
             // 创建数据集
             DrawCreateDatasetSection();
@@ -331,6 +338,65 @@ namespace AroAro.DataCore.Editor
             catch (Exception ex)
             {
                 EditorUtility.DisplayDialog("Import CSV Error", ex.Message, "OK");
+            }
+        }
+
+        private void DrawGraphMLImportSection()
+        {
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Import GraphML", EditorStyles.boldLabel);
+            
+            EditorGUILayout.BeginVertical(GUI.skin.box);
+            
+            EditorGUILayout.BeginHorizontal();
+            graphmlFilePath = EditorGUILayout.TextField("GraphML File", graphmlFilePath);
+            if (GUILayout.Button("Browse", GUILayout.Width(60)))
+            {
+                var path = EditorUtility.OpenFilePanel("Select GraphML File", "", "graphml,xml");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    graphmlFilePath = path;
+                    graphmlDatasetName = System.IO.Path.GetFileNameWithoutExtension(path);
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            graphmlDatasetName = EditorGUILayout.TextField("Dataset Name", graphmlDatasetName);
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Import GraphML", GUILayout.Width(100)))
+            {
+                ImportGraphML();
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.EndVertical();
+        }
+
+        private void ImportGraphML()
+        {
+            if (string.IsNullOrEmpty(graphmlFilePath))
+            {
+                EditorUtility.DisplayDialog("Import GraphML", "Please select a GraphML file first.", "OK");
+                return;
+            }
+            
+            if (string.IsNullOrEmpty(graphmlDatasetName))
+            {
+                EditorUtility.DisplayDialog("Import GraphML", "Please enter a dataset name.", "OK");
+                return;
+            }
+            
+            try
+            {
+                var graph = component.ImportGraphMLToGraph(graphmlFilePath, graphmlDatasetName);
+                EditorUtility.DisplayDialog("Import GraphML", $"Successfully imported {graph.NodeCount} nodes and {graph.EdgeCount} edges.", "OK");
+                EditorUtility.SetDirty(component);
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.DisplayDialog("Import GraphML Error", ex.Message, "OK");
             }
         }
 
