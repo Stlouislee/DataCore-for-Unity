@@ -16,13 +16,49 @@ namespace AroAro.DataCore.LiteDb
         private readonly LiteDatabase _database;
         private readonly TabularMetadata _metadata;
         private readonly ILiteCollection<TabularRow> _rows;
+        private readonly object _lock = new object();
+        private bool _disposed;
+        private int _pendingMetadataUpdates;
+        private const int MetadataUpdateBatchSize = 100; // Batch metadata updates
 
         internal LiteDbTabularDataset(LiteDatabase database, TabularMetadata metadata)
         {
-            _database = database;
-            _metadata = metadata;
+            _database = database ?? throw new ArgumentNullException(nameof(database));
+            _metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
             _rows = _database.GetCollection<TabularRow>($"tabular_{metadata.Id}");
             _rows.EnsureIndex(r => r.RowIndex, true);
+        }
+
+        /// <summary>
+        /// Check if the database is still accessible
+        /// </summary>
+        private void ThrowIfDisposed()
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(LiteDbTabularDataset), $"Tabular dataset '{_metadata.Name}' has been disposed");
+        }
+
+        /// <summary>
+        /// Mark this dataset as disposed (called by parent store)
+        /// </summary>
+        internal void MarkDisposed()
+        {
+            _disposed = true;
+        }
+
+        /// <summary>
+        /// Force flush any pending metadata updates
+        /// </summary>
+        public void FlushMetadata()
+        {
+            lock (_lock)
+            {
+                if (_pendingMetadataUpdates > 0)
+                {
+                    ForceUpdateMetadata();
+                    _pendingMetadataUpdates = 0;
+                }
+            }
         }
 
         #region IDataSet 实现
@@ -40,9 +76,32 @@ namespace AroAro.DataCore.LiteDb
 
         #region ITabularDataset 实现
 
-        public int RowCount => _metadata.RowCount;
-        public int ColumnCount => _metadata.Columns.Count;
-        public IReadOnlyCollection<string> ColumnNames => _metadata.Columns.Select(c => c.Name).ToList().AsReadOnly();
+        public int RowCount
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return _metadata.RowCount;
+            }
+        }
+        
+        public int ColumnCount
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return _metadata.Columns.Count;
+            }
+        }
+        
+        public IReadOnlyCollection<string> ColumnNames
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return _metadata.Columns.Select(c => c.Name).ToList().AsReadOnly();
+            }
+        }
 
         #endregion
 
@@ -50,44 +109,49 @@ namespace AroAro.DataCore.LiteDb
 
         public void AddNumericColumn(string name, double[] data)
         {
+            ThrowIfDisposed();
+            
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Column name is required", nameof(name));
             if (data == null)
                 throw new ArgumentNullException(nameof(data));
 
-            ValidateColumnLength(data.Length);
-            EnsureColumn(name, "Numeric");
-
-            if (_metadata.RowCount == 0)
+            lock (_lock)
             {
-                // 批量创建行 - 使用 InsertBulk 提速并保证事务安全性
-                var newRows = new List<TabularRow>(data.Length);
-                for (int i = 0; i < data.Length; i++)
-                {
-                    var row = new TabularRow 
-                    { 
-                        RowIndex = i, 
-                        Data = new BsonDocument { { name, new BsonValue(data[i]) } } 
-                    };
-                    newRows.Add(row);
-                }
-                _rows.InsertBulk(newRows);
-                _metadata.RowCount = data.Length;
-            }
-            else
-            {
-                // 更新现有行
-                // 注意：LiteDB 没有 UpdateBulk，所以我们只能查询出来修改后再 Update
-                // 对于大型数据集，这仍然比较慢，但为了保持逻辑简单暂时如此
-                var existingRows = _rows.FindAll().OrderBy(r => r.RowIndex).ToList();
-                for (int i = 0; i < Math.Min(existingRows.Count, data.Length); i++)
-                {
-                    existingRows[i].Data[name] = new BsonValue(data[i]);
-                    _rows.Update(existingRows[i]);
-                }
-            }
+                ValidateColumnLength(data.Length);
+                EnsureColumn(name, "Numeric");
 
-            UpdateMetadata();
+                if (_metadata.RowCount == 0)
+                {
+                    // 批量创建行 - 使用 InsertBulk 提速并保证事务安全性
+                    var newRows = new List<TabularRow>(data.Length);
+                    for (int i = 0; i < data.Length; i++)
+                    {
+                        var row = new TabularRow 
+                        { 
+                            RowIndex = i, 
+                            Data = new BsonDocument { { name, new BsonValue(data[i]) } } 
+                        };
+                        newRows.Add(row);
+                    }
+                    _rows.InsertBulk(newRows);
+                    _metadata.RowCount = data.Length;
+                }
+                else
+                {
+                    // 更新现有行
+                    // 注意：LiteDB 没有 UpdateBulk，所以我们只能查询出来修改后再 Update
+                    // 对于大型数据集，这仍然比较慢，但为了保持逻辑简单暂时如此
+                    var existingRows = _rows.FindAll().OrderBy(r => r.RowIndex).ToList();
+                    for (int i = 0; i < Math.Min(existingRows.Count, data.Length); i++)
+                    {
+                        existingRows[i].Data[name] = new BsonValue(data[i]);
+                        _rows.Update(existingRows[i]);
+                    }
+                }
+
+                ForceUpdateMetadata(); // Force update after bulk operation
+            }
         }
 
         public void AddNumericColumn(string name, NDArray data)
@@ -102,64 +166,79 @@ namespace AroAro.DataCore.LiteDb
 
         public void AddStringColumn(string name, string[] data)
         {
+            ThrowIfDisposed();
+            
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Column name is required", nameof(name));
             if (data == null)
                 throw new ArgumentNullException(nameof(data));
 
-            ValidateColumnLength(data.Length);
-            EnsureColumn(name, "String");
-
-            if (_metadata.RowCount == 0)
+            lock (_lock)
             {
-                // 批量创建行 - 使用 InsertBulk
-                var newRows = new List<TabularRow>(data.Length);
-                for (int i = 0; i < data.Length; i++)
-                {
-                    var row = new TabularRow 
-                    { 
-                        RowIndex = i, 
-                        Data = new BsonDocument { { name, new BsonValue(data[i]) } } 
-                    };
-                    newRows.Add(row);
-                }
-                _rows.InsertBulk(newRows);
-                _metadata.RowCount = data.Length;
-            }
-            else
-            {
-                var existingRows = _rows.FindAll().OrderBy(r => r.RowIndex).ToList();
-                for (int i = 0; i < Math.Min(existingRows.Count, data.Length); i++)
-                {
-                    existingRows[i].Data[name] = new BsonValue(data[i]);
-                    _rows.Update(existingRows[i]);
-                }
-            }
+                ValidateColumnLength(data.Length);
+                EnsureColumn(name, "String");
 
-            UpdateMetadata();
+                if (_metadata.RowCount == 0)
+                {
+                    // 批量创建行 - 使用 InsertBulk
+                    var newRows = new List<TabularRow>(data.Length);
+                    for (int i = 0; i < data.Length; i++)
+                    {
+                        var row = new TabularRow 
+                        { 
+                            RowIndex = i, 
+                            Data = new BsonDocument { { name, new BsonValue(data[i]) } } 
+                        };
+                        newRows.Add(row);
+                    }
+                    _rows.InsertBulk(newRows);
+                    _metadata.RowCount = data.Length;
+                }
+                else
+                {
+                    var existingRows = _rows.FindAll().OrderBy(r => r.RowIndex).ToList();
+                    for (int i = 0; i < Math.Min(existingRows.Count, data.Length); i++)
+                    {
+                        existingRows[i].Data[name] = new BsonValue(data[i]);
+                        _rows.Update(existingRows[i]);
+                    }
+                }
+
+                ForceUpdateMetadata(); // Force update after bulk operation
+            }
         }
 
         public bool RemoveColumn(string name)
         {
-            var col = _metadata.Columns.FirstOrDefault(c => c.Name == name);
-            if (col == null) return false;
-
-            _metadata.Columns.Remove(col);
-
-            foreach (var row in _rows.FindAll())
+            ThrowIfDisposed();
+            
+            lock (_lock)
             {
-                row.Data.Remove(name);
-                _rows.Update(row);
-            }
+                var col = _metadata.Columns.FirstOrDefault(c => c.Name == name);
+                if (col == null) return false;
 
-            UpdateMetadata();
-            return true;
+                _metadata.Columns.Remove(col);
+
+                foreach (var row in _rows.FindAll())
+                {
+                    row.Data.Remove(name);
+                    _rows.Update(row);
+                }
+
+                ForceUpdateMetadata();
+                return true;
+            }
         }
 
-        public bool HasColumn(string name) => _metadata.Columns.Any(c => c.Name == name);
+        public bool HasColumn(string name)
+        {
+            ThrowIfDisposed();
+            return _metadata.Columns.Any(c => c.Name == name);
+        }
 
         public NDArray GetNumericColumn(string name)
         {
+            ThrowIfDisposed();
             if (!HasColumn(name))
                 throw new KeyNotFoundException($"Column '{name}' not found");
 
@@ -172,6 +251,8 @@ namespace AroAro.DataCore.LiteDb
 
         public string[] GetStringColumn(string name)
         {
+            ThrowIfDisposed();
+            
             if (!HasColumn(name))
                 throw new KeyNotFoundException($"Column '{name}' not found");
 
@@ -182,6 +263,8 @@ namespace AroAro.DataCore.LiteDb
 
         public ColumnType GetColumnType(string name)
         {
+            ThrowIfDisposed();
+            
             var col = _metadata.Columns.FirstOrDefault(c => c.Name == name);
             if (col == null) return ColumnType.Unknown;
 
@@ -201,85 +284,107 @@ namespace AroAro.DataCore.LiteDb
 
         public void AddRow(IDictionary<string, object> values)
         {
+            ThrowIfDisposed();
+            
             if (values == null)
                 throw new ArgumentNullException(nameof(values));
 
-            var row = new TabularRow
+            lock (_lock)
             {
-                RowIndex = _metadata.RowCount,
-                Data = ConvertToBsonDocument(values)
-            };
+                var row = new TabularRow
+                {
+                    RowIndex = _metadata.RowCount,
+                    Data = ConvertToBsonDocument(values)
+                };
 
-            _rows.Insert(row);
-            _metadata.RowCount++;
-            UpdateMetadata();
+                _rows.Insert(row);
+                _metadata.RowCount++;
+                UpdateMetadata();
+            }
         }
 
         public int AddRows(IEnumerable<IDictionary<string, object>> rows)
         {
-            int count = 0;
-            int startIndex = _metadata.RowCount;
-
-            var rowDocs = rows.Select((values, i) => new TabularRow
+            ThrowIfDisposed();
+            
+            lock (_lock)
             {
-                RowIndex = startIndex + i,
-                Data = ConvertToBsonDocument(values)
-            }).ToList();
+                int count = 0;
+                int startIndex = _metadata.RowCount;
 
-            if (rowDocs.Count > 0)
-            {
-                _rows.InsertBulk(rowDocs);
-                _metadata.RowCount += rowDocs.Count;
-                count = rowDocs.Count;
-                UpdateMetadata();
+                var rowDocs = rows.Select((values, i) => new TabularRow
+                {
+                    RowIndex = startIndex + i,
+                    Data = ConvertToBsonDocument(values)
+                }).ToList();
+
+                if (rowDocs.Count > 0)
+                {
+                    _rows.InsertBulk(rowDocs);
+                    _metadata.RowCount += rowDocs.Count;
+                    count = rowDocs.Count;
+                    ForceUpdateMetadata(); // Force update after bulk operation
+                }
+
+                return count;
             }
-
-            return count;
         }
 
         public bool UpdateRow(int rowIndex, IDictionary<string, object> values)
         {
+            ThrowIfDisposed();
+            
             if (rowIndex < 0 || rowIndex >= _metadata.RowCount)
                 throw new ArgumentOutOfRangeException(nameof(rowIndex));
 
-            var row = _rows.FindOne(r => r.RowIndex == rowIndex);
-            if (row == null) return false;
-
-            foreach (var kv in values)
+            lock (_lock)
             {
-                row.Data[kv.Key] = ConvertToBsonValue(kv.Value);
-            }
+                var row = _rows.FindOne(r => r.RowIndex == rowIndex);
+                if (row == null) return false;
 
-            _rows.Update(row);
-            UpdateMetadata();
-            return true;
+                foreach (var kv in values)
+                {
+                    row.Data[kv.Key] = ConvertToBsonValue(kv.Value);
+                }
+
+                _rows.Update(row);
+                UpdateMetadata();
+                return true;
+            }
         }
 
         public bool DeleteRow(int rowIndex)
         {
+            ThrowIfDisposed();
+            
             if (rowIndex < 0 || rowIndex >= _metadata.RowCount)
                 throw new ArgumentOutOfRangeException(nameof(rowIndex));
 
-            var row = _rows.FindOne(r => r.RowIndex == rowIndex);
-            if (row == null) return false;
-
-            _rows.Delete(row.Id);
-
-            // 更新后续行索引
-            var subsequentRows = _rows.Find(r => r.RowIndex > rowIndex).ToList();
-            foreach (var r in subsequentRows)
+            lock (_lock)
             {
-                r.RowIndex--;
-                _rows.Update(r);
-            }
+                var row = _rows.FindOne(r => r.RowIndex == rowIndex);
+                if (row == null) return false;
 
-            _metadata.RowCount--;
-            UpdateMetadata();
-            return true;
+                _rows.Delete(row.Id);
+
+                // 更新后续行索引
+                var subsequentRows = _rows.Find(r => r.RowIndex > rowIndex).ToList();
+                foreach (var r in subsequentRows)
+                {
+                    r.RowIndex--;
+                    _rows.Update(r);
+                }
+
+                _metadata.RowCount--;
+                ForceUpdateMetadata();
+                return true;
+            }
         }
 
         public Dictionary<string, object> GetRow(int rowIndex)
         {
+            ThrowIfDisposed();
+            
             if (rowIndex < 0 || rowIndex >= _metadata.RowCount)
                 throw new ArgumentOutOfRangeException(nameof(rowIndex));
 
@@ -296,6 +401,8 @@ namespace AroAro.DataCore.LiteDb
 
         public IEnumerable<Dictionary<string, object>> GetRows(int startIndex, int count)
         {
+            ThrowIfDisposed();
+            
             var rows = _rows.Find(r => r.RowIndex >= startIndex && r.RowIndex < startIndex + count)
                 .OrderBy(r => r.RowIndex);
 
@@ -312,21 +419,31 @@ namespace AroAro.DataCore.LiteDb
 
         public int Clear()
         {
-            int count = _metadata.RowCount;
-            _rows.DeleteAll();
-            _metadata.RowCount = 0;
-            UpdateMetadata();
-            return count;
+            ThrowIfDisposed();
+            
+            lock (_lock)
+            {
+                int count = _metadata.RowCount;
+                _rows.DeleteAll();
+                _metadata.RowCount = 0;
+                ForceUpdateMetadata();
+                return count;
+            }
         }
 
         #endregion
 
         #region 查询
 
-        public ITabularQuery Query() => new LiteDbTabularQuery(this);
+        public ITabularQuery Query()
+        {
+            ThrowIfDisposed();
+            return new LiteDbTabularQuery(this);
+        }
 
         public int[] Where(string column, QueryOp op, object value)
         {
+            ThrowIfDisposed();
             return Query().Where(column, op, value).ToRowIndices();
         }
 
@@ -496,11 +613,44 @@ namespace AroAro.DataCore.LiteDb
                 throw new InvalidOperationException($"Column length {length} does not match existing row count {_metadata.RowCount}");
         }
 
+        /// <summary>
+        /// Batched metadata update - only writes to DB after threshold or on ForceUpdateMetadata
+        /// </summary>
         private void UpdateMetadata()
         {
             _metadata.ModifiedAt = DateTime.UtcNow;
-            var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
-            meta.Update(_metadata);
+            _pendingMetadataUpdates++;
+            
+            if (_pendingMetadataUpdates >= MetadataUpdateBatchSize)
+            {
+                ForceUpdateMetadata();
+                _pendingMetadataUpdates = 0;
+            }
+        }
+
+        /// <summary>
+        /// Force write metadata to database immediately
+        /// </summary>
+        private void ForceUpdateMetadata()
+        {
+            try
+            {
+                _metadata.ModifiedAt = DateTime.UtcNow;
+                var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
+                meta.Update(_metadata);
+                _pendingMetadataUpdates = 0;
+            }
+            catch (ObjectDisposedException)
+            {
+                // Database was disposed, mark self as disposed
+                _disposed = true;
+                throw;
+            }
+            catch (LiteException ex) when (ex.Message.Contains("disposed"))
+            {
+                _disposed = true;
+                throw new ObjectDisposedException(nameof(LiteDbTabularDataset), "Database has been disposed", ex);
+            }
         }
 
         private BsonDocument ConvertToBsonDocument(IDictionary<string, object> values)

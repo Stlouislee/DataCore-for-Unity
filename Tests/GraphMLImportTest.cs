@@ -27,6 +27,21 @@ namespace AroAro.DataCore.Tests
         {
             Debug.Log("开始 GraphML 导入测试...");
             
+            // Ensure clean state
+            string dbPath = "graphml_test.db";
+            if (File.Exists(dbPath))
+            {
+                try 
+                { 
+                    File.Delete(dbPath); 
+                    Debug.Log("已清理旧的测试数据库");
+                }
+                catch (System.Exception ex) 
+                { 
+                    Debug.LogWarning($"无法删除测试数据库: {ex.Message}"); 
+                }
+            }
+
             // 检查文件是否存在
             if (!File.Exists(graphmlFilePath))
             {
@@ -103,6 +118,14 @@ namespace AroAro.DataCore.Tests
         {
             Debug.Log("开始 GraphML 文本导入测试...");
             
+            // Ensure clean state
+            string dbPath = "graphml_text_test.db";
+            if (File.Exists(dbPath))
+            {
+                try { File.Delete(dbPath); } 
+                catch {}
+            }
+
             // 简单的 GraphML 示例
             string graphmlText = @"<?xml version=""1.0"" encoding=""UTF-8""?>
 <graphml xmlns=""http://graphml.graphdrawing.org/xmlns"">

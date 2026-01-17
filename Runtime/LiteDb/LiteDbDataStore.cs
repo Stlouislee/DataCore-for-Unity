@@ -19,6 +19,7 @@ namespace AroAro.DataCore.LiteDb
         private readonly DataStoreOptions _options;
         private readonly Dictionary<string, LiteDbTabularDataset> _tabularCache = new(StringComparer.Ordinal);
         private readonly Dictionary<string, LiteDbGraphDataset> _graphCache = new(StringComparer.Ordinal);
+        private readonly object _lock = new object();
         private bool _disposed;
 
         public string DatabasePath { get; }
@@ -89,14 +90,44 @@ namespace AroAro.DataCore.LiteDb
 
         public StorageBackend Backend => StorageBackend.LiteDb;
 
-        public IReadOnlyCollection<string> DatasetNames =>
-            TabularNames.Concat(GraphNames).ToList().AsReadOnly();
+        public IReadOnlyCollection<string> DatasetNames
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return TabularNames.Concat(GraphNames).ToList().AsReadOnly();
+            }
+        }
 
-        public IReadOnlyCollection<string> TabularNames =>
-            _database.GetCollection<TabularMetadata>("tabular_meta").FindAll().Select(m => m.Name).ToList().AsReadOnly();
+        public IReadOnlyCollection<string> TabularNames
+        {
+            get
+            {
+                ThrowIfDisposed();
+                lock (_lock)
+                {
+                    return _database.GetCollection<TabularMetadata>("tabular_meta").FindAll().Select(m => m.Name).ToList().AsReadOnly();
+                }
+            }
+        }
 
-        public IReadOnlyCollection<string> GraphNames =>
-            _database.GetCollection<GraphMetadata>("graph_meta").FindAll().Select(m => m.Name).ToList().AsReadOnly();
+        public IReadOnlyCollection<string> GraphNames
+        {
+            get
+            {
+                ThrowIfDisposed();
+                lock (_lock)
+                {
+                    return _database.GetCollection<GraphMetadata>("graph_meta").FindAll().Select(m => m.Name).ToList().AsReadOnly();
+                }
+            }
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(LiteDbDataStore), $"Data store at '{DatabasePath}' has been disposed");
+        }
 
         #endregion
 
@@ -104,63 +135,81 @@ namespace AroAro.DataCore.LiteDb
 
         public ITabularDataset CreateTabular(string name)
         {
+            ThrowIfDisposed();
+            
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Name is required", nameof(name));
 
-            var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
-            if (meta.Exists(m => m.Name == name))
-                throw new InvalidOperationException($"Tabular '{name}' already exists");
-
-            var metadata = new TabularMetadata
+            lock (_lock)
             {
-                Id = ObjectId.NewObjectId(),
-                Name = name,
-                DatasetId = Guid.NewGuid().ToString("N"),
-                CreatedAt = DateTime.UtcNow,
-                ModifiedAt = DateTime.UtcNow
-            };
-            meta.Insert(metadata);
+                var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
+                if (meta.Exists(m => m.Name == name))
+                    throw new InvalidOperationException($"Tabular '{name}' already exists");
 
-            var tabular = new LiteDbTabularDataset(_database, metadata);
-            _tabularCache[name] = tabular;
-            return tabular;
-        }
+                var metadata = new TabularMetadata
+                {
+                    Id = ObjectId.NewObjectId(),
+                    Name = name,
+                    DatasetId = Guid.NewGuid().ToString("N"),
+                    CreatedAt = DateTime.UtcNow,
+                    ModifiedAt = DateTime.UtcNow
+                };
+                meta.Insert(metadata);
 
-        public ITabularDataset GetTabular(string name)
-        {
-            if (_tabularCache.TryGetValue(name, out var cached))
-                return cached;
-
-            var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
-            var metadata = meta.FindOne(m => m.Name == name);
-            if (metadata == null)
-                throw new KeyNotFoundException($"Tabular '{name}' not found");
-
-            var tabular = new LiteDbTabularDataset(_database, metadata);
-            _tabularCache[name] = tabular;
-            return tabular;
-        }
-
-        public ITabularDataset GetOrCreateTabular(string name)
-        {
-            if (_tabularCache.TryGetValue(name, out var cached))
-                return cached;
-
-            var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
-            var metadata = meta.FindOne(m => m.Name == name);
-
-            if (metadata != null)
-            {
                 var tabular = new LiteDbTabularDataset(_database, metadata);
                 _tabularCache[name] = tabular;
                 return tabular;
             }
+        }
 
-            return CreateTabular(name);
+        public ITabularDataset GetTabular(string name)
+        {
+            ThrowIfDisposed();
+            
+            lock (_lock)
+            {
+                if (_tabularCache.TryGetValue(name, out var cached))
+                    return cached;
+
+                var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
+                var metadata = meta.FindOne(m => m.Name == name);
+                if (metadata == null)
+                    throw new KeyNotFoundException($"Tabular '{name}' not found");
+
+                var tabular = new LiteDbTabularDataset(_database, metadata);
+                _tabularCache[name] = tabular;
+                return tabular;
+            }
+        }
+
+        public ITabularDataset GetOrCreateTabular(string name)
+        {
+            ThrowIfDisposed();
+            
+            lock (_lock)
+            {
+                if (_tabularCache.TryGetValue(name, out var cached))
+                    return cached;
+
+                var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
+                var metadata = meta.FindOne(m => m.Name == name);
+
+                if (metadata != null)
+                {
+                    var tabular = new LiteDbTabularDataset(_database, metadata);
+                    _tabularCache[name] = tabular;
+                    return tabular;
+                }
+
+                return CreateTabular(name);
+            }
         }
 
         public bool TryGetTabular(string name, out ITabularDataset tabular)
         {
+            tabular = null;
+            if (_disposed) return false;
+            
             try
             {
                 tabular = GetTabular(name);
@@ -168,32 +217,50 @@ namespace AroAro.DataCore.LiteDb
             }
             catch (KeyNotFoundException)
             {
-                tabular = null;
+                return false;
+            }
+            catch (ObjectDisposedException)
+            {
                 return false;
             }
         }
 
         public bool TabularExists(string name)
         {
-            if (_tabularCache.ContainsKey(name)) return true;
-            var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
-            return meta.Exists(m => m.Name == name);
+            if (_disposed) return false;
+            
+            lock (_lock)
+            {
+                if (_tabularCache.ContainsKey(name)) return true;
+                var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
+                return meta.Exists(m => m.Name == name);
+            }
         }
 
         public bool DeleteTabular(string name)
         {
-            _tabularCache.Remove(name);
+            ThrowIfDisposed();
+            
+            lock (_lock)
+            {
+                // Mark cached dataset as disposed before removing
+                if (_tabularCache.TryGetValue(name, out var cachedDataset))
+                {
+                    cachedDataset.MarkDisposed();
+                }
+                _tabularCache.Remove(name);
 
-            var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
-            var metadata = meta.FindOne(m => m.Name == name);
-            if (metadata == null) return false;
+                var meta = _database.GetCollection<TabularMetadata>("tabular_meta");
+                var metadata = meta.FindOne(m => m.Name == name);
+                if (metadata == null) return false;
 
-            // 删除数据
-            var rows = _database.GetCollection<TabularRow>($"tabular_{metadata.Id}");
-            rows.DeleteAll();
-            _database.DropCollection($"tabular_{metadata.Id}");
+                // 删除数据
+                var rows = _database.GetCollection<TabularRow>($"tabular_{metadata.Id}");
+                rows.DeleteAll();
+                _database.DropCollection($"tabular_{metadata.Id}");
 
-            return meta.Delete(metadata.Id);
+                return meta.Delete(metadata.Id);
+            }
         }
 
         #endregion
@@ -202,63 +269,81 @@ namespace AroAro.DataCore.LiteDb
 
         public IGraphDataset CreateGraph(string name)
         {
+            ThrowIfDisposed();
+            
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Name is required", nameof(name));
 
-            var meta = _database.GetCollection<GraphMetadata>("graph_meta");
-            if (meta.Exists(m => m.Name == name))
-                throw new InvalidOperationException($"Graph '{name}' already exists");
-
-            var metadata = new GraphMetadata
+            lock (_lock)
             {
-                Id = ObjectId.NewObjectId(),
-                Name = name,
-                DatasetId = Guid.NewGuid().ToString("N"),
-                CreatedAt = DateTime.UtcNow,
-                ModifiedAt = DateTime.UtcNow
-            };
-            meta.Insert(metadata);
+                var meta = _database.GetCollection<GraphMetadata>("graph_meta");
+                if (meta.Exists(m => m.Name == name))
+                    throw new InvalidOperationException($"Graph '{name}' already exists");
 
-            var graph = new LiteDbGraphDataset(_database, metadata);
-            _graphCache[name] = graph;
-            return graph;
-        }
+                var metadata = new GraphMetadata
+                {
+                    Id = ObjectId.NewObjectId(),
+                    Name = name,
+                    DatasetId = Guid.NewGuid().ToString("N"),
+                    CreatedAt = DateTime.UtcNow,
+                    ModifiedAt = DateTime.UtcNow
+                };
+                meta.Insert(metadata);
 
-        public IGraphDataset GetGraph(string name)
-        {
-            if (_graphCache.TryGetValue(name, out var cached))
-                return cached;
-
-            var meta = _database.GetCollection<GraphMetadata>("graph_meta");
-            var metadata = meta.FindOne(m => m.Name == name);
-            if (metadata == null)
-                throw new KeyNotFoundException($"Graph '{name}' not found");
-
-            var graph = new LiteDbGraphDataset(_database, metadata);
-            _graphCache[name] = graph;
-            return graph;
-        }
-
-        public IGraphDataset GetOrCreateGraph(string name)
-        {
-            if (_graphCache.TryGetValue(name, out var cached))
-                return cached;
-
-            var meta = _database.GetCollection<GraphMetadata>("graph_meta");
-            var metadata = meta.FindOne(m => m.Name == name);
-
-            if (metadata != null)
-            {
                 var graph = new LiteDbGraphDataset(_database, metadata);
                 _graphCache[name] = graph;
                 return graph;
             }
+        }
 
-            return CreateGraph(name);
+        public IGraphDataset GetGraph(string name)
+        {
+            ThrowIfDisposed();
+            
+            lock (_lock)
+            {
+                if (_graphCache.TryGetValue(name, out var cached))
+                    return cached;
+
+                var meta = _database.GetCollection<GraphMetadata>("graph_meta");
+                var metadata = meta.FindOne(m => m.Name == name);
+                if (metadata == null)
+                    throw new KeyNotFoundException($"Graph '{name}' not found");
+
+                var graph = new LiteDbGraphDataset(_database, metadata);
+                _graphCache[name] = graph;
+                return graph;
+            }
+        }
+
+        public IGraphDataset GetOrCreateGraph(string name)
+        {
+            ThrowIfDisposed();
+            
+            lock (_lock)
+            {
+                if (_graphCache.TryGetValue(name, out var cached))
+                    return cached;
+
+                var meta = _database.GetCollection<GraphMetadata>("graph_meta");
+                var metadata = meta.FindOne(m => m.Name == name);
+
+                if (metadata != null)
+                {
+                    var graph = new LiteDbGraphDataset(_database, metadata);
+                    _graphCache[name] = graph;
+                    return graph;
+                }
+
+                return CreateGraph(name);
+            }
         }
 
         public bool TryGetGraph(string name, out IGraphDataset graph)
         {
+            graph = null;
+            if (_disposed) return false;
+            
             try
             {
                 graph = GetGraph(name);
@@ -266,43 +351,77 @@ namespace AroAro.DataCore.LiteDb
             }
             catch (KeyNotFoundException)
             {
-                graph = null;
+                return false;
+            }
+            catch (ObjectDisposedException)
+            {
                 return false;
             }
         }
 
         public bool GraphExists(string name)
         {
-            if (_graphCache.ContainsKey(name)) return true;
-            var meta = _database.GetCollection<GraphMetadata>("graph_meta");
-            return meta.Exists(m => m.Name == name);
+            if (_disposed) return false;
+            
+            lock (_lock)
+            {
+                if (_graphCache.ContainsKey(name)) return true;
+                var meta = _database.GetCollection<GraphMetadata>("graph_meta");
+                return meta.Exists(m => m.Name == name);
+            }
         }
 
         public bool DeleteGraph(string name)
         {
-            _graphCache.Remove(name);
+            ThrowIfDisposed();
+            
+            lock (_lock)
+            {
+                // Mark cached dataset as disposed before removing
+                if (_graphCache.TryGetValue(name, out var cachedDataset))
+                {
+                    cachedDataset.MarkDisposed();
+                }
+                _graphCache.Remove(name);
 
-            var meta = _database.GetCollection<GraphMetadata>("graph_meta");
-            var metadata = meta.FindOne(m => m.Name == name);
-            if (metadata == null) return false;
+                var meta = _database.GetCollection<GraphMetadata>("graph_meta");
+                var metadata = meta.FindOne(m => m.Name == name);
+                if (metadata == null) return false;
 
-            // 删除数据
-            _database.DropCollection($"graph_{metadata.Id}_nodes");
-            _database.DropCollection($"graph_{metadata.Id}_edges");
+                // 删除数据
+                _database.DropCollection($"graph_{metadata.Id}_nodes");
+                _database.DropCollection($"graph_{metadata.Id}_edges");
 
-            return meta.Delete(metadata.Id);
+                return meta.Delete(metadata.Id);
+            }
         }
 
         #endregion
 
         #region 事务
 
-        public bool BeginTransaction() => _database.BeginTrans();
-        public bool Commit() => _database.Commit();
-        public bool Rollback() => _database.Rollback();
+        public bool BeginTransaction()
+        {
+            ThrowIfDisposed();
+            return _database.BeginTrans();
+        }
+        
+        public bool Commit()
+        {
+            ThrowIfDisposed();
+            return _database.Commit();
+        }
+        
+        public bool Rollback()
+        {
+            ThrowIfDisposed();
+            return _database.Rollback();
+        }
 
         public void ExecuteInTransaction(Action action)
         {
+            ThrowIfDisposed();
+            
             BeginTransaction();
             try
             {
@@ -318,6 +437,8 @@ namespace AroAro.DataCore.LiteDb
 
         public T ExecuteInTransaction<T>(Func<T> action)
         {
+            ThrowIfDisposed();
+            
             BeginTransaction();
             try
             {
@@ -336,21 +457,58 @@ namespace AroAro.DataCore.LiteDb
 
         #region 维护
 
-        public void Checkpoint() => _database.Checkpoint();
+        public void Checkpoint()
+        {
+            ThrowIfDisposed();
+            
+            // First flush all pending metadata updates in cached datasets
+            lock (_lock)
+            {
+                foreach (var graph in _graphCache.Values)
+                {
+                    graph.FlushMetadata();
+                }
+                foreach (var tabular in _tabularCache.Values)
+                {
+                    tabular.FlushMetadata();
+                }
+            }
+            
+            _database.Checkpoint();
+        }
 
         public void ClearAll()
         {
-            _tabularCache.Clear();
-            _graphCache.Clear();
+            ThrowIfDisposed();
+            
+            lock (_lock)
+            {
+                // Mark all cached datasets as disposed
+                foreach (var graph in _graphCache.Values)
+                {
+                    graph.MarkDisposed();
+                }
+                foreach (var tabular in _tabularCache.Values)
+                {
+                    tabular.MarkDisposed();
+                }
+                
+                _tabularCache.Clear();
+                _graphCache.Clear();
 
-            foreach (var name in TabularNames.ToList())
-                DeleteTabular(name);
+                foreach (var name in TabularNames.ToList())
+                    DeleteTabular(name);
 
-            foreach (var name in GraphNames.ToList())
-                DeleteGraph(name);
+                foreach (var name in GraphNames.ToList())
+                    DeleteGraph(name);
+            }
         }
 
-        public long Shrink() => _database.Rebuild();
+        public long Shrink()
+        {
+            ThrowIfDisposed();
+            return _database.Rebuild();
+        }
 
         public long GetDatabaseSize()
         {
@@ -402,8 +560,23 @@ namespace AroAro.DataCore.LiteDb
         {
             if (_disposed) return;
             _disposed = true;
-            _tabularCache.Clear();
-            _graphCache.Clear();
+            
+            lock (_lock)
+            {
+                // Mark all cached datasets as disposed before clearing
+                foreach (var graph in _graphCache.Values)
+                {
+                    graph.MarkDisposed();
+                }
+                foreach (var tabular in _tabularCache.Values)
+                {
+                    tabular.MarkDisposed();
+                }
+                
+                _tabularCache.Clear();
+                _graphCache.Clear();
+            }
+            
             _database?.Dispose();
         }
     }
