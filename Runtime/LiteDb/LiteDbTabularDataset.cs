@@ -649,7 +649,7 @@ namespace AroAro.DataCore.LiteDb
             catch (LiteException ex) when (ex.Message.Contains("disposed"))
             {
                 _disposed = true;
-                throw new ObjectDisposedException(nameof(LiteDbTabularDataset), "Database has been disposed", ex);
+                throw new ObjectDisposedException(nameof(LiteDbTabularDataset), $"Database has been disposed: {ex.Message}");
             }
         }
 
