@@ -43,11 +43,28 @@ namespace AroAro.DataCore.Import
 
                     // 解析 GraphML 文档
                     ParseGraphMLDocument(doc, graph);
+                    
+                    // Flush metadata after bulk import
+                    if (graph is LiteDb.LiteDbGraphDataset liteDbGraph)
+                    {
+                        liteDbGraph.FlushMetadata();
+                    }
                 }
+            }
+            catch (ObjectDisposedException)
+            {
+                Debug.LogError("Failed to parse GraphML: Database was disposed during import. Try restarting Unity.");
+                throw;
+            }
+            catch (LiteDB.LiteException ex) when (ex.Message.Contains("PAGE_SIZE"))
+            {
+                Debug.LogError($"Failed to parse GraphML: Database corruption detected ({ex.Message}). Try deleting the database file and reimporting.");
+                throw;
             }
             catch (Exception ex)
             {
                 Debug.LogError($"Failed to parse GraphML: {ex.Message}");
+                throw;
             }
         }
 
@@ -164,6 +181,9 @@ namespace AroAro.DataCore.Import
             var nodeNodes = graphNode.SelectNodes(xpath, nsmgr);
             if (nodeNodes == null) return;
 
+            // Collect all nodes first for bulk insertion
+            var nodesToAdd = new List<(string Id, IDictionary<string, object> Properties)>();
+            
             foreach (XmlNode nodeNode in nodeNodes)
             {
                 var id = nodeNode.Attributes?["id"]?.Value;
@@ -173,7 +193,33 @@ namespace AroAro.DataCore.Import
                 if (!graph.HasNode(id))
                 {
                     var properties = ParseProperties(nodeNode, "node", keyMap, nsmgr);
-                    graph.AddNode(id, properties);
+                    nodesToAdd.Add((id, properties));
+                }
+            }
+            
+            // Bulk add nodes for better performance
+            if (nodesToAdd.Count > 0)
+            {
+                try
+                {
+                    graph.AddNodes(nodesToAdd);
+                    Debug.Log($"Added {nodesToAdd.Count} nodes in bulk");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"Bulk node addition failed ({ex.Message}), falling back to individual adds");
+                    // Fallback to individual adds
+                    foreach (var node in nodesToAdd)
+                    {
+                        try
+                        {
+                            graph.AddNode(node.Id, node.Properties);
+                        }
+                        catch (Exception addEx)
+                        {
+                            Debug.LogWarning($"Failed to add node {node.Id}: {addEx.Message}");
+                        }
+                    }
                 }
             }
         }
@@ -184,6 +230,10 @@ namespace AroAro.DataCore.Import
             var edgeNodes = graphNode.SelectNodes(xpath, nsmgr);
             if (edgeNodes == null) return;
 
+            // Collect all edges first for bulk insertion
+            var edgesToAdd = new List<(string From, string To, IDictionary<string, object> Properties)>();
+            var missingNodes = new HashSet<string>();
+
             foreach (XmlNode edgeNode in edgeNodes)
             {
                 var source = edgeNode.Attributes?["source"]?.Value;
@@ -192,8 +242,8 @@ namespace AroAro.DataCore.Import
                 if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(target)) continue;
 
                 // 确保节点存在（GraphML 规范中节点通常在边之前定义，但为了健壮性...）
-                if (!graph.HasNode(source)) graph.AddNode(source);
-                if (!graph.HasNode(target)) graph.AddNode(target);
+                if (!graph.HasNode(source)) missingNodes.Add(source);
+                if (!graph.HasNode(target)) missingNodes.Add(target);
 
                 string directedAttr = edgeNode.Attributes?["directed"]?.Value;
                 bool isDirected = defaultDirected;
@@ -202,25 +252,60 @@ namespace AroAro.DataCore.Import
 
                 var properties = ParseProperties(edgeNode, "edge", keyMap, nsmgr);
                 
-                try 
+                edgesToAdd.Add((source, target, properties));
+
+                // Add reverse edge for undirected graphs
+                if (!isDirected && source != target)
                 {
-                    graph.AddEdge(source, target, properties);
+                    edgesToAdd.Add((target, source, properties));
+                }
+            }
+            
+            // Add missing nodes first
+            if (missingNodes.Count > 0)
+            {
+                var nodesToAdd = missingNodes.Select(id => (id, (IDictionary<string, object>)null));
+                try
+                {
+                    graph.AddNodes(nodesToAdd);
+                    Debug.Log($"Added {missingNodes.Count} missing nodes");
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"Skipping edge {source}->{target}: {ex.Message}");
-                }
-
-                if (!isDirected && source != target)
-                {
-                    try
+                    Debug.LogWarning($"Failed to add missing nodes in bulk: {ex.Message}");
+                    foreach (var nodeId in missingNodes)
                     {
-                        if (!graph.HasEdge(target, source))
-                            graph.AddEdge(target, source, properties);
+                        try { graph.AddNode(nodeId); }
+                        catch { /* ignore */ }
                     }
-                    catch (Exception ex)
+                }
+            }
+            
+            // Bulk add edges for better performance
+            if (edgesToAdd.Count > 0)
+            {
+                try
+                {
+                    graph.AddEdges(edgesToAdd);
+                    Debug.Log($"Added {edgesToAdd.Count} edges in bulk");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"Bulk edge addition failed ({ex.Message}), falling back to individual adds");
+                    // Fallback to individual adds
+                    foreach (var edge in edgesToAdd)
                     {
-                        Debug.LogWarning($"Could not add reverse edge {target}->{source}: {ex.Message}");
+                        try
+                        {
+                            if (!graph.HasEdge(edge.From, edge.To))
+                            {
+                                graph.AddEdge(edge.From, edge.To, edge.Properties);
+                            }
+                        }
+                        catch (Exception addEx)
+                        {
+                            Debug.LogWarning($"Skipping edge {edge.From}->{edge.To}: {addEx.Message}");
+                        }
                     }
                 }
             }

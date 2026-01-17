@@ -55,33 +55,54 @@ namespace AroAro.DataCore.LiteDb
                 ReadOnly = _options.ReadOnly
             };
 
-            try
+            int retryCount = 0;
+            const int maxRetries = 2;
+            
+            while (retryCount < maxRetries)
             {
-                _database = new LiteDatabase(connectionString);
-                InitializeDatabase();
-            }
-            catch (Exception ex) when (ex.Message.Contains("PAGE_SIZE") || ex is LiteException)
-            {
-                // If corruption detected (PAGE_SIZE error), dispose, delete and retry once
-                _database?.Dispose();
-                _database = null;
-
                 try
                 {
-                    if (File.Exists(DatabasePath)) File.Delete(DatabasePath);
-                    // Also delete log file
-                    var logPath = DatabasePath + "-log";
-                    if (File.Exists(logPath)) File.Delete(logPath);
-
-#if UNITY_2019_1_OR_NEWER
-                    Debug.LogWarning($"[LiteDbDataStore] Database corruption detected ({ex.Message}). Deleted and retrying: {DatabasePath}");
-#endif
                     _database = new LiteDatabase(connectionString);
                     InitializeDatabase();
+                    break; // Success
                 }
-                catch (Exception retryEx)
+                catch (Exception ex) when ((ex.Message.Contains("PAGE_SIZE") || ex is LiteException) && retryCount < maxRetries - 1)
                 {
-                    throw new Exception($"Failed to initialize LiteDB after recovery attempt: {retryEx.Message}", retryEx);
+                    retryCount++;
+                    
+                    // If corruption detected (PAGE_SIZE error), dispose, delete and retry
+                    _database?.Dispose();
+                    _database = null;
+
+                    try
+                    {
+                        if (File.Exists(DatabasePath)) File.Delete(DatabasePath);
+                        // Also delete log file
+                        var logPath = DatabasePath + "-log";
+                        if (File.Exists(logPath)) File.Delete(logPath);
+
+#if UNITY_2019_1_OR_NEWER
+                        Debug.LogWarning($"[LiteDbDataStore] Database corruption detected ({ex.Message}). Deleted and retrying ({retryCount}/{maxRetries}): {DatabasePath}");
+#endif
+                        // Force GC to release file handles
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                        
+                        // Short delay before retry
+                        System.Threading.Thread.Sleep(100);
+                    }
+                    catch (Exception deleteEx)
+                    {
+#if UNITY_2019_1_OR_NEWER
+                        Debug.LogError($"[LiteDbDataStore] Failed to delete corrupted database: {deleteEx.Message}");
+#endif
+                        throw new Exception($"Failed to recover from database corruption: {deleteEx.Message}", deleteEx);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Non-recoverable error
+                    throw new Exception($"Failed to initialize LiteDB: {ex.Message}", ex);
                 }
             }
         }
