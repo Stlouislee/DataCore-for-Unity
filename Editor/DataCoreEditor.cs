@@ -469,6 +469,36 @@ namespace AroAro.DataCore.Editor
             EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.Space();
+            
+            // Export Database Button
+            if (GUILayout.Button("Export Database File", GUILayout.Height(30)))
+            {
+                string exportPath = EditorUtility.SaveFilePanel(
+                    "Export Database",
+                    "",
+                    "datacore_export.db",
+                    "db");
+                
+                if (!string.IsNullOrEmpty(exportPath))
+                {
+                    if (component.ExportDatabaseFile(exportPath))
+                    {
+                        EditorUtility.DisplayDialog("Export Success", 
+                            $"Database has been exported to:\n{exportPath}", "OK");
+                    }
+                    else
+                    {
+                        EditorUtility.DisplayDialog("Export Failed", 
+                            "Failed to export database. Check console for details.", "OK");
+                    }
+                }
+            }
+            
+            EditorGUILayout.Space();
+            
+            // Hard Reset Button (Red)
+            var originalColor = GUI.backgroundColor;
+            GUI.backgroundColor = Color.red;
             if (GUILayout.Button("Delete Database File (Hard Reset)", GUILayout.Height(30)))
             {
                 if (EditorUtility.DisplayDialog("Delete Database", 
@@ -482,6 +512,7 @@ namespace AroAro.DataCore.Editor
                     EditorUtility.DisplayDialog("Database Deleted", "Database file has been deleted. It will be recreated on next access.", "OK");
                 }
             }
+            GUI.backgroundColor = originalColor;
         }
 
 

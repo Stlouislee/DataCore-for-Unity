@@ -339,6 +339,63 @@ namespace AroAro.DataCore
 
 
         /// <summary>
+        /// 导出数据库文件到指定位置
+        /// </summary>
+        /// <param name="destinationPath">目标路径</param>
+        /// <returns>是否导出成功</returns>
+        public bool ExportDatabaseFile(string destinationPath)
+        {
+            // 1. 先执行 checkpoint 确保数据同步
+            _store?.Checkpoint();
+
+            // 2. Resolve source path
+            var sourcePath = databasePath;
+#if UNITY_2019_1_OR_NEWER
+            if (!Path.IsPathRooted(databasePath))
+            {
+                sourcePath = Path.Combine(Application.persistentDataPath, databasePath);
+            }
+#endif
+
+            // 3. Check if source file exists
+            if (!File.Exists(sourcePath))
+            {
+                Debug.LogError($"Database file not found at: {sourcePath}");
+                return false;
+            }
+
+            // 4. Ensure destination directory exists
+            var destinationDir = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrEmpty(destinationDir) && !Directory.Exists(destinationDir))
+            {
+                Directory.CreateDirectory(destinationDir);
+            }
+
+            // 5. Copy file
+            try
+            {
+                File.Copy(sourcePath, destinationPath, true);
+                Debug.Log($"Database exported successfully to: {destinationPath}");
+                
+                // Also copy log file if exists
+                var sourceLogPath = sourcePath + "-log";
+                if (File.Exists(sourceLogPath))
+                {
+                    var destLogPath = destinationPath + "-log";
+                    File.Copy(sourceLogPath, destLogPath, true);
+                    Debug.Log($"Database log file also exported.");
+                }
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to export database: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
         /// 获取会话管理器
         /// </summary>
         public Session.SessionManager GetSessionManager()
