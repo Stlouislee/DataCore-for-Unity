@@ -40,6 +40,8 @@ This package includes precompiled DLLs:
 
 - **NumSharp.Core.dll** - Numerical computing backend
 - **Apache.Arrow.dll** - Tabular data serialization
+- **LiteDB.dll** - Embedded document database
+- **Microsoft.Data.Analysis.dll** - DataFrame support
 
 These dependencies are included in the package and will be automatically available after installation.
 
@@ -62,11 +64,12 @@ playerData.AddStringColumn("name", new[] { "Alice", "Bob", "Charlie" });
 
 // Query the data
 var highScorers = playerData.Query()
-    .Where("score", Tabular.TabularOp.Gt, 150)
+    .Where("score", QueryOp.Gt, 150)
     .ToRowIndices();
 
-// Data will auto-save when scene ends (if autoSaveOnExit is enabled)
-// Or manually save: DataCoreEditorComponent.Instance.SaveDataset("player-stats");
+// Data persists automatically via LiteDB.
+// You can force a write to disk if needed:
+store.Checkpoint();
 ```
 
 **Setup:**
@@ -80,35 +83,25 @@ var highScorers = playerData.Query()
 
 ```csharp
 using AroAro.DataCore;
-using AroAro.DataCore.Tabular;
 using NumSharp;
 
-var store = new DataCoreStore();
-var t = store.CreateTabular("my-table");
+// Initialize a store at a specific path
+var store = new DataCoreStore("Data/my_database.db");
+var t = store.GetOrCreateTabular("my-table");
 
-t.AddNumericColumn("x", np.array(new float[] { 1, 2, 3 }));
-var indices = t.Query().Where("x", TabularOp.Gt, 1f).ToRowIndices();
+t.AddNumericColumn("x", new double[] { 1, 2, 3 });
+var indices = t.Query().Where("x", QueryOp.Gt, 1.0).ToRowIndices();
 
-store.Save("my-table", "my-table.arrow");
-var loaded = store.Load("my-table.arrow");
+// Ensure data is written to disk
+store.Checkpoint();
 
-var g = store.CreateGraph("my-graph");
+var g = store.GetOrCreateGraph("my-graph");
 g.AddNode("a");
 g.AddNode("b");
 g.AddEdge("a", "b");
-store.Save("my-graph", "my-graph.dcgraph");
+
+store.Checkpoint();
 ```
-
-## Self-Test
-
-### Method 1: GameObject (Play Mode)
-- Create empty GameObject
-- Add `DataCoreSelfTest` component
-- Enter Play Mode → tests run automatically
-
-### Method 2: Editor Menu
-- **Tools → DataCore → Run Self-Test** (runs in Editor)
-- **Tools → DataCore → Create Test GameObject** (creates test GameObject)
 
 ## Editor Integration
 
@@ -121,7 +114,7 @@ When you select a Data Core GameObject, the Inspector shows:
 - **Persistence Configuration**: Set storage path and auto-save options
 - **Datasets Panel**: View all datasets with type, size, and delete options
 - **Create Buttons**: Create new Tabular or Graph datasets
-- **Actions**: Save All, Load All, Run Tests
+- **Actions**: Save All, Load All
 
 ### Dataset Preview
 For each dataset, you can see:
@@ -144,17 +137,14 @@ using AroAro.DataCore.Events;
 // Subscribe to dataset events
 DataCoreEventManager.DatasetCreated += (sender, args) => 
 {
-    Debug.Log($"Dataset created: {args.DatasetName} ({args.DatasetKind})");
+    // Handle dataset creation
+    Console.WriteLine($"Dataset created: {args.DatasetName}");
 };
 
 DataCoreEventManager.DatasetModified += (sender, args) => 
 {
-    Debug.Log($"Dataset modified: {args.DatasetName} - {args.Operation}");
-};
-
-DataCoreEventManager.DatasetSaved += (sender, args) => 
-{
-    Debug.Log($"Dataset saved: {args.DatasetName} to {args.FilePath}");
+    // Handle dataset modifications
+    Console.WriteLine($"Dataset modified: {args.DatasetName}");
 };
 
 // Available events:
@@ -171,61 +161,24 @@ DataCoreEventManager.DatasetSaved += (sender, args) =>
 ### California Housing Dataset
 A built-in sample dataset containing housing data for California districts.
 
-**Usage Methods:**
-
-**Method 1: Static Access (Recommended)**
-```csharp
-// Load dataset directly
-CaliforniaHousingDataset.LoadIntoDataCore();
-
-// Or create dataset manually
-var dataset = CaliforniaHousingDataset.CreateDataset();
-
-// Get sample queries
-var queries = CaliforniaHousingDataset.GetSampleQueries();
-
-// Get statistics
-var stats = CaliforniaHousingDataset.GetStatistics();
-```
-
-**Method 2: Component-based**
-1. Add `CaliforniaHousingLoader` component to a GameObject
-2. Dataset will be loaded on start (configurable)
-
-**Features:**
-- **Built-in sample data** - No external files required
-- **10 properties** with 9 attributes each (sample subset)
-- **Sample queries** included
-- **Statistics** generation
-- **Static access** - No GameObject required
-
 **Usage:**
 ```csharp
-// Access the loaded dataset
+// Load the sample dataset
+CaliforniaHousingDataset.LoadIntoDataCore();
+
+// Access and query the dataset
 var store = DataCoreEditorComponent.Instance.GetStore();
 var housingData = store.Get<Tabular.TabularData>("california-housing");
 
-// Run queries
 var expensiveHouses = housingData.Query()
     .Where("median_house_value", Tabular.TabularOp.Gt, 500000)
     .ToRowIndices();
-
-// Persist dataset across play mode sessions
-DataCoreEditorComponent.Instance.PersistDataset("california-housing");
 ```
 
-**Play Mode Persistence:**
-- **Auto-save on exit**: Datasets are automatically saved when exiting play mode
-- **Manual persistence**: Use `PersistDataset()` to explicitly save datasets
-- **Reload persisted data**: Use `LoadPersistedDataset()` to reload after play mode
-
-**Columns:**
-- `longitude`, `latitude` - Geographic coordinates
-- `housing_median_age` - Median age of houses
-- `total_rooms`, `total_bedrooms` - Room counts
-- `population`, `households` - Demographic data
-- `median_income` - Median income (in tens of thousands)
-- `median_house_value` - Median house value (target variable)
+**Features:**
+- Built-in sample data with housing statistics
+- Ready-to-use queries and examples
+- Automatic persistence across play mode sessions
 
 ## Performance Features
 
@@ -240,68 +193,32 @@ store.RegisterMetadata("large-dataset", DataSetKind.Tabular, "path/to/large-data
 var dataset = store.Get<Tabular.TabularData>("large-dataset");
 ```
 
-**Benefits:**
-- Faster startup times
-- Reduced memory usage
-- Automatic loading when needed
+### CSV Import
+Import CSV files with optimized performance:
 
-### CSV Import Performance
-Optimized CSV import with:
-- **Batch Processing**: Process data in batches for better performance
-- **Streaming Support**: Handle large files efficiently
-- **Type Detection**: Automatic numeric/string column detection
-
-### Editor Interface
-1. Select a Data Core GameObject
-2. In Inspector, find the **CSV Import** section
-3. Browse and select a CSV file
-4. Configure options:
-   - Dataset Name: Name for the new dataset
-   - Has Header: Check if first row contains column names
-   - Delimiter: CSV delimiter (default: comma)
-5. Click **Import CSV**
-
-### Menu Option
-- **Tools → DataCore → Import CSV** - Quick CSV import from menu
-
-### Code Usage
 ```csharp
 var dataCore = DataCoreEditorComponent.Instance;
 dataCore.ImportCsvToTabular("path/to/file.csv", "MyDataset", true, ',');
 ```
 
-### CSV Format Support
-- Comma-separated values
-- Quoted fields with embedded commas
-- Header row detection
-- Automatic type detection (numeric vs string)
+## Key Features
 
-## New Features Summary
+### Data Management
+- **Tabular Data**: Store and query structured data with numeric and string columns
+- **Graph Data**: Create and manipulate graph datasets with nodes and edges
+- **Persistence**: Automatic saving and loading of datasets
 
-### Enhanced Preview System
-- **Inline Inspector Preview**: Quick view of dataset contents directly in the Inspector
-- **Full Preview Window**: Dedicated window for comprehensive data browsing
-- **Tabular Data Preview**: View column headers and first 100 rows
-- **Graph Data Preview**: Browse nodes and edges with properties
+### Editor Integration
+- **Inspector Preview**: View dataset contents directly in Unity Inspector
+- **CSV Import**: Import CSV files with automatic type detection
+- **Event System**: Monitor dataset changes with comprehensive events
 
-### Event System
-- **Dataset Lifecycle Events**: Created, deleted, loaded, saved
-- **Modification Events**: Track changes to rows, columns, nodes, edges
-- **Query Events**: Monitor query execution
-- **Easy Integration**: Simple event subscription model
+### Performance
+- **Lazy Loading**: Load large datasets only when needed
+- **Optimized Processing**: Efficient batch processing for CSV import
+- **Memory Efficient**: Better handling of large datasets
 
-### Performance Optimizations
-- **Lazy Loading**: Load data only when needed
-- **Batch Processing**: Efficient CSV import
-- **Memory Management**: Better handling of large datasets
-
-### Cross-Platform Support
-- **Unity Package Manager**: Easy installation
-- **NumSharp Backend**: Numerical computing support
-- **Apache Arrow**: Efficient tabular data serialization
-- **Custom Graph Format**: Optimized for Unity
-
-## Getting Started with New Features
+## Getting Started with Features
 
 ### Using the Preview System
 ```csharp
@@ -321,12 +238,14 @@ DataCoreEventManager.DatasetModified += OnDatasetModified;
 
 void OnDatasetCreated(object sender, DatasetCreatedEventArgs args)
 {
-    Debug.Log($"New dataset: {args.Dataset.Name}");
+    // Handle new dataset creation
+    Console.WriteLine($"New dataset: {args.Dataset.Name}");
 }
 
 void OnDatasetModified(object sender, DatasetModifiedEventArgs args)
 {
-    Debug.Log($"Dataset {args.DatasetName} modified: {args.Operation}");
+    // Handle dataset modifications
+    Console.WriteLine($"Dataset modified: {args.DatasetName}");
 }
 ```
 

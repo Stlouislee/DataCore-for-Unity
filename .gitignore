@@ -53,3 +53,6 @@ Thumbs.db
 Library/
 ProjectSettings/
 Documentation/
+# Documentation source files (except wiki content)
+Documentation~/*
+!Documentation~/wiki/
