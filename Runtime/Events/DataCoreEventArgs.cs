@@ -217,4 +217,75 @@ namespace AroAro.DataCore.Events
     }
 
     #endregion
+
+    #region Algorithm Events
+
+    /// <summary>
+    /// Algorithm execution started event arguments.
+    /// </summary>
+    public class AlgorithmStartedEventArgs : EventArgs
+    {
+        public string AlgorithmName { get; }
+        public IDataSet InputDataset { get; }
+
+        public AlgorithmStartedEventArgs(string algorithmName, IDataSet inputDataset)
+        {
+            AlgorithmName = algorithmName;
+            InputDataset = inputDataset;
+        }
+    }
+
+    /// <summary>
+    /// Algorithm execution completed event arguments.
+    /// </summary>
+    public class AlgorithmCompletedEventArgs : EventArgs
+    {
+        public string AlgorithmName { get; }
+        public IDataSet InputDataset { get; }
+        public IDataSet OutputDataset { get; }
+        public bool Success { get; }
+        public TimeSpan Duration { get; }
+        public string Error { get; }
+
+        public AlgorithmCompletedEventArgs(
+            string algorithmName,
+            IDataSet inputDataset,
+            IDataSet outputDataset,
+            bool success,
+            TimeSpan duration,
+            string error = null)
+        {
+            AlgorithmName = algorithmName;
+            InputDataset = inputDataset;
+            OutputDataset = outputDataset;
+            Success = success;
+            Duration = duration;
+            Error = error;
+        }
+    }
+
+    /// <summary>
+    /// Pipeline execution completed event arguments.
+    /// </summary>
+    public class PipelineCompletedEventArgs : EventArgs
+    {
+        public string PipelineName { get; }
+        public int StepCount { get; }
+        public bool Success { get; }
+        public TimeSpan Duration { get; }
+        public int FailedStepIndex { get; }
+
+        public PipelineCompletedEventArgs(
+            string pipelineName, int stepCount, bool success,
+            TimeSpan duration, int failedStepIndex = -1)
+        {
+            PipelineName = pipelineName;
+            StepCount = stepCount;
+            Success = success;
+            Duration = duration;
+            FailedStepIndex = failedStepIndex;
+        }
+    }
+
+    #endregion
 }

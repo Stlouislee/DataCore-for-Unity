@@ -176,6 +176,18 @@ namespace AroAro.DataCore
         void CreateIndex(string columnName);
 
         #endregion
+
+        #region 原生查询
+
+        /// <summary>
+        /// 执行原生 LiteDB SQL-like 命令
+        /// </summary>
+        /// <param name="sql">SQL-like 查询语句</param>
+        /// <param name="args">参数值（@0, @1...）</param>
+        /// <returns>执行结果</returns>
+        RawResult ExecuteRaw(string sql, params object[] args);
+
+        #endregion
     }
 
     /// <summary>

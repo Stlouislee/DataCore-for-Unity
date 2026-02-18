@@ -90,6 +90,7 @@ Interface for table-like datasets providing row and column operations.
 
 #### Querying
 - `ITabularQuery Query()`: Returns a fluent query builder.
+- `RawResult ExecuteRaw(string sql, params object[] args)`: Executes native LiteDB SQL-like queries. Returns either tabular data (for SELECT) or scalar values (for COUNT/UPDATE/DELETE). Only supported on LiteDB-backed datasets.
 
 ---
 
@@ -216,6 +217,36 @@ A temporary workspace that can hold data copies, results of analyses, and transa
 - `bool PersistDataset(string name, string targetName = null)`: Saves a dataset from the session back to the permanent global store.
 - `IDataSet SaveQueryResult(string sourceName, Func<IDataSet, IDataSet> query, string newName)`: Executes a query function and saves the result as a new session dataset.
 - `void Clear()`: Wipes all temporary datasets in the session.
+
+---
+
+### RawResult
+Result wrapper for native LiteDB queries.
+
+#### Properties
+- `Data`: Tabular data result (for SELECT queries).
+- `ScalarValue`: Scalar result (for COUNT/UPDATE/DELETE queries).
+- `HasData`: Whether the result contains tabular data.
+- `AsInt32`, `AsInt64`, `AsDouble`, `AsString`, `AsBoolean`: Convenience properties for scalar results.
+
+#### Usage Example
+```csharp
+// SELECT query
+var result = dataset.ExecuteRaw("SELECT * FROM employees WHERE Age > @0", 30);
+if (result.HasData)
+{
+    var data = result.Data; // ITabularDataset
+    var rows = data.Query().OrderBy("Salary").ToDictionaries();
+}
+
+// COUNT query
+var countResult = dataset.ExecuteRaw("SELECT COUNT(*) FROM employees");
+int count = countResult.AsInt32;
+
+// UPDATE query
+var updateResult = dataset.ExecuteRaw("UPDATE employees SET Salary = Salary * 1.1 WHERE Department = @0", "Engineering");
+Console.WriteLine($"Updated {updateResult.AsInt32} rows");
+```
 
 ---
 

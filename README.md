@@ -2,7 +2,7 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-blue)](https://github.com/Stlouislee/DataCore-for-Unity)
 
-Tabular + graph datasets with CRUD/query and persistence.
+Tabular + graph datasets with CRUD/query, persistence, and extensible algorithm components.
 
 ## Installation
 
@@ -208,10 +208,16 @@ dataCore.ImportCsvToTabular("path/to/file.csv", "MyDataset", true, ',');
 - **Graph Data**: Create and manipulate graph datasets with nodes and edges
 - **Persistence**: Automatic saving and loading of datasets
 
+### Algorithm Framework
+- **Built-in Algorithms**: PageRank, Connected Components, Min-Max Normalization
+- **Composable Pipelines**: Chain algorithms sequentially with automatic data flow
+- **Algorithm Registry**: Discover, register, and look up algorithms at runtime
+- **Extensible**: Create custom algorithms by extending base classes
+
 ### Editor Integration
 - **Inspector Preview**: View dataset contents directly in Unity Inspector
 - **CSV Import**: Import CSV files with automatic type detection
-- **Event System**: Monitor dataset changes with comprehensive events
+- **Event System**: Monitor dataset changes and algorithm execution with comprehensive events
 
 ### Performance
 - **Lazy Loading**: Load large datasets only when needed
@@ -256,4 +262,95 @@ store.RegisterMetadata("big-data", DataSetKind.Tabular, "path/to/big-data.arrow"
 
 // Data loads automatically on first access
 var data = store.Get<Tabular.TabularData>("big-data");
+```
+
+### Using the Algorithm Framework
+
+```csharp
+using AroAro.DataCore.Algorithms;
+using AroAro.DataCore.Algorithms.Graph;
+using AroAro.DataCore.Algorithms.Tabular;
+```
+
+**Run a single algorithm on a graph:**
+```csharp
+// Look up a registered algorithm
+var algo = AlgorithmRegistry.Default.Get("PageRank");
+
+// Configure parameters and execute
+var context = AlgorithmContext.Create()
+    .WithParameter("dampingFactor", 0.85)
+    .WithParameter("maxIterations", 100)
+    .Build();
+
+var result = algo.Execute(myGraph, context);
+if (result.Success)
+{
+    var rankedGraph = result.OutputDataset as IGraphDataset;
+    double score = (double)rankedGraph.GetNodeProperties("nodeA")["pagerank"];
+    int iterations = (int)result.Metrics["iterations"];
+    bool converged = (bool)result.Metrics["converged"];
+}
+```
+
+**Normalize tabular data:**
+```csharp
+var result = new MinMaxNormalizeAlgorithm().Execute(myTable,
+    AlgorithmContext.Create()
+        .WithParameter("rangeMin", -1.0)
+        .WithParameter("rangeMax", 1.0)
+        .WithParameter("columns", new[] { "score", "age" })
+        .Build());
+
+var normalizedTable = result.OutputDataset as ITabularDataset;
+```
+
+**Chain algorithms in a pipeline:**
+```csharp
+var pipeline = new AlgorithmPipeline("GraphAnalysis")
+    .Add(new PageRankAlgorithm(), b => b.WithParameter("dampingFactor", 0.9))
+    .Add(new ConnectedComponentsAlgorithm());
+
+var pipelineResult = pipeline.Execute(myGraph);
+// pipelineResult.FinalOutput has both "pagerank" and "componentId" on every node
+// pipelineResult.StepResults gives per-step metrics
+// pipelineResult.GetAllMetrics() aggregates all metrics
+```
+
+**Create a custom algorithm:**
+```csharp
+public class ShortestPathAlgorithm : GraphAlgorithmBase
+{
+    public override string Name => "ShortestPath";
+    public override string Description => "Dijkstra's shortest path from a source node.";
+
+    public override IReadOnlyList<AlgorithmParameterDescriptor> Parameters { get; } =
+        new List<AlgorithmParameterDescriptor>
+        {
+            new("sourceNode", "Starting node ID", typeof(string), required: true),
+        };
+
+    protected override AlgorithmResult ExecuteGraph(
+        IGraphDataset input, AlgorithmContext context)
+    {
+        string source = context.GetRequired<string>("sourceNode");
+        // ... your algorithm logic ...
+        return AlgorithmResult.Succeeded(Name, outputGraph, metrics);
+    }
+}
+
+// Register it
+AlgorithmRegistry.Default.Register(new ShortestPathAlgorithm());
+```
+
+**Monitor algorithm execution via events:**
+```csharp
+DataCoreEventManager.AlgorithmStarted += (sender, args) =>
+    Debug.Log($"Algorithm started: {args.AlgorithmName}");
+
+DataCoreEventManager.AlgorithmCompleted += (sender, args) =>
+    Debug.Log($"Algorithm completed: {args.AlgorithmName} in {args.Duration.TotalMilliseconds}ms");
+
+DataCoreEventManager.PipelineCompleted += (sender, args) =>
+    Debug.Log($"Pipeline '{args.PipelineName}': {args.StepCount} steps in {args.Duration.TotalMilliseconds}ms");
 ```

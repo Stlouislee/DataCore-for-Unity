@@ -156,6 +156,51 @@ namespace AroAro.DataCore.Events
 
         #endregion
 
+        #endregion
+
+        #region Algorithm Events
+
+        // Algorithm started event
+        public static event EventHandler<AlgorithmStartedEventArgs> AlgorithmStarted;
+
+        // Algorithm completed event
+        public static event EventHandler<AlgorithmCompletedEventArgs> AlgorithmCompleted;
+
+        // Pipeline completed event
+        public static event EventHandler<PipelineCompletedEventArgs> PipelineCompleted;
+
+        /// <summary>
+        /// Fire when an algorithm execution begins.
+        /// </summary>
+        public static void RaiseAlgorithmStarted(string algorithmName, IDataSet inputDataset)
+        {
+            AlgorithmStarted?.Invoke(null, new AlgorithmStartedEventArgs(algorithmName, inputDataset));
+        }
+
+        /// <summary>
+        /// Fire when an algorithm execution completes (success or failure).
+        /// </summary>
+        public static void RaiseAlgorithmCompleted(
+            string algorithmName, IDataSet inputDataset, IDataSet outputDataset,
+            bool success, TimeSpan duration, string error = null)
+        {
+            AlgorithmCompleted?.Invoke(null, new AlgorithmCompletedEventArgs(
+                algorithmName, inputDataset, outputDataset, success, duration, error));
+        }
+
+        /// <summary>
+        /// Fire when an algorithm pipeline completes.
+        /// </summary>
+        public static void RaisePipelineCompleted(
+            string pipelineName, int stepCount, bool success,
+            TimeSpan duration, int failedStepIndex = -1)
+        {
+            PipelineCompleted?.Invoke(null, new PipelineCompletedEventArgs(
+                pipelineName, stepCount, success, duration, failedStepIndex));
+        }
+
+        #endregion
+
         /// <summary>
         /// 清除所有事件订阅
         /// </summary>
@@ -174,6 +219,9 @@ namespace AroAro.DataCore.Events
             DataFrameCreated = null;
             DataFrameRemoved = null;
             DataFrameQueried = null;
+            AlgorithmStarted = null;
+            AlgorithmCompleted = null;
+            PipelineCompleted = null;
         }
     }
 }

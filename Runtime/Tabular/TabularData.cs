@@ -303,6 +303,11 @@ namespace AroAro.DataCore.Tabular
             return new InMemoryTabularQuery(this);
         }
 
+        public RawResult ExecuteRaw(string sql, params object[] args)
+        {
+            throw new NotSupportedException("ExecuteRaw is only supported on LiteDB-backed datasets");
+        }
+
         public double Sum(string columnName)
         {
             var data = GetNumericColumn(columnName);

@@ -447,6 +447,99 @@ namespace AroAro.DataCore.LiteDb
             return Query().Where(column, op, value).ToRowIndices();
         }
 
+        public RawResult ExecuteRaw(string sql, params object[] args)
+        {
+            ThrowIfDisposed();
+            
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentException("SQL query cannot be null or empty", nameof(sql));
+            
+            try
+            {
+                // 转换参数为 BsonValue 数组
+                var bsonArgs = args?.Select(arg => ConvertToBsonValue(arg)).ToArray() ?? Array.Empty<BsonValue>();
+                
+                // 执行原生查询
+                using var reader = _database.Execute(sql, bsonArgs);
+                
+                // 检查是否有数据
+                if (!reader.HasValues)
+                {
+                    return new RawResult();
+                }
+                
+                // 读取第一行以确定结果类型
+                if (reader.Read())
+                {
+                    var firstValue = reader.Current;
+                    
+                    // 如果是文档（SELECT 返回的行）
+                    if (firstValue.IsDocument)
+                    {
+                        var rows = new List<Dictionary<string, object>>();
+                        var columnNames = new HashSet<string>();
+                        
+                        // 收集第一行
+                        var firstRow = ConvertFromBsonDocument(firstValue.AsDocument);
+                        rows.Add(firstRow);
+                        foreach (var key in firstRow.Keys)
+                        {
+                            columnNames.Add(key);
+                        }
+                        
+                        // 收集剩余行
+                        while (reader.Read())
+                        {
+                            var row = ConvertFromBsonDocument(reader.Current.AsDocument);
+                            rows.Add(row);
+                            foreach (var key in row.Keys)
+                            {
+                                columnNames.Add(key);
+                            }
+                        }
+                        
+                        // 创建内存 TabularData
+                        var resultDataset = new Tabular.TabularData($"raw_query_result_{Guid.NewGuid():N}");
+                        
+                        // 添加列和数据
+                        foreach (var columnName in columnNames)
+                        {
+                            var columnData = rows.Select(row => row.TryGetValue(columnName, out var value) ? value : null).ToArray();
+                            
+                            // 尝试推断列类型
+                            if (columnData.All(v => v is double || v is int || v is long || v is float))
+                            {
+                                var numericData = columnData.Select(v => Convert.ToDouble(v)).ToArray();
+                                resultDataset.AddNumericColumn(columnName, numericData);
+                            }
+                            else
+                            {
+                                var stringData = columnData.Select(v => v?.ToString() ?? "").ToArray();
+                                resultDataset.AddStringColumn(columnName, stringData);
+                            }
+                        }
+                        
+                        return new RawResult(resultDataset);
+                    }
+                    else
+                    {
+                        // 标量结果（COUNT/UPDATE/DELETE）
+                        return new RawResult(firstValue);
+                    }
+                }
+                
+                return new RawResult();
+            }
+            catch (LiteException ex)
+            {
+                throw new DataCoreRawQueryException(sql, args, ex.Message, ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DataCoreRawQueryException(sql, args, $"Unexpected error: {ex.Message}", ex);
+            }
+        }
+
         #endregion
 
         #region CSV 导入导出
@@ -689,6 +782,16 @@ namespace AroAro.DataCore.LiteDb
             if (value.IsDateTime) return value.AsDateTime;
             if (value.IsString) return value.AsString;
             return value.ToString();
+        }
+
+        private Dictionary<string, object> ConvertFromBsonDocument(BsonDocument doc)
+        {
+            var result = new Dictionary<string, object>();
+            foreach (var element in doc)
+            {
+                result[element.Key] = ConvertFromBsonValue(element.Value);
+            }
+            return result;
         }
 
         private List<string> ParseCsvLine(string line, char delimiter)
