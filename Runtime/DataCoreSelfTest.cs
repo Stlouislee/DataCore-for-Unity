@@ -1,7 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
+using AroAro.DataCore.Algorithms;
+using AroAro.DataCore.Algorithms.Graph;
+using AroAro.DataCore.Algorithms.Tabular;
+using AroAro.DataCore.Graph;
+using AroAro.DataCore.Tabular;
 
 namespace AroAro.DataCore
 {
@@ -29,6 +35,7 @@ namespace AroAro.DataCore
                 TestTabular(sb);
                 TestGraph(sb);
                 TestSessions(sb);
+                TestAlgorithms(sb);
                 sb.AppendLine("✅ All tests passed!");
             }
             catch (Exception ex)
@@ -147,6 +154,116 @@ namespace AroAro.DataCore
             sb.AppendLine("✅ Session cleanup OK");
 
             sb.AppendLine("✅ Sessions OK");
+        }
+
+        private static void TestAlgorithms(StringBuilder sb)
+        {
+            sb.AppendLine("Testing Algorithms...");
+
+            // --- Registry ---
+            var registry = AlgorithmRegistry.Default;
+            if (registry.Count < 3)
+                throw new Exception($"Expected at least 3 registered algorithms, got {registry.Count}");
+            if (!registry.Contains("PageRank"))
+                throw new Exception("PageRank not registered");
+            if (!registry.Contains("ConnectedComponents"))
+                throw new Exception("ConnectedComponents not registered");
+            if (!registry.Contains("MinMaxNormalize"))
+                throw new Exception("MinMaxNormalize not registered");
+            sb.AppendLine("✅ Algorithm registry OK");
+
+            // --- PageRank ---
+            {
+                var graph = new GraphData("pr-test");
+                graph.AddNode("A"); graph.AddNode("B"); graph.AddNode("C");
+                graph.AddEdge("A", "B"); graph.AddEdge("B", "C"); graph.AddEdge("C", "A");
+
+                var result = new PageRankAlgorithm().Execute(graph, AlgorithmContext.Empty);
+                if (!result.Success) throw new Exception($"PageRank failed: {result.Error}");
+                if (result.OutputDataset == null) throw new Exception("PageRank produced no output");
+
+                var output = result.OutputDataset as IGraphDataset;
+                double rankA = (double)output.GetNodeProperties("A")["pagerank"];
+                double rankB = (double)output.GetNodeProperties("B")["pagerank"];
+                if (Math.Abs(rankA - rankB) > 0.01)
+                    throw new Exception($"Cycle nodes should have similar rank: A={rankA:F4}, B={rankB:F4}");
+            }
+            sb.AppendLine("✅ PageRank OK");
+
+            // --- ConnectedComponents ---
+            {
+                var graph = new GraphData("cc-test");
+                graph.AddNode("A"); graph.AddNode("B"); graph.AddNode("C");
+                graph.AddEdge("A", "B"); graph.AddEdge("B", "C");
+                graph.AddNode("X"); graph.AddNode("Y");
+                graph.AddEdge("X", "Y");
+
+                var result = new ConnectedComponentsAlgorithm().Execute(graph, AlgorithmContext.Empty);
+                if (!result.Success) throw new Exception($"ConnectedComponents failed: {result.Error}");
+
+                int count = (int)result.Metrics["componentCount"];
+                if (count != 2) throw new Exception($"Expected 2 components, got {count}");
+
+                var output = result.OutputDataset as IGraphDataset;
+                int cidA = (int)output.GetNodeProperties("A")["componentId"];
+                int cidX = (int)output.GetNodeProperties("X")["componentId"];
+                if (cidA == cidX) throw new Exception("Nodes in different components should have different IDs");
+            }
+            sb.AppendLine("✅ ConnectedComponents OK");
+
+            // --- MinMaxNormalize ---
+            {
+                var table = new TabularData("norm-test");
+                table.AddNumericColumn("values", new double[] { 10, 20, 30, 40, 50 });
+                table.AddStringColumn("labels", new[] { "a", "b", "c", "d", "e" });
+
+                var result = new MinMaxNormalizeAlgorithm().Execute(table, AlgorithmContext.Empty);
+                if (!result.Success) throw new Exception($"MinMaxNormalize failed: {result.Error}");
+
+                var output = result.OutputDataset as ITabularDataset;
+                var normalized = output.GetNumericColumn("values").ToArray<double>();
+                if (Math.Abs(normalized[0]) > 1e-10) throw new Exception($"Min should be 0, got {normalized[0]}");
+                if (Math.Abs(normalized[4] - 1.0) > 1e-10) throw new Exception($"Max should be 1, got {normalized[4]}");
+                if (output.GetStringColumn("labels")[0] != "a") throw new Exception("String column not preserved");
+            }
+            sb.AppendLine("✅ MinMaxNormalize OK");
+
+            // --- Pipeline ---
+            {
+                var graph = new GraphData("pipe-test");
+                graph.AddNode("A"); graph.AddNode("B"); graph.AddNode("C");
+                graph.AddEdge("A", "B"); graph.AddEdge("B", "C"); graph.AddEdge("C", "A");
+
+                var pipeline = new AlgorithmPipeline("SelfTestPipeline")
+                    .Add(new PageRankAlgorithm())
+                    .Add(new ConnectedComponentsAlgorithm());
+
+                var result = pipeline.Execute(graph);
+                if (!result.Success) throw new Exception($"Pipeline failed: {result.Error}");
+                if (result.StepResults.Count != 2) throw new Exception($"Expected 2 steps, got {result.StepResults.Count}");
+
+                var finalGraph = result.FinalOutput as IGraphDataset;
+                if (finalGraph == null) throw new Exception("Pipeline should produce graph output");
+
+                var props = finalGraph.GetNodeProperties("A");
+                if (!props.ContainsKey("pagerank")) throw new Exception("Missing pagerank from pipeline step 1");
+                if (!props.ContainsKey("componentId")) throw new Exception("Missing componentId from pipeline step 2");
+            }
+            sb.AppendLine("✅ Algorithm pipeline OK");
+
+            // --- Validation: wrong dataset kind ---
+            {
+                var table = new TabularData("wrong-kind");
+                table.AddNumericColumn("x", new double[] { 1, 2, 3 });
+
+                var result = new PageRankAlgorithm().Execute(table, AlgorithmContext.Empty);
+                if (result.Success) throw new Exception("PageRank on tabular should fail");
+                if (!result.Error.Contains("not compatible"))
+                    throw new Exception($"Error should mention incompatibility: {result.Error}");
+            }
+            sb.AppendLine("✅ Algorithm validation OK");
+
+            sb.AppendLine("✅ Algorithms OK");
         }
     }
 }
