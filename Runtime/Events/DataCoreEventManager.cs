@@ -156,8 +156,6 @@ namespace AroAro.DataCore.Events
 
         #endregion
 
-        #endregion
-
         #region Algorithm Events
 
         // Algorithm started event
