@@ -49,10 +49,21 @@ namespace AroAro.DataCore
                 Debug.Log(result);
         }
 
+        /// <summary>
+        /// Create a temporary DataCoreStore for testing to avoid sharing violations
+        /// with any already-open database (e.g. from DataCoreEditorComponent).
+        /// </summary>
+        private static DataCoreStore CreateTestStore()
+        {
+            var tempPath = System.IO.Path.Combine(
+                Application.temporaryCachePath, "DataCore", $"selftest_{System.Diagnostics.Process.GetCurrentProcess().Id}.db");
+            return new DataCoreStore(tempPath);
+        }
+
         private static void TestTabular(StringBuilder sb)
         {
             sb.AppendLine("Testing Tabular...");
-            using var store = new DataCoreStore();
+            using var store = CreateTestStore();
             var t = store.CreateTabular("test-table");
 
             // 添加列
@@ -79,7 +90,7 @@ namespace AroAro.DataCore
         private static void TestGraph(StringBuilder sb)
         {
             sb.AppendLine("Testing Graph...");
-            using var store = new DataCoreStore();
+            using var store = CreateTestStore();
             var g = store.CreateGraph("test-graph");
 
             g.AddNode("a", new System.Collections.Generic.Dictionary<string, object> { ["type"] = "root" });
@@ -101,7 +112,7 @@ namespace AroAro.DataCore
         private static void TestSessions(StringBuilder sb)
         {
             sb.AppendLine("Testing Sessions...");
-            using var store = new DataCoreStore();
+            using var store = CreateTestStore();
             var sessionManager = store.SessionManager;
 
             // 测试会话创建

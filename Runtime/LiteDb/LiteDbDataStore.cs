@@ -50,13 +50,13 @@ namespace AroAro.DataCore.LiteDb
             var connectionString = new ConnectionString
             {
                 Filename = DatabasePath,
-                Connection = ConnectionType.Direct,
+                Connection = ConnectionType.Shared,
                 Upgrade = true,
                 ReadOnly = _options.ReadOnly
             };
 
             int retryCount = 0;
-            const int maxRetries = 2;
+            const int maxRetries = 3;
             
             while (retryCount < maxRetries)
             {
@@ -66,7 +66,10 @@ namespace AroAro.DataCore.LiteDb
                     InitializeDatabase();
                     break; // Success
                 }
-                catch (Exception ex) when ((ex.Message.Contains("PAGE_SIZE") || ex is LiteException) && retryCount < maxRetries - 1)
+                catch (Exception ex) when (
+                    (ex.Message.Contains("PAGE_SIZE") || ex is LiteException ||
+                     ex is System.IO.IOException || ex.Message.Contains("Sharing violation")) 
+                    && retryCount < maxRetries - 1)
                 {
                     retryCount++;
                     
