@@ -70,12 +70,34 @@ namespace AroAro.DataCore.Import
         }
 
         /// <summary>
-        /// 从 GraphML 文件解析数据并创建新的图数据集
+        /// 从 GraphML 文件解析数据并创建新的图数据集（使用 DataCoreStore，会触发事件）
         /// </summary>
-        /// <param name="store">数据存储</param>
-        /// <param name="graphmlPath">GraphML 文件路径</param>
-        /// <param name="datasetName">数据集名称</param>
-        /// <returns>创建的图数据集</returns>
+        public static IGraphDataset ImportFromFile(DataCoreStore store, string graphmlPath, string datasetName)
+        {
+            if (!File.Exists(graphmlPath))
+            {
+                Debug.LogError($"GraphML file not found: {graphmlPath}");
+                return null;
+            }
+
+            try
+            {
+                var graphmlText = File.ReadAllText(graphmlPath);
+                // store.CreateGraph fires DatasetCreated event
+                var graph = store.CreateGraph(datasetName);
+                ImportToGraph(graphmlText, graph);
+                return graph;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to import GraphML from file: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 从 GraphML 文件解析数据并创建新的图数据集（底层 IDataStore，不触发事件）
+        /// </summary>
         public static IGraphDataset ImportFromFile(IDataStore store, string graphmlPath, string datasetName)
         {
             if (!File.Exists(graphmlPath))

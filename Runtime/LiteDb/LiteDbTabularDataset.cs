@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using AroAro.DataCore.Events;
 using LiteDB;
 using NumSharp;
 
@@ -152,6 +153,7 @@ namespace AroAro.DataCore.LiteDb
 
                 ForceUpdateMetadata(); // Force update after bulk operation
             }
+            DataCoreEventManager.RaiseDatasetModified(this, "AddNumericColumn", name);
         }
 
         public void AddNumericColumn(string name, NDArray data)
@@ -206,12 +208,14 @@ namespace AroAro.DataCore.LiteDb
 
                 ForceUpdateMetadata(); // Force update after bulk operation
             }
+            DataCoreEventManager.RaiseDatasetModified(this, "AddStringColumn", name);
         }
 
         public bool RemoveColumn(string name)
         {
             ThrowIfDisposed();
             
+            bool removed;
             lock (_lock)
             {
                 var col = _metadata.Columns.FirstOrDefault(c => c.Name == name);
@@ -226,8 +230,10 @@ namespace AroAro.DataCore.LiteDb
                 }
 
                 ForceUpdateMetadata();
-                return true;
+                removed = true;
             }
+            DataCoreEventManager.RaiseDatasetModified(this, "RemoveColumn", name);
+            return removed;
         }
 
         public bool HasColumn(string name)
@@ -301,15 +307,17 @@ namespace AroAro.DataCore.LiteDb
                 _metadata.RowCount++;
                 UpdateMetadata();
             }
+            DataCoreEventManager.RaiseDatasetModified(this, "AddRow");
         }
 
         public int AddRows(IEnumerable<IDictionary<string, object>> rows)
         {
             ThrowIfDisposed();
             
+            int count;
             lock (_lock)
             {
-                int count = 0;
+                count = 0;
                 int startIndex = _metadata.RowCount;
 
                 var rowDocs = rows.Select((values, i) => new TabularRow
@@ -325,9 +333,10 @@ namespace AroAro.DataCore.LiteDb
                     count = rowDocs.Count;
                     ForceUpdateMetadata(); // Force update after bulk operation
                 }
-
-                return count;
             }
+            if (count > 0)
+                DataCoreEventManager.RaiseDatasetModified(this, "AddRows", count);
+            return count;
         }
 
         public bool UpdateRow(int rowIndex, IDictionary<string, object> values)
@@ -337,20 +346,25 @@ namespace AroAro.DataCore.LiteDb
             if (rowIndex < 0 || rowIndex >= _metadata.RowCount)
                 throw new ArgumentOutOfRangeException(nameof(rowIndex));
 
+            bool updated;
             lock (_lock)
             {
                 var row = _rows.FindOne(r => r.RowIndex == rowIndex);
-                if (row == null) return false;
-
-                foreach (var kv in values)
+                if (row == null) { updated = false; }
+                else
                 {
-                    row.Data[kv.Key] = ConvertToBsonValue(kv.Value);
+                    foreach (var kv in values)
+                    {
+                        row.Data[kv.Key] = ConvertToBsonValue(kv.Value);
+                    }
+                    _rows.Update(row);
+                    UpdateMetadata();
+                    updated = true;
                 }
-
-                _rows.Update(row);
-                UpdateMetadata();
-                return true;
             }
+            if (updated)
+                DataCoreEventManager.RaiseDatasetModified(this, "UpdateRow", rowIndex);
+            return updated;
         }
 
         public bool DeleteRow(int rowIndex)
@@ -360,25 +374,31 @@ namespace AroAro.DataCore.LiteDb
             if (rowIndex < 0 || rowIndex >= _metadata.RowCount)
                 throw new ArgumentOutOfRangeException(nameof(rowIndex));
 
+            bool deleted;
             lock (_lock)
             {
                 var row = _rows.FindOne(r => r.RowIndex == rowIndex);
-                if (row == null) return false;
-
-                _rows.Delete(row.Id);
-
-                // 更新后续行索引
-                var subsequentRows = _rows.Find(r => r.RowIndex > rowIndex).ToList();
-                foreach (var r in subsequentRows)
+                if (row == null) { deleted = false; }
+                else
                 {
-                    r.RowIndex--;
-                    _rows.Update(r);
-                }
+                    _rows.Delete(row.Id);
 
-                _metadata.RowCount--;
-                ForceUpdateMetadata();
-                return true;
+                    // 更新后续行索引
+                    var subsequentRows = _rows.Find(r => r.RowIndex > rowIndex).ToList();
+                    foreach (var r in subsequentRows)
+                    {
+                        r.RowIndex--;
+                        _rows.Update(r);
+                    }
+
+                    _metadata.RowCount--;
+                    ForceUpdateMetadata();
+                    deleted = true;
+                }
             }
+            if (deleted)
+                DataCoreEventManager.RaiseDatasetModified(this, "DeleteRow", rowIndex);
+            return deleted;
         }
 
         public Dictionary<string, object> GetRow(int rowIndex)
@@ -421,14 +441,16 @@ namespace AroAro.DataCore.LiteDb
         {
             ThrowIfDisposed();
             
+            int count;
             lock (_lock)
             {
-                int count = _metadata.RowCount;
+                count = _metadata.RowCount;
                 _rows.DeleteAll();
                 _metadata.RowCount = 0;
                 ForceUpdateMetadata();
-                return count;
             }
+            DataCoreEventManager.RaiseDatasetModified(this, "Clear");
+            return count;
         }
 
         #endregion
@@ -634,6 +656,7 @@ namespace AroAro.DataCore.LiteDb
             _rows.InsertBulk(newRows);
             _metadata.RowCount = dataRows.Count;
             UpdateMetadata();
+            DataCoreEventManager.RaiseDatasetModified(this, "ImportFromCsv");
         }
 
         public string ExportToCsv(char delimiter = ',', bool includeHeader = true)

@@ -89,14 +89,29 @@ namespace AroAro.DataCore.Import
         }
 
         /// <summary>
-        /// 从 CSV 文件解析数据并创建新的表格数据集
+        /// 从 CSV 文件解析数据并创建新的表格数据集（使用 DataCoreStore，会触发事件）
         /// </summary>
-        /// <param name="store">数据存储</param>
-        /// <param name="csvPath">CSV 文件路径</param>
-        /// <param name="datasetName">数据集名称</param>
-        /// <param name="hasHeader">是否包含表头</param>
-        /// <param name="delimiter">分隔符</param>
-        /// <returns>创建的表格数据集</returns>
+        public static ITabularDataset ImportFromFile(DataCoreStore store, string csvPath, string datasetName, bool hasHeader = true, char delimiter = ',')
+        {
+            if (!File.Exists(csvPath))
+            {
+                Debug.LogError($"CSV file not found: {csvPath}");
+                return null;
+            }
+
+            var csvText = File.ReadAllText(csvPath);
+            return store.UnderlyingStore.ExecuteInTransaction(() =>
+            {
+                // store.CreateTabular fires DatasetCreated event
+                var tabular = store.CreateTabular(datasetName);
+                tabular.ImportFromCsv(csvText, hasHeader, delimiter);
+                return tabular;
+            });
+        }
+
+        /// <summary>
+        /// 从 CSV 文件解析数据并创建新的表格数据集（底层 IDataStore，不触发事件）
+        /// </summary>
         public static ITabularDataset ImportFromFile(IDataStore store, string csvPath, string datasetName, bool hasHeader = true, char delimiter = ',')
         {
             if (!File.Exists(csvPath))
@@ -134,11 +149,11 @@ namespace AroAro.DataCore.Import
         }
 
         /// <summary>
-        /// 使用 DataCoreStore 从 CSV 文本创建表格数据集
+        /// 使用 DataCoreStore 从 CSV 文本创建表格数据集（会触发 DatasetCreated 事件）
         /// </summary>
         public static ITabularDataset ImportFromText(DataCoreStore store, string csvText, string datasetName, bool hasHeader = true, char delimiter = ',')
         {
-            // Use the underlying IDataStore transaction to avoid leaving half-created datasets on failure.
+            // store.CreateTabular fires DatasetCreated; wrap in underlying transaction to keep atomicity.
             return store.UnderlyingStore.ExecuteInTransaction(() =>
             {
                 var tabular = store.CreateTabular(datasetName);

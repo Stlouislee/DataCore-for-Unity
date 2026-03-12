@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using AroAro.DataCore.Events;
 using LiteDB;
 
 namespace AroAro.DataCore.LiteDb
@@ -107,15 +108,17 @@ namespace AroAro.DataCore.LiteDb
                 _metadata.NodeCount++;
                 UpdateMetadata();
             }
+            DataCoreEventManager.RaiseDatasetModified(this, "AddNode", id);
         }
 
         public int AddNodes(IEnumerable<(string Id, IDictionary<string, object> Properties)> nodes)
         {
             ThrowIfDisposed();
             
+            int count;
             lock (_lock)
             {
-                int count = 0;
+                count = 0;
                 var nodeList = nodes.Select(n => new GraphNode
                 {
                     NodeId = n.Id,
@@ -129,9 +132,10 @@ namespace AroAro.DataCore.LiteDb
                     count = nodeList.Count;
                     ForceUpdateMetadata(); // Force update after bulk operation
                 }
-
-                return count;
             }
+            if (count > 0)
+                DataCoreEventManager.RaiseDatasetModified(this, "AddNodes", count);
+            return count;
         }
 
         public void UpdateNodeProperties(string id, IDictionary<string, object> properties)
@@ -152,30 +156,37 @@ namespace AroAro.DataCore.LiteDb
                 _nodes.Update(node);
                 UpdateMetadata();
             }
+            DataCoreEventManager.RaiseDatasetModified(this, "UpdateNodeProperties", id);
         }
 
         public bool RemoveNode(string id)
         {
             ThrowIfDisposed();
             
+            bool removed;
             lock (_lock)
             {
                 var node = _nodes.FindOne(n => n.NodeId == id);
-                if (node == null) return false;
-
-                // 删除相关边
-                var relatedEdges = _edges.Find(e => e.FromNodeId == id || e.ToNodeId == id).ToList();
-                foreach (var edge in relatedEdges)
+                if (node == null) { removed = false; }
+                else
                 {
-                    _edges.Delete(edge.Id);
-                }
-                _metadata.EdgeCount -= relatedEdges.Count;
+                    // 删除相关边
+                    var relatedEdges = _edges.Find(e => e.FromNodeId == id || e.ToNodeId == id).ToList();
+                    foreach (var edge in relatedEdges)
+                    {
+                        _edges.Delete(edge.Id);
+                    }
+                    _metadata.EdgeCount -= relatedEdges.Count;
 
-                _nodes.Delete(node.Id);
-                _metadata.NodeCount--;
-                ForceUpdateMetadata();
-                return true;
+                    _nodes.Delete(node.Id);
+                    _metadata.NodeCount--;
+                    ForceUpdateMetadata();
+                    removed = true;
+                }
             }
+            if (removed)
+                DataCoreEventManager.RaiseDatasetModified(this, "RemoveNode", id);
+            return removed;
         }
 
         public bool HasNode(string id)
@@ -237,15 +248,17 @@ namespace AroAro.DataCore.LiteDb
                 _metadata.EdgeCount++;
                 UpdateMetadata();
             }
+            DataCoreEventManager.RaiseDatasetModified(this, "AddEdge", $"{fromId}->{toId}");
         }
 
         public int AddEdges(IEnumerable<(string From, string To, IDictionary<string, object> Properties)> edges)
         {
             ThrowIfDisposed();
             
+            int count;
             lock (_lock)
             {
-                int count = 0;
+                count = 0;
                 var edgeList = edges.Select(e => new GraphEdge
                 {
                     FromNodeId = e.From,
@@ -261,25 +274,32 @@ namespace AroAro.DataCore.LiteDb
                     count = edgeList.Count;
                     ForceUpdateMetadata(); // Force update after bulk operation
                 }
-
-                return count;
             }
+            if (count > 0)
+                DataCoreEventManager.RaiseDatasetModified(this, "AddEdges", count);
+            return count;
         }
 
         public bool RemoveEdge(string fromId, string toId)
         {
             ThrowIfDisposed();
             
+            bool removed;
             lock (_lock)
             {
                 var edge = _edges.FindOne(e => e.FromNodeId == fromId && e.ToNodeId == toId);
-                if (edge == null) return false;
-
-                _edges.Delete(edge.Id);
-                _metadata.EdgeCount--;
-                UpdateMetadata();
-                return true;
+                if (edge == null) { removed = false; }
+                else
+                {
+                    _edges.Delete(edge.Id);
+                    _metadata.EdgeCount--;
+                    UpdateMetadata();
+                    removed = true;
+                }
             }
+            if (removed)
+                DataCoreEventManager.RaiseDatasetModified(this, "RemoveEdge", $"{fromId}->{toId}");
+            return removed;
         }
 
         public bool HasEdge(string fromId, string toId)
@@ -321,6 +341,7 @@ namespace AroAro.DataCore.LiteDb
                 _edges.Update(edge);
                 UpdateMetadata();
             }
+            DataCoreEventManager.RaiseDatasetModified(this, "UpdateEdgeProperties", $"{fromId}->{toId}");
         }
 
         public IEnumerable<(string From, string To)> GetEdges()
@@ -391,6 +412,7 @@ namespace AroAro.DataCore.LiteDb
                 _metadata.EdgeCount = 0;
                 ForceUpdateMetadata();
             }
+            DataCoreEventManager.RaiseDatasetModified(this, "Clear");
         }
 
         #endregion

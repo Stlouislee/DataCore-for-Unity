@@ -244,7 +244,7 @@ namespace AroAro.DataCore
                 throw new FileNotFoundException($"CSV file not found: {csvFilePath}");
 
             InitializeStore();
-            return Import.CsvImporter.ImportFromFile(_store.UnderlyingStore, csvFilePath, datasetName, hasHeader, delimiter);
+            return Import.CsvImporter.ImportFromFile(_store, csvFilePath, datasetName, hasHeader, delimiter);
         }
 
         /// <summary>
@@ -262,7 +262,7 @@ namespace AroAro.DataCore
                 throw new FileNotFoundException($"GraphML file not found: {graphmlFilePath}");
 
             InitializeStore();
-            return Import.GraphMLImporter.ImportFromFile(_store.UnderlyingStore, graphmlFilePath, datasetName);
+            return Import.GraphMLImporter.ImportFromFile(_store, graphmlFilePath, datasetName);
         }
 
         /// <summary>
