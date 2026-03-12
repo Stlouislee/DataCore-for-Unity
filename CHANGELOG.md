@@ -1,3 +1,10 @@
+## 0.3.1
+
+### Bug Fixes
+- **Event Coverage**: Fixed issue where CSV and GraphML imports via the editor bypassed the `DatasetCreated` event. Added `DataCoreStore` overloads to importers to ensure consistent event dispatching.
+- **Event Coverage**: Implemented `DatasetModified` event triggers for all dataset mutation methods (add/update/remove for rows, columns, nodes, and edges).
+- **Stability**: Ensured events are raised outside of database locks to prevent deadlocks and improve performance during event processing.
+
 ## 0.3.0
 
 ### New Features
