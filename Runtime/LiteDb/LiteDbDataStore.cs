@@ -50,7 +50,7 @@ namespace AroAro.DataCore.LiteDb
             var connectionString = new ConnectionString
             {
                 Filename = DatabasePath,
-                Connection = ConnectionType.Shared,
+                Connection = ResolveConnectionType(),
                 Upgrade = true,
                 ReadOnly = _options.ReadOnly
             };
@@ -108,6 +108,16 @@ namespace AroAro.DataCore.LiteDb
                     throw new Exception($"Failed to initialize LiteDB: {ex.Message}", ex);
                 }
             }
+        }
+
+        private static ConnectionType ResolveConnectionType()
+        {
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+            // Shared mode requires named mutex support, which is not available on some runtime platforms.
+            return ConnectionType.Direct;
+#else
+            return ConnectionType.Shared;
+#endif
         }
 
         #region IDataStore 实现
