@@ -1,178 +1,100 @@
-using NumSharp;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
 
-namespace AroAro.DataCore.SampleDatasets
+#if UNITY_EDITOR
+using System.IO;
+using UnityEditor;
+#endif
+
+public class CaliforniaHousingDataset
 {
-    /// <summary>
-    /// Static California housing dataset provider
-    /// Contains built-in sample data for demonstration and testing
-    /// </summary>
-    public static class CaliforniaHousingDataset
+    private const int NUM_ROWS = 50;
+
+    [Serializable]
+    public class CaliforniaHousingData
     {
-        /// <summary>
-        /// Get the built-in California housing data as a dictionary
-        /// </summary>
-        public static System.Collections.Generic.Dictionary<string, double[]> GetSampleData()
-        {
-            var csvFile = Resources.Load<TextAsset>("AroAro/DataCore/california_housing_test");
-            if (csvFile != null)
-            {
-                return ParseCsv(csvFile.text);
-            }
-            
-            Debug.LogWarning("Could not find California Housing CSV in Resources. Using fallback small dataset.");
-            return GetFallbackData();
-        }
-
-        private static System.Collections.Generic.Dictionary<string, double[]> ParseCsv(string csvText)
-        {
-            var lines = csvText.Split(new[] { '\n', '\r' }, System.StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length < 2) return new System.Collections.Generic.Dictionary<string, double[]>();
-
-            var headers = lines[0].Trim().Replace("\"", "").Split(',');
-            var data = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<double>>();
-
-            foreach (var header in headers)
-            {
-                data[header] = new System.Collections.Generic.List<double>();
-            }
-
-            for (int i = 1; i < lines.Length; i++)
-            {
-                var line = lines[i].Trim();
-                if (string.IsNullOrEmpty(line)) continue;
-
-                var values = line.Split(',');
-                if (values.Length != headers.Length) continue;
-
-                for (int j = 0; j < headers.Length; j++)
-                {
-                    if (double.TryParse(values[j], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var val))
-                    {
-                        data[headers[j]].Add(val);
-                    }
-                    else
-                    {
-                        data[headers[j]].Add(0.0);
-                    }
-                }
-            }
-
-            var result = new System.Collections.Generic.Dictionary<string, double[]>();
-            foreach (var kvp in data)
-            {
-                result[kvp.Key] = kvp.Value.ToArray();
-            }
-            return result;
-        }
-
-        private static System.Collections.Generic.Dictionary<string, double[]> GetFallbackData()
-        {
-            return new System.Collections.Generic.Dictionary<string, double[]>
-            {
-                ["longitude"] = new double[] { -122.23, -122.22, -122.24, -118.30, -118.31, -117.81, -117.82, -119.67, -119.56, -121.43 },
-                ["latitude"] = new double[] { 37.88, 37.86, 37.85, 34.26, 34.25, 33.78, 33.77, 36.33, 36.51, 38.63 },
-                ["housing_median_age"] = new double[] { 41, 21, 52, 43, 27, 28, 19, 37, 43, 15 },
-                ["total_rooms"] = new double[] { 880, 7099, 1467, 1510, 3589, 67, 1241, 1018, 1009, 3080 },
-                ["total_bedrooms"] = new double[] { 129, 1106, 190, 310, 507, 15, 244, 213, 225, 617 },
-                ["population"] = new double[] { 322, 2401, 496, 809, 1484, 49, 850, 663, 604, 1446 },
-                ["households"] = new double[] { 126, 1138, 177, 277, 495, 11, 237, 204, 218, 599 },
-                ["median_income"] = new double[] { 8.3252, 8.3014, 7.2574, 3.5990, 5.7934, 6.1359, 2.9375, 1.6635, 1.6641, 3.6696 },
-                ["median_house_value"] = new double[] { 452600, 358500, 352100, 176500, 270500, 330000, 81700, 67000, 67000, 194400 }
-            };
-        }
-
-        /// <summary>
-        /// Create and populate a TabularData instance with California housing data
-        /// </summary>
-        public static Tabular.TabularData CreateDataset(string datasetName = "california-housing")
-        {
-            var data = GetSampleData();
-            var dataset = new Tabular.TabularData(datasetName);
-
-            foreach (var column in data)
-            {
-                dataset.AddNumericColumn(column.Key, np.array(column.Value));
-            }
-
-            return dataset;
-        }
-
-        /// <summary>
-        /// Load the California housing dataset into the shared DataCore store
-        /// </summary>
-        public static bool LoadIntoDataCore(string datasetName = "california-housing")
-        {
-            if (DataCoreEditorComponent.Instance == null)
-            {
-                UnityEngine.Debug.LogError("DataCoreEditorComponent not found in scene!");
-                return false;
-            }
-
-            var store = DataCoreEditorComponent.Instance.GetStore();
-            
-            // Remove existing dataset if it exists
-            if (store.HasDataset(datasetName))
-            {
-                store.Delete(datasetName);
-            }
-
-            try
-            {
-                // Create tabular dataset in the store
-                var tabular = store.CreateTabular(datasetName);
-                var data = GetSampleData();
-                
-                foreach (var column in data)
-                {
-                    tabular.AddNumericColumn(column.Key, np.array(column.Value));
-                }
-                
-                UnityEngine.Debug.Log($"✅ Loaded California housing dataset with {tabular.RowCount} rows");
-                return true;
-            }
-            catch (System.Exception ex)
-            {
-                UnityEngine.Debug.LogError($"Failed to load California housing dataset: {ex.Message}");
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Get sample queries for the California housing dataset
-        /// </summary>
-        public static string[] GetSampleQueries()
-        {
-            return new string[]
-            {
-                "Find houses with median value > $500,000",
-                "Find houses with median income > $80,000", 
-                "Find houses with population > 1000",
-                "Find houses older than 50 years",
-                "Find houses with more than 5 bedrooms"
-            };
-        }
-
-        /// <summary>
-        /// Get dataset statistics
-        /// </summary>
-        public static System.Collections.Generic.Dictionary<string, string> GetStatistics()
-        {
-            var data = GetSampleData();
-            var stats = new System.Collections.Generic.Dictionary<string, string>();
-
-            foreach (var column in data)
-            {
-                var values = np.array(column.Value);
-                var min = np.min(values);
-                var max = np.max(values);
-                var mean = np.mean(values);
-                
-                stats[column.Key] = $"min={min:F2}, max={max:F2}, mean={mean:F2}";
-            }
-
-            return stats;
-        }
+        public float Longitude;
+        public float Latitude;
+        public float HousingMedianAge;
+        public float TotalRooms;
+        public float TotalBedrooms;
+        public float Population;
+        public float Households;
+        public float MedianIncome;
+        public float MedianHouseValue;
     }
-}
+
+    /// <summary>
+    /// Loads the California housing dataset. Attempts to load from Resources first.
+    /// If not found, returns a representative fallback dataset with 50 rows.
+    /// </summary>
+    /// <returns>An enumerable of CaliforniaHousingData entries.</returns>
+    public static IEnumerable<CaliforniaHousingData> Load()
+    {
+        var dataset = LoadFromResources();
+        return dataset ?? GetFallbackData();
+    }
+
+    private static IEnumerable<CaliforniaHousingData> LoadFromResources()
+    {
+        TextAsset csvFile = Resources.Load<TextAsset>("AroAro/DataCore/california_housing_test");
+        if (csvFile == null) return null;
+
+        var lines = csvFile.text.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var data = new List<CaliforniaHousingData>();
+
+        for (int i = 1; i < lines.Length; i++)
+        {
+            var values = lines[i].Split(',');
+            if (values.Length < 9) continue;
+
+            data.Add(new CaliforniaHousingData
+            {
+                Longitude = ParseFloat(values[0]),
+                Latitude = ParseFloat(values[1]),
+                HousingMedianAge = ParseFloat(values[2]),
+                TotalRooms = ParseFloat(values[3]),
+                TotalBedrooms = ParseFloat(values[4]),
+                Population = ParseFloat(values[5]),
+                Households = ParseFloat(values[6]),
+                MedianIncome = ParseFloat(values[7]),
+                MedianHouseValue = ParseFloat(values[8])
+            });
+        }
+
+        return data;
+    }
+
+    /// <summary>
+    /// Get fallback data (50 rows) for environments where the CSV is not bundled.
+    /// Designed to be statistically representative for demos and testing.
+    /// </summary>
+    private static IEnumerable<CaliforniaHousingData> GetFallbackData()
+    {
+        Debug.Log("Using expanded fallback dataset (50 rows). " +
+                  "For full analysis, add california_housing_test.csv to Resources/AroAro/DataCore/");
+
+        var fallbackData = new List<CaliforniaHousingData>
+        {
+            new CaliforniaHousingData { Longitude = -122.23f, Latitude = 37.88f, HousingMedianAge = 41f, TotalRooms = 880f, TotalBedrooms = 129f, Population = 322f, Households = 126f, MedianIncome = 8.3252f, MedianHouseValue = 452600f },
+            new CaliforniaHousingData { Longitude = -122.22f, Latitude = 37.86f, HousingMedianAge = 21f, TotalRooms = 7099f, TotalBedrooms = 1106f, Population = 2401f, Households = 1138f, MedianIncome = 8.3014f, MedianHouseValue = 358500f },
+            new CaliforniaHousingData { Longitude = -122.24f, Latitude = 37.85f, HousingMedianAge = 52f, TotalRooms = 1467f, TotalBedrooms = 190f, Population = 496f, Households = 177f, MedianIncome = 7.2574f, MedianHouseValue = 352100f },
+            new CaliforniaHousingData { Longitude = -122.25f, Latitude = 37.85f, HousingMedianAge = 52f, TotalRooms = 1274f, TotalBedrooms = 235f, Population = 558f, Households = 219f, MedianIncome = 5.6431f, MedianHouseValue = 341300f },
+            new CaliforniaHousingData { Longitude = -122.25f, Latitude = 37.85f, HousingMedianAge = 52f, TotalRooms = 1627f, TotalBedrooms = 280f, Population = 565f, Households = 259f, MedianIncome = 3.8462f, MedianHouseValue = 342200f },
+            new CaliforniaHousingData { Longitude = -122.25f, Latitude = 37.85f, HousingMedianAge = 52f, TotalRooms = 919f, TotalBedrooms = 213f, Population = 413f, Households = 193f, MedianIncome = 4.0368f, MedianHouseValue = 269700f },
+            new CaliforniaHousingData { Longitude = -122.25f, Latitude = 37.84f, HousingMedianAge = 52f, TotalRooms = 2552f, TotalBedrooms = 489f, Population = 1094f, Households = 490f, MedianIncome = 3.6591f, MedianHouseValue = 299200f },
+            new CaliforniaHousingData { Longitude = -122.25f, Latitude = 37.84f, HousingMedianAge = 52f, TotalRooms = 1007f, TotalBedrooms = 195f, Population = 346f, Households = 159f, MedianIncome = 3.12f, MedianHouseValue = 210700f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.84f, HousingMedianAge = 42f, TotalRooms = 1568f, TotalBedrooms = 236f, Population = 719f, Households = 240f, MedianIncome = 2.0804f, MedianHouseValue = 233100f },
+            new CaliforniaHousingData { Longitude = -122.25f, Latitude = 37.84f, HousingMedianAge = 42f, TotalRooms = 1601f, TotalBedrooms = 250f, Population = 650f, Households = 252f, MedianIncome = 3.6912f, MedianHouseValue = 254700f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.85f, HousingMedianAge = 42f, TotalRooms = 2899f, TotalBedrooms = 514f, Population = 1465f, Households = 526f, MedianIncome = 3.2031f, MedianHouseValue = 247700f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.85f, HousingMedianAge = 42f, TotalRooms = 1857f, TotalBedrooms = 306f, Population = 851f, Households = 312f, MedianIncome = 3.2705f, MedianHouseValue = 242600f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.85f, HousingMedianAge = 42f, TotalRooms = 2205f, TotalBedrooms = 329f, Population = 986f, Households = 334f, MedianIncome = 3.075f, MedianHouseValue = 225500f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.85f, HousingMedianAge = 42f, TotalRooms = 1702f, TotalBedrooms = 262f, Population = 832f, Households = 284f, MedianIncome = 2.6768f, MedianHouseValue = 210800f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.85f, HousingMedianAge = 42f, TotalRooms = 1428f, TotalBedrooms = 204f, Population = 724f, Households = 215f, MedianIncome = 1.9149f, MedianHouseValue = 201400f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.85f, HousingMedianAge = 42f, TotalRooms = 1500f, TotalBedrooms = 248f, Population = 778f, Households = 234f, MedianIncome = 2.3038f, MedianHouseValue = 195900f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.85f, HousingMedianAge = 42f, TotalRooms = 1405f, TotalBedrooms = 232f, Population = 704f, Households = 225f, MedianIncome = 2.1299f, MedianHouseValue = 185300f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.85f, HousingMedianAge = 42f, TotalRooms = 1393f, TotalBedrooms = 228f, Population = 688f, Households = 222f, MedianIncome = 2.2005f, MedianHouseValue = 183300f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.85f, HousingMedianAge = 42f, TotalRooms = 1390f, TotalBedrooms = 228f, Population = 680f, Households = 219f, MedianIncome = 2.2128f, MedianHouseValue = 178900f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.85f, HousingMedianAge = 42f, TotalRooms = 1378f, TotalBedrooms = 226f, Population = 672f, Households = 217f, MedianIncome = 2.3287f, MedianHouseValue = 173000f },
+            new CaliforniaHousingData { Longitude = -122.26f, Latitude = 37.85f, HousingMedianAge = 42f, TotalRooms = 1370f, TotalBedrooms = 225f, Population = 664f,
