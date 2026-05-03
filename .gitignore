@@ -56,3 +56,4 @@ Documentation/
 # Documentation source files (except wiki content)
 Documentation~/*
 !Documentation~/wiki/
+!Documentation~/issues/
