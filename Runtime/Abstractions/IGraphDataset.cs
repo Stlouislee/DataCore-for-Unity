@@ -264,5 +264,33 @@ namespace AroAro.DataCore
         int CountEdges();
 
         #endregion
+
+        #region 异步执行
+
+        /// <summary>
+        /// 异步获取匹配的节点 ID
+        /// </summary>
+        Task<IEnumerable<string>> ToNodeIdsAsync(CancellationToken ct = default)
+            => Task.Run(() => ToNodeIds(), ct);
+
+        /// <summary>
+        /// 异步获取匹配的边
+        /// </summary>
+        Task<IEnumerable<(string From, string To)>> ToEdgesAsync(CancellationToken ct = default)
+            => Task.Run(() => ToEdges(), ct);
+
+        /// <summary>
+        /// 异步计算匹配节点数
+        /// </summary>
+        Task<int> CountNodesAsync(CancellationToken ct = default)
+            => Task.Run(() => CountNodes(), ct);
+
+        /// <summary>
+        /// 异步计算匹配边数
+        /// </summary>
+        Task<int> CountEdgesAsync(CancellationToken ct = default)
+            => Task.Run(() => CountEdges(), ct);
+
+        #endregion
     }
 }

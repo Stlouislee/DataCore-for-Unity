@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AroAro.DataCore
 {
@@ -89,6 +91,12 @@ namespace AroAro.DataCore
         /// </summary>
         ITabularQuery OrderByDescending(string column);
 
+        /// <summary>
+        /// 按列排序（指定方向）
+        /// </summary>
+        ITabularQuery OrderBy(string column, SortDirection direction)
+            => direction == SortDirection.Descending ? OrderByDescending(column) : OrderBy(column);
+
         #endregion
 
         #region 分页
@@ -145,6 +153,28 @@ namespace AroAro.DataCore
         /// 返回第一行或 null
         /// </summary>
         Dictionary<string, object> FirstOrDefault();
+
+        #endregion
+
+        #region 异步执行
+
+        /// <summary>
+        /// 异步执行查询并返回字典列表
+        /// </summary>
+        Task<List<Dictionary<string, object>>> ExecuteAsync(CancellationToken ct = default)
+            => Task.Run(() => ToDictionaries(), ct);
+
+        /// <summary>
+        /// 异步返回匹配的行数
+        /// </summary>
+        Task<int> CountAsync(CancellationToken ct = default)
+            => Task.Run(() => Count(), ct);
+
+        /// <summary>
+        /// 异步返回第一行或 null
+        /// </summary>
+        Task<Dictionary<string, object>> FirstOrDefaultAsync(CancellationToken ct = default)
+            => Task.Run(() => FirstOrDefault(), ct);
 
         #endregion
 
