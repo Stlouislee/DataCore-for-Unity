@@ -192,8 +192,8 @@ namespace DataCore.Tests.Session
             var df = DataFrameConverter.TabularToDataFrame(tabular);
 
             Assert.NotNull(df);
-            Assert.Equal(0, df.Columns.Count);
-            Assert.Equal(0, df.Rows.Count);
+            Assert.Empty(df.Columns);
+            Assert.Empty(df.Rows);
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -295,8 +295,8 @@ namespace DataCore.Tests.Session
 
             var optimized = DataFrameConverter.OptimizeMemory(df);
 
-            Assert.Equal(0, optimized.Columns.Count);
-            Assert.Equal(0, optimized.Rows.Count);
+            Assert.Empty(optimized.Columns);
+            Assert.Empty(optimized.Rows);
         }
 
         // ────────────────────────────────────────────────────────────────

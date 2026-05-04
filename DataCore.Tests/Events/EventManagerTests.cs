@@ -386,7 +386,7 @@ namespace DataCore.Tests.Events
 
         [Fact]
         [Trait("Bug", "event-thread-safety")]
-        public void ThreadSafety_ConcurrentSubscribeAndRaise_NoGuarantee()
+        public async Task ThreadSafety_ConcurrentSubscribeAndRaise_NoGuarantee()
         {
             // Known issue: DataCoreEventManager uses standard C# events which are
             // not thread-safe. Concurrent subscribe/raise operations can lead to
@@ -437,7 +437,7 @@ namespace DataCore.Tests.Events
                 }));
             }
 
-            Task.WaitAll(tasks.ToArray());
+            await Task.WhenAll(tasks.ToArray());
 
             // Document: some events may be lost or exceptions may occur
             // In a thread-safe implementation, receivedCount would be exactly 20
@@ -452,7 +452,7 @@ namespace DataCore.Tests.Events
         }
 
         [Fact]
-        public void ClearAllSubscriptions_CalledDuringRaise_NoGuarantee()
+        public async Task ClearAllSubscriptions_CalledDuringRaise_NoGuarantee()
         {
             // Known issue: clearing subscriptions while events are being raised
             // can lead to NullReferenceException because the event delegate
@@ -490,7 +490,7 @@ namespace DataCore.Tests.Events
                 }
             }));
 
-            Task.WaitAll(tasks.ToArray());
+            await Task.WhenAll(tasks.ToArray());
 
             // This test documents potential issues; no assertion on errors
             // since the behavior is inherently racy.

@@ -597,7 +597,7 @@ namespace DataCore.Tests.Session
         // ────────────────────────────────────────────────────────────────
 
         [Fact]
-        public void SessionManager_ConcurrentCreateSession_IsThreadSafe()
+        public async Task SessionManager_ConcurrentCreateSession_IsThreadSafe()
         {
             var manager = new SessionManager(_store);
             var tasks = new List<Task>();
@@ -613,7 +613,7 @@ namespace DataCore.Tests.Session
                 }));
             }
 
-            Task.WaitAll(tasks.ToArray());
+            await Task.WhenAll(tasks.ToArray());
 
             // All sessions should be unique and registered
             Assert.Equal(50, sessions.Count);
@@ -622,7 +622,7 @@ namespace DataCore.Tests.Session
         }
 
         [Fact]
-        public void SessionManager_ConcurrentGetAndClose_IsThreadSafe()
+        public async Task SessionManager_ConcurrentGetAndClose_IsThreadSafe()
         {
             var manager = new SessionManager(_store);
             var sessionIds = new List<string>();
@@ -646,8 +646,8 @@ namespace DataCore.Tests.Session
                 }));
             }
 
-            Task.WaitAll(tasks.ToArray());
-            Assert.Equal(0, manager.SessionIds.Count);
+            await Task.WhenAll(tasks.ToArray());
+            Assert.Empty(manager.SessionIds);
         }
 
         // ────────────────────────────────────────────────────────────────
