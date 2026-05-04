@@ -5,6 +5,7 @@ namespace AroAro.DataCore
     public class DataCoreEditorComponent : UnityEngine.MonoBehaviour
     {
         public static DataCoreEditorComponent Instance => null;
+        public string InstanceName => "Stub";
 
         public DataCoreStore GetStore()
         {

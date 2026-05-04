@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 
 #if UNITY_EDITOR
@@ -12,36 +13,86 @@ namespace AroAro.DataCore
     /// <summary>
     /// DataCore 编辑器组件，挂到 GameObject 上用于配置和预览
     /// 使用 LiteDB 作为底层存储，自动持久化所有数据
+    /// 支持多实例模式：每个实例独立管理自己的 DataCoreStore
     /// </summary>
-    [DisallowMultipleComponent]
     public class DataCoreEditorComponent : MonoBehaviour
     {
+        // ────────────────────────────────────────────────────────────
+        // 多实例注册表
+        // ────────────────────────────────────────────────────────────
+
+        private static readonly List<DataCoreEditorComponent> _instances = new List<DataCoreEditorComponent>();
+
         /// <summary>
-        /// Shared instance accessible from anywhere in the scene
+        /// 所有活跃的 DataCoreEditorComponent 实例
         /// </summary>
-        public static DataCoreEditorComponent Instance { get; private set; }
+        public static IReadOnlyList<DataCoreEditorComponent> AllInstances => _instances;
+
+        /// <summary>
+        /// 向后兼容：返回第一个注册的实例（等效于旧的单例）
+        /// 新代码建议使用 FindByName() 或直接持有引用
+        /// </summary>
+        public static DataCoreEditorComponent Instance => _instances.Count > 0 ? _instances[0] : null;
+
+        /// <summary>
+        /// 按名称查找实例
+        /// </summary>
+        public static DataCoreEditorComponent FindByName(string name)
+        {
+            return _instances.FirstOrDefault(i => i.InstanceName == name);
+        }
+
+        /// <summary>
+        /// 按数据库路径查找实例
+        /// </summary>
+        public static DataCoreEditorComponent FindByPath(string path)
+        {
+            return _instances.FirstOrDefault(i => i.databasePath == path);
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // 实例配置
+        // ────────────────────────────────────────────────────────────
 
         [Header("DataCore Configuration")]
+        [Tooltip("唯一标识名称，用于 FindByName 查找")]
+        [SerializeField] private string instanceName = "Default";
         [SerializeField] private string databasePath = "DataCore/datacore.db";
         [SerializeField] private bool loadSampleDatasets = true;
 
         [Header("Runtime Store")]
         private DataCoreStore _store;
 
+        /// <summary>
+        /// 实例名称，用于在多实例场景中标识和查找
+        /// </summary>
+        public string InstanceName
+        {
+            get => instanceName;
+            set => instanceName = value;
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // 生命周期
+        // ────────────────────────────────────────────────────────────
+
         private void Awake()
         {
-            Debug.Log("DataCoreEditorComponent Awake started.");
-            
-            // Singleton pattern
-            if (Instance != null && Instance != this)
+            Debug.Log($"DataCoreEditorComponent '{instanceName}' Awake started on '{gameObject.name}'.");
+
+            // 检测同路径冲突（警告，不销毁）
+            var conflict = _instances.FirstOrDefault(i => i != this && i.databasePath == databasePath);
+            if (conflict != null)
             {
-                Debug.LogWarning($"Multiple DataCoreEditorComponent instances detected. Destroying duplicate on '{gameObject.name}'.");
-                Destroy(gameObject);
-                return;
+                Debug.LogWarning(
+                    $"DataCoreEditorComponent '{instanceName}' on '{gameObject.name}' uses the same database path " +
+                    $"'{databasePath}' as '{conflict.instanceName}' on '{conflict.gameObject.name}'. " +
+                    $"This may cause LiteDB file lock conflicts. Consider using different database paths.");
             }
 
-            Instance = this;
-            
+            // 注册到实例列表
+            _instances.Add(this);
+
             // 初始化存储
             InitializeStore();
 
@@ -54,22 +105,39 @@ namespace AroAro.DataCore
 #if UNITY_EDITOR
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
 #endif
-            Debug.Log($"DataCoreEditorComponent Awake finished. Datasets: {string.Join(", ", _store.Names)}");
+            Debug.Log($"DataCoreEditorComponent '{instanceName}' Awake finished. Datasets: {string.Join(", ", _store.Names)}");
         }
+
+        private void OnDestroy()
+        {
+            // 从注册表移除
+            _instances.Remove(this);
+
+#if UNITY_EDITOR
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+#endif
+
+            // LiteDB 会自动保存，只需要 dispose
+            _store?.Dispose();
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // 存储初始化
+        // ────────────────────────────────────────────────────────────
 
         private void InitializeStore()
         {
             if (_store != null) return;
 
             var resolvedPath = databasePath;
-            
+
 #if UNITY_2019_1_OR_NEWER
             if (!Path.IsPathRooted(databasePath))
             {
                 resolvedPath = Path.Combine(Application.persistentDataPath, databasePath);
             }
 #endif
-            
+
             // 确保目录存在
             var directory = Path.GetDirectoryName(resolvedPath);
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -77,15 +145,15 @@ namespace AroAro.DataCore
                 Directory.CreateDirectory(directory);
             }
 
-            Debug.Log($"Initializing DataCoreStore at: {resolvedPath}");
-            
+            Debug.Log($"Initializing DataCoreStore '{instanceName}' at: {resolvedPath}");
+
             try
             {
                 _store = new DataCoreStore(resolvedPath);
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Failed to initialize DataCoreStore: {ex.Message}");
+                Debug.LogError($"Failed to initialize DataCoreStore '{instanceName}': {ex.Message}");
                 throw;
             }
         }
@@ -93,7 +161,6 @@ namespace AroAro.DataCore
         private void InitializeSampleDatasets()
         {
             // Auto-load CSVs from Resources/AroAro/DataCore/AutoLoad
-            // 逻辑：扫描 -> 用文件名作为 datasetName -> 若 DB 中不存在则导入
             const string resourceFolder = "AroAro/DataCore/AutoLoad";
             var csvAssets = Resources.LoadAll<TextAsset>(resourceFolder);
             if (csvAssets == null || csvAssets.Length == 0)
@@ -134,34 +201,20 @@ namespace AroAro.DataCore
             }
         }
 
-        private void OnDestroy()
-        {
-            if (Instance == this)
-            {
-                Instance = null;
-            }
-
-#if UNITY_EDITOR
-            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
-#endif
-            
-            // LiteDB 会自动保存，只需要 dispose
-            _store?.Dispose();
-        }
-
 #if UNITY_EDITOR
         private void OnPlayModeStateChanged(PlayModeStateChange state)
         {
             if (state == PlayModeStateChange.ExitingPlayMode)
             {
-                // 执行检查点确保数据写入
                 _store?.Checkpoint();
-                Debug.Log("DataCore checkpoint completed before exiting play mode.");
+                Debug.Log($"DataCore '{instanceName}' checkpoint completed before exiting play mode.");
             }
         }
 #endif
 
-        #region Public API
+        // ────────────────────────────────────────────────────────────
+        // Public API
+        // ────────────────────────────────────────────────────────────
 
         /// <summary>
         /// 获取数据存储实例
@@ -272,7 +325,7 @@ namespace AroAro.DataCore
         public void Checkpoint()
         {
             _store?.Checkpoint();
-            Debug.Log("DataCore checkpoint completed.");
+            Debug.Log($"DataCore '{instanceName}' checkpoint completed.");
         }
 
         /// <summary>
@@ -281,7 +334,7 @@ namespace AroAro.DataCore
         public void ClearAll()
         {
             _store?.ClearAll();
-            Debug.Log("All datasets cleared.");
+            Debug.Log($"All datasets cleared from '{instanceName}'.");
         }
 
         /// <summary>
@@ -289,18 +342,15 @@ namespace AroAro.DataCore
         /// </summary>
         public void DeleteDatabaseFile()
         {
-            // 1. Dispose existing store
             if (_store != null)
             {
                 _store.Dispose();
                 _store = null;
             }
 
-            // Force GC to release file handles (important on Windows)
             GC.Collect();
             GC.WaitForPendingFinalizers();
 
-            // 2. Resolve path
             var resolvedPath = databasePath;
 #if UNITY_2019_1_OR_NEWER
             if (!Path.IsPathRooted(databasePath))
@@ -308,7 +358,6 @@ namespace AroAro.DataCore
                 resolvedPath = Path.Combine(Application.persistentDataPath, databasePath);
             }
 #endif
-            // 3. Delete files
             try
             {
                 bool deleted = false;
@@ -338,18 +387,13 @@ namespace AroAro.DataCore
             }
         }
 
-
         /// <summary>
         /// 导出数据库文件到指定位置
         /// </summary>
-        /// <param name="destinationPath">目标路径</param>
-        /// <returns>是否导出成功</returns>
         public bool ExportDatabaseFile(string destinationPath)
         {
-            // 1. 先执行 checkpoint 确保数据同步
             _store?.Checkpoint();
 
-            // 2. Resolve source path
             var sourcePath = databasePath;
 #if UNITY_2019_1_OR_NEWER
             if (!Path.IsPathRooted(databasePath))
@@ -358,27 +402,23 @@ namespace AroAro.DataCore
             }
 #endif
 
-            // 3. Check if source file exists
             if (!File.Exists(sourcePath))
             {
                 Debug.LogError($"Database file not found at: {sourcePath}");
                 return false;
             }
 
-            // 4. Ensure destination directory exists
             var destinationDir = Path.GetDirectoryName(destinationPath);
             if (!string.IsNullOrEmpty(destinationDir) && !Directory.Exists(destinationDir))
             {
                 Directory.CreateDirectory(destinationDir);
             }
 
-            // 5. Copy file
             try
             {
                 File.Copy(sourcePath, destinationPath, true);
                 Debug.Log($"Database exported successfully to: {destinationPath}");
-                
-                // Also copy log file if exists
+
                 var sourceLogPath = sourcePath + "-log";
                 if (File.Exists(sourceLogPath))
                 {
@@ -386,7 +426,7 @@ namespace AroAro.DataCore
                     File.Copy(sourceLogPath, destLogPath, true);
                     Debug.Log($"Database log file also exported.");
                 }
-                
+
                 return true;
             }
             catch (Exception ex)
@@ -405,14 +445,11 @@ namespace AroAro.DataCore
             return _store.SessionManager;
         }
 
-        #endregion
-
         #region Editor Setup
 
         private void Reset()
         {
 #if UNITY_EDITOR
-            // 确保 AutoLoad 目录存在
             string resourcesPath = Path.Combine(Application.dataPath, "Resources");
             string autoLoadPath = Path.Combine(resourcesPath, "AroAro", "DataCore", "AutoLoad");
 
