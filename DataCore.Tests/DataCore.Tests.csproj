@@ -40,6 +40,13 @@
     </Reference>
   </ItemGroup>
 
+  <!-- xUnit runner config: disable parallel test collections to prevent static-event races -->
+  <ItemGroup>
+    <None Update="xunit.runner.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <!-- Include Runtime source files via compile links, excluding Editor/Examples/specific files -->
   <ItemGroup>
     <Compile Include="../Runtime/**/*.cs"
