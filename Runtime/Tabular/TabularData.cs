@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using NumSharp;
 
 namespace AroAro.DataCore.Tabular
@@ -501,6 +503,43 @@ namespace AroAro.DataCore.Tabular
         {
             // 内存实现中索引不必要，但为了接口兼容提供空实现
             // No-op for in-memory implementation
+        }
+
+        #endregion
+
+        #region 异步操作
+
+        public Task AddRowAsync(IDictionary<string, object> values, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            AddRow(values);
+            return Task.CompletedTask;
+        }
+
+        public Task<int> AddRowsAsync(IEnumerable<IDictionary<string, object>> rows, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(AddRows(rows));
+        }
+
+        public Task AddNumericColumnAsync(string name, double[] data, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            AddNumericColumn(name, data);
+            return Task.CompletedTask;
+        }
+
+        public Task AddStringColumnAsync(string name, string[] data, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            AddStringColumn(name, data);
+            return Task.CompletedTask;
+        }
+
+        public Task<int> ClearAsync(CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(Clear());
         }
 
         #endregion

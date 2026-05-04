@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using AroAro.DataCore.Events;
 using LiteDB;
 
@@ -16,6 +18,7 @@ namespace AroAro.DataCore.LiteDb
         private readonly ILiteCollection<GraphNode> _nodes;
         private readonly ILiteCollection<GraphEdge> _edges;
         private readonly object _lock = new object();
+        private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
         private bool _disposed;
         private int _pendingMetadataUpdates;
         private const int MetadataUpdateBatchSize = 100; // Batch metadata updates
@@ -518,6 +521,100 @@ namespace AroAro.DataCore.LiteDb
             if (value.IsDateTime) return value.AsDateTime;
             if (value.IsString) return value.AsString;
             return value.ToString();
+        }
+
+        #endregion
+
+        #region 异步操作
+
+        public async Task AddNodeAsync(string id, IDictionary<string, object> properties = null, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await Task.Run(() => AddNode(id, properties), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        public async Task<int> AddNodesAsync(IEnumerable<(string Id, IDictionary<string, object> Properties)> nodes, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                return await Task.Run(() => AddNodes(nodes), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        public async Task<IEnumerable<string>> GetOutNeighborsAsync(string nodeId, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return await Task.Run(() => GetOutNeighbors(nodeId), ct).ConfigureAwait(false);
+        }
+
+        public async Task AddEdgeAsync(string fromId, string toId, IDictionary<string, object> properties = null, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await Task.Run(() => AddEdge(fromId, toId, properties), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        public async Task<int> AddEdgesAsync(IEnumerable<(string From, string To, IDictionary<string, object> Properties)> edges, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                return await Task.Run(() => AddEdges(edges), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        public async Task<bool> RemoveNodeAsync(string id, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                return await Task.Run(() => RemoveNode(id), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        public async Task ClearAsync(CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await Task.Run(() => Clear(), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
         }
 
         #endregion

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using NumSharp;
 
 namespace AroAro.DataCore
@@ -186,6 +188,35 @@ namespace AroAro.DataCore
         /// <param name="args">参数值（@0, @1...）</param>
         /// <returns>执行结果</returns>
         RawResult ExecuteRaw(string sql, params object[] args);
+
+        #endregion
+
+        #region 异步操作
+
+        /// <summary>
+        /// 异步添加行
+        /// </summary>
+        Task AddRowAsync(IDictionary<string, object> values, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步批量添加行
+        /// </summary>
+        Task<int> AddRowsAsync(IEnumerable<IDictionary<string, object>> rows, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步添加数值列
+        /// </summary>
+        Task AddNumericColumnAsync(string name, double[] data, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步添加字符串列
+        /// </summary>
+        Task AddStringColumnAsync(string name, string[] data, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步清空所有行数据
+        /// </summary>
+        Task<int> ClearAsync(CancellationToken ct = default);
 
         #endregion
     }

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AroAro.DataCore.Graph
 {
@@ -259,6 +261,55 @@ namespace AroAro.DataCore.Graph
         {
             var parts = key.Split('\0');
             return (parts[0], parts[1]);
+        }
+
+        #endregion
+
+        #region 异步操作
+
+        public Task AddNodeAsync(string id, IDictionary<string, object> properties = null, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            AddNode(id, properties);
+            return Task.CompletedTask;
+        }
+
+        public Task<int> AddNodesAsync(IEnumerable<(string Id, IDictionary<string, object> Properties)> nodes, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(AddNodes(nodes));
+        }
+
+        public Task<IEnumerable<string>> GetOutNeighborsAsync(string nodeId, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(GetOutNeighbors(nodeId));
+        }
+
+        public Task AddEdgeAsync(string fromId, string toId, IDictionary<string, object> properties = null, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            AddEdge(fromId, toId, properties);
+            return Task.CompletedTask;
+        }
+
+        public Task<int> AddEdgesAsync(IEnumerable<(string From, string To, IDictionary<string, object> Properties)> edges, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(AddEdges(edges));
+        }
+
+        public Task<bool> RemoveNodeAsync(string id, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(RemoveNode(id));
+        }
+
+        public Task ClearAsync(CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            Clear();
+            return Task.CompletedTask;
         }
 
         #endregion

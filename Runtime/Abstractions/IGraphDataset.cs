@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AroAro.DataCore
 {
@@ -144,6 +146,45 @@ namespace AroAro.DataCore
         /// 清空所有数据
         /// </summary>
         void Clear();
+
+        #endregion
+
+        #region 异步操作
+
+        /// <summary>
+        /// 异步添加节点
+        /// </summary>
+        Task AddNodeAsync(string id, IDictionary<string, object> properties = null, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步批量添加节点
+        /// </summary>
+        Task<int> AddNodesAsync(IEnumerable<(string Id, IDictionary<string, object> Properties)> nodes, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步获取出边邻居
+        /// </summary>
+        Task<IEnumerable<string>> GetOutNeighborsAsync(string nodeId, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步添加边
+        /// </summary>
+        Task AddEdgeAsync(string fromId, string toId, IDictionary<string, object> properties = null, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步批量添加边
+        /// </summary>
+        Task<int> AddEdgesAsync(IEnumerable<(string From, string To, IDictionary<string, object> Properties)> edges, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步移除节点
+        /// </summary>
+        Task<bool> RemoveNodeAsync(string id, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步清空所有数据
+        /// </summary>
+        Task ClearAsync(CancellationToken ct = default);
 
         #endregion
     }

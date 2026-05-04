@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using AroAro.DataCore.Events;
 using LiteDB;
 using NumSharp;
@@ -18,6 +20,7 @@ namespace AroAro.DataCore.LiteDb
         private readonly TabularMetadata _metadata;
         private readonly ILiteCollection<TabularRow> _rows;
         private readonly object _lock = new object();
+        private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
         private bool _disposed;
         private int _pendingMetadataUpdates;
         private const int MetadataUpdateBatchSize = 100; // Batch metadata updates
@@ -866,6 +869,80 @@ namespace AroAro.DataCore.LiteDb
             if (field.Contains(',') || field.Contains('"') || field.Contains('\n'))
                 return $"\"{field.Replace("\"", "\"\"")}\"";
             return field;
+        }
+
+        #endregion
+
+        #region 异步操作
+
+        public async Task AddRowAsync(IDictionary<string, object> values, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await Task.Run(() => AddRow(values), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        public async Task<int> AddRowsAsync(IEnumerable<IDictionary<string, object>> rows, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                return await Task.Run(() => AddRows(rows), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        public async Task AddNumericColumnAsync(string name, double[] data, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await Task.Run(() => AddNumericColumn(name, data), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        public async Task AddStringColumnAsync(string name, string[] data, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await Task.Run(() => AddStringColumn(name, data), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        public async Task<int> ClearAsync(CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                return await Task.Run(() => Clear(), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
         }
 
         #endregion

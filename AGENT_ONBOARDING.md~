@@ -136,6 +136,16 @@ gh issue edit <number> --remove-label "severity:high" --add-label "severity:low"
 - 链式调用：`Query().Where().GroupBy().Select().Execute()`
 - `GroupBy` 支持多聚合列（合并到结果 DataFrame，不覆盖）
 
+### 异步 API（Async API）
+
+- **接口层**：`IGraphDataset` 和 `ITabularDataset` 提供异步版本的写操作和查询方法
+- **LiteDB 实现**：使用 `Task.Run()` 卸载 I/O 到线程池，`SemaphoreSlim(1,1)` 串行化写操作
+- **内存实现**：`Task.CompletedTask` / `Task.FromResult` 轻量包装（无 I/O 开销）
+- **写操作模式**：`SemaphoreSlim` → `Task.Run()` → sync `lock` → release
+- **读操作模式**：直接 `Task.Run()`（并发安全）
+- **CancellationToken**：全链路传递，`ConfigureAwait(false)` 避免 Unity SynchronizationContext 问题
+- 参考：LiteDB 集成最佳实践（`LiteDbGateway` 模式）
+
 ## 平台注意事项（Unity / Android / Meta Quest）
 
 1. **IL2CPP (AOT)**：

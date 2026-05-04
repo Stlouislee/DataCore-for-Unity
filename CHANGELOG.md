@@ -1,3 +1,17 @@
+## 0.4.0
+
+### New Features
+- **Async API**: Added async versions of dataset mutation and query operations for offloading LiteDB I/O from the Unity main thread
+  - `IGraphDataset`: `AddNodeAsync`, `AddNodesAsync`, `GetOutNeighborsAsync`, `AddEdgeAsync`, `AddEdgesAsync`, `RemoveNodeAsync`, `ClearAsync`
+  - `ITabularDataset`: `AddRowAsync`, `AddRowsAsync`, `AddNumericColumnAsync`, `AddStringColumnAsync`, `ClearAsync`
+  - All async methods accept `CancellationToken` for cooperative cancellation
+  - LiteDB implementations use `Task.Run()` for true background I/O and `SemaphoreSlim` for write serialization
+  - In-memory implementations (`GraphData`, `TabularData`) use lightweight `Task.CompletedTask` wrapping
+
+### Architecture
+- `LiteDbGraphDataset` / `LiteDbTabularDataset`: Added `SemaphoreSlim(1,1)` write lock to prevent race conditions on concurrent async writes
+- Async write pattern: `SemaphoreSlim` → `Task.Run()` → sync `lock` → release, following the `LiteDbGateway` pattern from LiteDB integration best practices
+
 ## 0.3.1
 
 ### Bug Fixes
