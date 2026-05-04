@@ -111,12 +111,41 @@ namespace AroAro.DataCore.Algorithms
                 DataCoreEventManager.RaiseAlgorithmCompleted(Name, input, null, false, sw.Elapsed, "Cancelled");
                 return AlgorithmResult.Failed(Name, "Algorithm execution was cancelled.", sw.Elapsed);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsFatalException(ex))
             {
                 sw.Stop();
+                UnityEngine.Debug.LogException(ex);
                 DataCoreEventManager.RaiseAlgorithmCompleted(Name, input, null, false, sw.Elapsed, ex.Message);
-                return AlgorithmResult.Failed(Name, ex.Message, sw.Elapsed);
+                return AlgorithmResult.Failed(Name, FormatException(ex), sw.Elapsed, ex);
             }
+            catch (Exception ex)
+            {
+                // Fatal exceptions: log full details but still return Failed to avoid VR app crash
+                sw.Stop();
+                UnityEngine.Debug.LogException(ex);
+                DataCoreEventManager.RaiseAlgorithmCompleted(Name, input, null, false, sw.Elapsed, ex.Message);
+                return AlgorithmResult.Failed(Name, $"[FATAL] {FormatException(ex)}", sw.Elapsed, ex);
+            }
+        }
+
+        private static bool IsFatalException(Exception ex)
+        {
+            return ex is OutOfMemoryException
+                || ex is StackOverflowException
+                || ex is AccessViolationException
+                || ex is AppDomainUnloadedException;
+        }
+
+        private static string FormatException(Exception ex)
+        {
+            var sb = new System.Text.StringBuilder();
+            var current = ex;
+            while (current != null)
+            {
+                sb.AppendLine($"[{current.GetType().Name}] {current.Message}");
+                current = current.InnerException;
+            }
+            return sb.ToString().TrimEnd();
         }
 
         /// <summary>

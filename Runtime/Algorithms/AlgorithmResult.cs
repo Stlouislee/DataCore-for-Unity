@@ -39,6 +39,9 @@ namespace AroAro.DataCore.Algorithms
         /// <summary>Error message when <see cref="Success"/> is <c>false</c>.</summary>
         public string Error { get; }
 
+        /// <summary>The original exception when <see cref="Success"/> is <c>false</c>, if available.</summary>
+        public Exception Exception { get; }
+
         /// <summary>Name of the algorithm that produced this result.</summary>
         public string AlgorithmName { get; }
 
@@ -49,7 +52,8 @@ namespace AroAro.DataCore.Algorithms
             IReadOnlyDictionary<string, object> metrics,
             IReadOnlyDictionary<string, object> metadata,
             TimeSpan duration,
-            string error)
+            string error,
+            Exception exception = null)
         {
             Success = success;
             AlgorithmName = algorithmName;
@@ -58,6 +62,7 @@ namespace AroAro.DataCore.Algorithms
             Metadata = metadata ?? new Dictionary<string, object>();
             Duration = duration;
             Error = error;
+            Exception = exception;
         }
 
         #region Factory Methods
@@ -104,7 +109,8 @@ namespace AroAro.DataCore.Algorithms
         public static AlgorithmResult Failed(
             string algorithmName,
             string error,
-            TimeSpan duration = default)
+            TimeSpan duration = default,
+            Exception exception = null)
         {
             return new AlgorithmResult(
                 success: false,
@@ -117,7 +123,8 @@ namespace AroAro.DataCore.Algorithms
                     ["duration"] = duration,
                 },
                 duration: duration,
-                error: error);
+                error: error,
+                exception: exception);
         }
 
         #endregion

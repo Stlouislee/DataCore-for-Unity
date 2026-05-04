@@ -427,7 +427,7 @@ namespace DataCore.Tests.Algorithms
             Assert.True(result.StepResults[1].Success);
         }
 
-        [Fact(Skip = "Known issue: AlgorithmBase.Execute catches all exceptions, masking failures")]
+        [Fact(Skip = "Pre-existing: AlgorithmBase.Execute wraps ExecuteCore's Failed result as Succeeded")]
         public void Pipeline_StepFailure_StopsPipeline()
         {
             var graph = CreateSmallGraph();
@@ -448,7 +448,7 @@ namespace DataCore.Tests.Algorithms
             Assert.False(result.StepResults[1].Success);
         }
 
-        [Fact(Skip = "Known issue: OperationCanceledException not caught gracefully")]
+        [Fact(Skip = "Pre-existing: Pipeline.Execute does not catch OperationCanceledException from its own cancellation check")]
         public void Pipeline_Cancellation_StopsExecution()
         {
             var graph = CreateSmallGraph();
@@ -935,7 +935,7 @@ namespace DataCore.Tests.Algorithms
             Assert.Contains("Test exception", result.Error);
         }
 
-        [Fact(Skip = "Known issue: AlgorithmBase catches all exceptions including OperationCanceledException")]
+        [Fact(Skip = "Pre-existing: CancellationToken.ThrowIfCancellationRequested is outside AlgorithmBase try-catch scope")]
         public void AlgorithmBase_CancellationException_ProducesCancelledResult()
         {
             var graph = CreateSmallGraph();
