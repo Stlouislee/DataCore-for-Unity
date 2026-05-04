@@ -411,17 +411,10 @@ namespace DataCore.Tests.Session
 
         [Fact]
         [Trait("Bug", "groupby-multiple-aggregates")]
-        public void GroupBy_MultipleAggregates_OnlyLastSurvives()
+        public void GroupBy_MultipleAggregates_AllAggregatesPresent()
         {
-            // CRITICAL BUG: When GroupBy is called with multiple aggregates,
-            // only the last aggregate's result survives. This is because each
-            // aggregate call to groupBy.Sum/Min/etc. returns a NEW DataFrame,
-            // and only resultDf is assigned. The previous aggregate results
-            // are lost because they're each overwritten.
-            //
-            // Expected behavior: all aggregate columns should be present in
-            // the result DataFrame (e.g., value_Sum, value_Count, value_Min).
-            // Actual behavior: only value_Min (the last one) survives.
+            // Fixed: GroupBy with multiple aggregates now preserves all aggregation columns.
+            // Each aggregate is merged into the result DataFrame instead of overwriting.
             SetupGroupByDataFrame();
 
             var result = _session.QueryDataFrame("groupByDf")
@@ -434,26 +427,20 @@ namespace DataCore.Tests.Session
             // The result should have 2 rows (one per category)
             Assert.Equal(2, result.Rows.Count);
 
-            // With the bug, only the last aggregate (Min) column survives.
-            // Correct behavior would have: value_Sum, value_Count, value_Min
+            // All aggregate columns should be present
+            Assert.True(result.Columns.IndexOf("value_Sum") >= 0,
+                "value_Sum should be present after fix");
+            Assert.True(result.Columns.IndexOf("value_Count") >= 0,
+                "value_Count should be present after fix");
             Assert.True(result.Columns.IndexOf("value_Min") >= 0,
-                "The last aggregate (Min) should be present");
-
-            // These assertions would pass with correct behavior but fail with the bug:
-            // Assert.True(result.Columns.IndexOf("value_Sum") >= 0);
-            // Assert.True(result.Columns.IndexOf("value_Count") >= 0);
-
-            // Document the actual bug: only the last aggregate survives
-            Assert.True(result.Columns.IndexOf("value_Sum") < 0,
-                "Bug: value_Sum is lost because only the last aggregate result survives");
-            Assert.True(result.Columns.IndexOf("value_Count") < 0,
-                "Bug: value_Count is lost because only the last aggregate result survives");
+                "value_Min should be present after fix");
         }
 
         [Fact]
         [Trait("Bug", "groupby-multiple-aggregates")]
-        public void GroupBy_TwoAggregates_OnlySecondSurvives()
+        public void GroupBy_TwoAggregates_BothPresent()
         {
+            // Fixed: both aggregates are preserved in the result
             SetupGroupByDataFrame();
 
             var result = _session.QueryDataFrame("groupByDf")
@@ -464,10 +451,11 @@ namespace DataCore.Tests.Session
 
             Assert.Equal(2, result.Rows.Count);
 
-            // Bug: only the last aggregate (Max) survives
-            Assert.True(result.Columns.IndexOf("value_Max") >= 0);
-            Assert.True(result.Columns.IndexOf("value_Sum") < 0,
-                "Bug: Sum is overwritten by Max");
+            // Both aggregate columns should be present
+            Assert.True(result.Columns.IndexOf("value_Sum") >= 0,
+                "value_Sum should be present after fix");
+            Assert.True(result.Columns.IndexOf("value_Max") >= 0,
+                "value_Max should be present after fix");
         }
 
         // ────────────────────────────────────────────────────────────────

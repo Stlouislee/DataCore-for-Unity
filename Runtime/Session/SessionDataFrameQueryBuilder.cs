@@ -263,11 +263,8 @@ namespace AroAro.DataCore.Session
                 var groupKeyColumn = df.Columns[groupColumn];
                 var groupBy = df.GroupBy(groupColumn);
                 
-                // 为每个聚合列准备列名数组
-                var aggregateColumns = aggregates.Select(a => a.column).ToArray();
-                
-                // 根据聚合函数调用相应的方法
                 DataFrame resultDf = null;
+                string aggColumnName = null;
                 
                 foreach (var (aggColumn, function) in aggregates)
                 {
@@ -278,46 +275,60 @@ namespace AroAro.DataCore.Session
                     if (numericColumn == null)
                         throw new InvalidOperationException($"Column '{aggColumn}' is not numeric, cannot aggregate");
 
-                    switch (function)
+                    DataFrame singleAgg = function switch
                     {
-                        case AggregateFunction.Sum:
-                            resultDf = groupBy.Sum(aggColumn);
-                            break;
-                        case AggregateFunction.Average:
-                            resultDf = groupBy.Mean(aggColumn);
-                            break;
-                        case AggregateFunction.Min:
-                            resultDf = groupBy.Min(aggColumn);
-                            break;
-                        case AggregateFunction.Max:
-                            resultDf = groupBy.Max(aggColumn);
-                            break;
-                        case AggregateFunction.Count:
-                            resultDf = groupBy.Count(aggColumn);
-                            break;
-                    }
-                    
+                        AggregateFunction.Sum     => groupBy.Sum(aggColumn),
+                        AggregateFunction.Average => groupBy.Mean(aggColumn),
+                        AggregateFunction.Min     => groupBy.Min(aggColumn),
+                        AggregateFunction.Max     => groupBy.Max(aggColumn),
+                        AggregateFunction.Count   => groupBy.Count(aggColumn),
+                        _ => throw new NotSupportedException($"Unsupported aggregate: {function}")
+                    };
+
                     // 重命名聚合列以反映聚合函数
-                    if (resultDf != null)
+                    aggColumnName = $"{aggColumn}_{function}";
+                    for (int i = 0; i < singleAgg.Columns.Count; i++)
                     {
-                        var originalColumnName = aggColumn;
-                        var aggregatedColumnName = $"{aggColumn}_{function}";
-                        
-                        // 查找并重命名聚合列
-                        for (int i = 0; i < resultDf.Columns.Count; i++)
+                        var colName = singleAgg.Columns[i].Name;
+                        // Count 返回的列名是 "Count"，其他函数返回原列名
+                        if (colName == aggColumn || (function == AggregateFunction.Count && colName == "Count"))
                         {
-                            if (resultDf.Columns[i].Name == originalColumnName)
+                            singleAgg.Columns[i].SetName(aggColumnName);
+                            break;
+                        }
+                    }
+
+                    if (resultDf == null)
+                    {
+                        resultDf = singleAgg;
+                    }
+                    else
+                    {
+                        // 将聚合列合并到结果 DataFrame（跳过分组键列）
+                        for (int i = 0; i < singleAgg.Columns.Count; i++)
+                        {
+                            var col = singleAgg.Columns[i];
+                            if (col.Name != groupColumn)
                             {
-                                resultDf.Columns[i].SetName(aggregatedColumnName);
-                                break;
+                                // 支持多种数值列类型
+                                if (col is PrimitiveDataFrameColumn<double> dc)
+                                {
+                                    resultDf.Columns.Add(new DoubleDataFrameColumn(col.Name, dc.ToArray()));
+                                }
+                                else if (col is PrimitiveDataFrameColumn<long> lc)
+                                {
+                                    resultDf.Columns.Add(new PrimitiveDataFrameColumn<long>(col.Name, lc.ToArray()));
+                                }
+                                else if (col is PrimitiveDataFrameColumn<int> ic)
+                                {
+                                    resultDf.Columns.Add(new PrimitiveDataFrameColumn<int>(col.Name, ic.ToArray()));
+                                }
                             }
                         }
                     }
                 }
 
-                // 将列名数组转换为 DataFrameColumn 数组，然后执行 Count
-                var aggregateDfColumns = aggregateColumns.Select(name => df.Columns[name]).ToArray();
-                return resultDf ?? groupBy.Count(aggregateColumns); // 默认返回计数
+                return resultDf ?? groupBy.Count();
             });
 
             return this;

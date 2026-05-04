@@ -13,6 +13,7 @@ namespace AroAro.DataCore
     /// DataCore 编辑器组件，挂到 GameObject 上用于配置和预览
     /// 使用 LiteDB 作为底层存储，自动持久化所有数据
     /// </summary>
+    [DisallowMultipleComponent]
     public class DataCoreEditorComponent : MonoBehaviour
     {
         /// <summary>
@@ -35,7 +36,7 @@ namespace AroAro.DataCore
             if (Instance != null && Instance != this)
             {
                 Debug.LogWarning($"Multiple DataCoreEditorComponent instances detected. Destroying duplicate on '{gameObject.name}'.");
-                Destroy(this);
+                Destroy(gameObject);
                 return;
             }
 

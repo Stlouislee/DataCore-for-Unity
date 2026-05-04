@@ -38,6 +38,8 @@ namespace AroAro.DataCore.SampleDatasets
                 data[header] = new System.Collections.Generic.List<double>();
             }
 
+            int parseErrorCount = 0;
+
             for (int i = 1; i < lines.Length; i++)
             {
                 var line = lines[i].Trim();
@@ -54,9 +56,19 @@ namespace AroAro.DataCore.SampleDatasets
                     }
                     else
                     {
-                        data[headers[j]].Add(0.0);
+                        data[headers[j]].Add(double.NaN);
+                        parseErrorCount++;
+                        if (parseErrorCount <= 10)
+                        {
+                            Debug.LogWarning($"[CaliforniaHousingDataset] Row {i}, Column '{headers[j]}': cannot parse '{values[j]}', using NaN");
+                        }
                     }
                 }
+            }
+
+            if (parseErrorCount > 0)
+            {
+                Debug.LogWarning($"[CaliforniaHousingDataset] Total parse errors: {parseErrorCount} cells could not be parsed, replaced with NaN");
             }
 
             var result = new System.Collections.Generic.Dictionary<string, double[]>();
