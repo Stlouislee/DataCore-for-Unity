@@ -18,6 +18,8 @@ obj/
 # .NET test artifacts
 DataCore.Tests/bin/
 DataCore.Tests/obj/
+DataCore.Tests~/bin/
+DataCore.Tests~/obj/
 *.user
 *.suo
 .vs/

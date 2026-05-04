@@ -20,10 +20,10 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore dependencies
-        run: dotnet restore DataCore.Tests/DataCore.Tests.csproj
+        run: dotnet restore DataCore.Tests~/DataCore.Tests.csproj
 
       - name: Build
-        run: dotnet build DataCore.Tests/DataCore.Tests.csproj --no-restore --configuration Release
+        run: dotnet build DataCore.Tests~/DataCore.Tests.csproj --no-restore --configuration Release
 
       - name: Run tests
-        run: dotnet test DataCore.Tests/DataCore.Tests.csproj --no-build --configuration Release --verbosity normal
+        run: dotnet test DataCore.Tests~/DataCore.Tests.csproj --no-build --configuration Release --verbosity normal
