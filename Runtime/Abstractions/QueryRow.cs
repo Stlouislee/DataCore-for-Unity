@@ -121,7 +121,7 @@ namespace AroAro.DataCore
         /// <summary>
         /// 获取所有列名。
         /// </summary>
-        public IEnumerable<string> Columns => _data?.Keys ?? Array.Empty<string>();
+        public IEnumerable<string> Columns => _data != null ? (IEnumerable<string>)_data.Keys : Array.Empty<string>();
 
         /// <summary>
         /// 底层数据（高级场景）。
