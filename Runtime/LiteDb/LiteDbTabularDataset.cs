@@ -303,7 +303,7 @@ namespace AroAro.DataCore.LiteDb
                 var row = new TabularRow
                 {
                     RowIndex = _metadata.RowCount,
-                    Data = ConvertToBsonDocument(values)
+                    Data = BsonValueConverter.ToBsonDocument(values)
                 };
 
                 _rows.Insert(row);
@@ -326,7 +326,7 @@ namespace AroAro.DataCore.LiteDb
                 var rowDocs = rows.Select((values, i) => new TabularRow
                 {
                     RowIndex = startIndex + i,
-                    Data = ConvertToBsonDocument(values)
+                    Data = BsonValueConverter.ToBsonDocument(values)
                 }).ToList();
 
                 if (rowDocs.Count > 0)
@@ -358,7 +358,7 @@ namespace AroAro.DataCore.LiteDb
                 {
                     foreach (var kv in values)
                     {
-                        row.Data[kv.Key] = ConvertToBsonValue(kv.Value);
+                        row.Data[kv.Key] = BsonValueConverter.ToBsonValue(kv.Value);
                     }
                     _rows.Update(row);
                     UpdateMetadata();
@@ -417,7 +417,7 @@ namespace AroAro.DataCore.LiteDb
             var result = new Dictionary<string, object>();
             foreach (var kv in row.Data)
             {
-                result[kv.Key] = ConvertFromBsonValue(kv.Value);
+                result[kv.Key] = BsonValueConverter.FromBsonValue(kv.Value);
             }
             return result;
         }
@@ -434,7 +434,7 @@ namespace AroAro.DataCore.LiteDb
                 var result = new Dictionary<string, object>();
                 foreach (var kv in row.Data)
                 {
-                    result[kv.Key] = ConvertFromBsonValue(kv.Value);
+                    result[kv.Key] = BsonValueConverter.FromBsonValue(kv.Value);
                 }
                 yield return result;
             }
@@ -482,7 +482,7 @@ namespace AroAro.DataCore.LiteDb
             try
             {
                 // 转换参数为 BsonValue 数组
-                var bsonArgs = args?.Select(arg => ConvertToBsonValue(arg)).ToArray() ?? Array.Empty<BsonValue>();
+                var bsonArgs = args?.Select(arg => BsonValueConverter.ToBsonValue(arg)).ToArray() ?? Array.Empty<BsonValue>();
                 
                 // 执行原生查询
                 using var reader = _database.Execute(sql, bsonArgs);
@@ -505,7 +505,7 @@ namespace AroAro.DataCore.LiteDb
                         var columnNames = new HashSet<string>();
                         
                         // 收集第一行
-                        var firstRow = ConvertFromBsonDocument(firstValue.AsDocument);
+                        var firstRow = BsonValueConverter.FromBsonDocument(firstValue.AsDocument);
                         rows.Add(firstRow);
                         foreach (var key in firstRow.Keys)
                         {
@@ -515,7 +515,7 @@ namespace AroAro.DataCore.LiteDb
                         // 收集剩余行
                         while (reader.Read())
                         {
-                            var row = ConvertFromBsonDocument(reader.Current.AsDocument);
+                            var row = BsonValueConverter.FromBsonDocument(reader.Current.AsDocument);
                             rows.Add(row);
                             foreach (var key in row.Keys)
                             {
@@ -772,53 +772,7 @@ namespace AroAro.DataCore.LiteDb
             }
         }
 
-        private BsonDocument ConvertToBsonDocument(IDictionary<string, object> values)
-        {
-            var doc = new BsonDocument();
-            foreach (var kv in values)
-            {
-                doc[kv.Key] = ConvertToBsonValue(kv.Value);
-            }
-            return doc;
-        }
 
-        private BsonValue ConvertToBsonValue(object value)
-        {
-            if (value == null) return BsonValue.Null;
-            return value switch
-            {
-                double d => new BsonValue(d),
-                float f => new BsonValue(f),
-                int i => new BsonValue(i),
-                long l => new BsonValue(l),
-                bool b => new BsonValue(b),
-                DateTime dt => new BsonValue(dt),
-                string s => new BsonValue(s),
-                _ => new BsonValue(value.ToString())
-            };
-        }
-
-        private object ConvertFromBsonValue(BsonValue value)
-        {
-            if (value.IsNull) return null;
-            if (value.IsDouble) return value.AsDouble;
-            if (value.IsInt32) return value.AsInt32;
-            if (value.IsInt64) return value.AsInt64;
-            if (value.IsBoolean) return value.AsBoolean;
-            if (value.IsDateTime) return value.AsDateTime;
-            if (value.IsString) return value.AsString;
-            return value.ToString();
-        }
-
-        private Dictionary<string, object> ConvertFromBsonDocument(BsonDocument doc)
-        {
-            var result = new Dictionary<string, object>();
-            foreach (var element in doc)
-            {
-                result[element.Key] = ConvertFromBsonValue(element.Value);
-            }
-            return result;
-        }
 
         private List<string> ParseCsvLine(string line, char delimiter)
         {

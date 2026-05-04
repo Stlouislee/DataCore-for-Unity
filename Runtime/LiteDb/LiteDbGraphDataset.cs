@@ -104,7 +104,7 @@ namespace AroAro.DataCore.LiteDb
                 var node = new GraphNode
                 {
                     NodeId = id,
-                    Properties = ConvertToBsonDocument(properties)
+                    Properties = BsonValueConverter.ToBsonDocument(properties)
                 };
 
                 _nodes.Insert(node);
@@ -125,7 +125,7 @@ namespace AroAro.DataCore.LiteDb
                 var nodeList = nodes.Select(n => new GraphNode
                 {
                     NodeId = n.Id,
-                    Properties = ConvertToBsonDocument(n.Properties)
+                    Properties = BsonValueConverter.ToBsonDocument(n.Properties)
                 }).ToList();
 
                 if (nodeList.Count > 0)
@@ -153,7 +153,7 @@ namespace AroAro.DataCore.LiteDb
 
                 foreach (var kv in properties)
                 {
-                    node.Properties[kv.Key] = ConvertToBsonValue(kv.Value);
+                    node.Properties[kv.Key] = BsonValueConverter.ToBsonValue(kv.Value);
                 }
 
                 _nodes.Update(node);
@@ -208,7 +208,7 @@ namespace AroAro.DataCore.LiteDb
             var result = new Dictionary<string, object>();
             foreach (var kv in node.Properties)
             {
-                result[kv.Key] = ConvertFromBsonValue(kv.Value);
+                result[kv.Key] = BsonValueConverter.FromBsonValue(kv.Value);
             }
             return result;
         }
@@ -244,7 +244,7 @@ namespace AroAro.DataCore.LiteDb
                     FromNodeId = fromId,
                     ToNodeId = toId,
                     Weight = 1.0,
-                    Properties = ConvertToBsonDocument(properties)
+                    Properties = BsonValueConverter.ToBsonDocument(properties)
                 };
 
                 _edges.Insert(edge);
@@ -267,7 +267,7 @@ namespace AroAro.DataCore.LiteDb
                     FromNodeId = e.From,
                     ToNodeId = e.To,
                     Weight = 1.0,
-                    Properties = ConvertToBsonDocument(e.Properties)
+                    Properties = BsonValueConverter.ToBsonDocument(e.Properties)
                 }).ToList();
 
                 if (edgeList.Count > 0)
@@ -321,7 +321,7 @@ namespace AroAro.DataCore.LiteDb
             var result = new Dictionary<string, object>();
             foreach (var kv in edge.Properties)
             {
-                result[kv.Key] = ConvertFromBsonValue(kv.Value);
+                result[kv.Key] = BsonValueConverter.FromBsonValue(kv.Value);
             }
             return result;
         }
@@ -338,7 +338,7 @@ namespace AroAro.DataCore.LiteDb
 
                 foreach (var kv in properties)
                 {
-                    edge.Properties[kv.Key] = ConvertToBsonValue(kv.Value);
+                    edge.Properties[kv.Key] = BsonValueConverter.ToBsonValue(kv.Value);
                 }
 
                 _edges.Update(edge);
@@ -482,46 +482,7 @@ namespace AroAro.DataCore.LiteDb
             }
         }
 
-        private BsonDocument ConvertToBsonDocument(IDictionary<string, object> values)
-        {
-            var doc = new BsonDocument();
-            if (values != null)
-            {
-                foreach (var kv in values)
-                {
-                    doc[kv.Key] = ConvertToBsonValue(kv.Value);
-                }
-            }
-            return doc;
-        }
 
-        private BsonValue ConvertToBsonValue(object value)
-        {
-            if (value == null) return BsonValue.Null;
-            return value switch
-            {
-                double d => new BsonValue(d),
-                float f => new BsonValue(f),
-                int i => new BsonValue(i),
-                long l => new BsonValue(l),
-                bool b => new BsonValue(b),
-                DateTime dt => new BsonValue(dt),
-                string s => new BsonValue(s),
-                _ => new BsonValue(value.ToString())
-            };
-        }
-
-        private object ConvertFromBsonValue(BsonValue value)
-        {
-            if (value.IsNull) return null;
-            if (value.IsDouble) return value.AsDouble;
-            if (value.IsInt32) return value.AsInt32;
-            if (value.IsInt64) return value.AsInt64;
-            if (value.IsBoolean) return value.AsBoolean;
-            if (value.IsDateTime) return value.AsDateTime;
-            if (value.IsString) return value.AsString;
-            return value.ToString();
-        }
 
         #endregion
 
