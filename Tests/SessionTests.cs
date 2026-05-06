@@ -157,17 +157,17 @@ namespace AroAro.DataCore.Tests
             bool datasetAddedEventFired = false;
             bool datasetCreatedEventFired = false;
 
-            Events.DataCoreEventManager.SessionDatasetAdded += (sender, e) =>
+            Events.DataCoreEventManager.SubscribeSessionDatasetAdded((sender, e) =>
             {
                 if (e.Session == session && e.Dataset.Name == "EventTestDataset")
                     datasetAddedEventFired = true;
-            };
+            });
 
-            Events.DataCoreEventManager.SessionDatasetCreated += (sender, e) =>
+            Events.DataCoreEventManager.SubscribeSessionDatasetCreated((sender, e) =>
             {
                 if (e.Session == session && e.Dataset.Name == "EventTestDataset")
                     datasetCreatedEventFired = true;
-            };
+            });
 
             // 创建数据集来触发事件
             var dataset = session.CreateDataset("EventTestDataset", DataSetKind.Tabular);

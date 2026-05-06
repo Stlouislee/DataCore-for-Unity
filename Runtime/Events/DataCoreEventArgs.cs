@@ -104,6 +104,20 @@ namespace AroAro.DataCore.Events
     }
 
     /// <summary>
+    /// 数据集导入完成事件参数（数据已填充）
+    /// </summary>
+    public class DatasetImportCompletedEventArgs : DataCoreEventArgs
+    {
+        public IDataSet Dataset { get; }
+
+        public DatasetImportCompletedEventArgs(IDataSet dataset)
+            : base(dataset.Name, dataset.Kind)
+        {
+            Dataset = dataset;
+        }
+    }
+
+    /// <summary>
     /// 会话数据集添加事件参数
     /// </summary>
     public class SessionDatasetAddedEventArgs : EventArgs

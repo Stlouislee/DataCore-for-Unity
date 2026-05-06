@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Xml;
+using AroAro.DataCore.Events;
 using UnityEngine;
 
 namespace AroAro.DataCore.Import
@@ -83,12 +84,14 @@ namespace AroAro.DataCore.Import
             try
             {
                 var graphmlText = File.ReadAllText(graphmlPath);
-                return store.UnderlyingStore.ExecuteInTransaction(() =>
+                var result = store.UnderlyingStore.ExecuteInTransaction(() =>
                 {
                     var graph = store.CreateGraph(datasetName);
                     ImportToGraph(graphmlText, graph);
                     return graph;
                 });
+                DataCoreEventManager.RaiseDatasetImportCompleted(result);
+                return result;
             }
             catch (Exception ex)
             {

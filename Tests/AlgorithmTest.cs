@@ -407,18 +407,18 @@ namespace AroAro.DataCore.Tests
             bool completedFired = false;
             string capturedAlgoName = null;
 
-            DataCoreEventManager.AlgorithmStarted += (s, e) =>
+            DataCoreEventManager.SubscribeAlgorithmStarted((s, e) =>
             {
                 startedFired = true;
                 capturedAlgoName = e.AlgorithmName;
-            };
+            });
 
-            DataCoreEventManager.AlgorithmCompleted += (s, e) =>
+            DataCoreEventManager.SubscribeAlgorithmCompleted((s, e) =>
             {
                 completedFired = true;
                 Assert(e.Success, "Completed event should report success");
                 Assert(e.Duration.TotalMilliseconds >= 0, "Duration should be non-negative");
-            };
+            });
 
             var graph = new GraphData("event-test");
             graph.AddNode("A"); graph.AddNode("B");

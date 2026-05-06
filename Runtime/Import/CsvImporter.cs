@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using AroAro.DataCore.Events;
 using UnityEngine;
 
 namespace AroAro.DataCore.Import
@@ -95,13 +96,14 @@ namespace AroAro.DataCore.Import
             }
 
             var csvText = File.ReadAllText(csvPath);
-            return store.UnderlyingStore.ExecuteInTransaction(() =>
+            var result = store.UnderlyingStore.ExecuteInTransaction(() =>
             {
-                // store.CreateTabular fires DatasetCreated event
                 var tabular = store.CreateTabular(datasetName);
                 tabular.ImportFromCsv(csvText, hasHeader, delimiter);
                 return tabular;
             });
+            DataCoreEventManager.RaiseDatasetImportCompleted(result);
+            return result;
         }
 
         /// <summary>
@@ -148,13 +150,14 @@ namespace AroAro.DataCore.Import
         /// </summary>
         public static ITabularDataset ImportFromText(DataCoreStore store, string csvText, string datasetName, bool hasHeader = true, char delimiter = ',')
         {
-            // store.CreateTabular fires DatasetCreated; wrap in underlying transaction to keep atomicity.
-            return store.UnderlyingStore.ExecuteInTransaction(() =>
+            var result = store.UnderlyingStore.ExecuteInTransaction(() =>
             {
                 var tabular = store.CreateTabular(datasetName);
                 tabular.ImportFromCsv(csvText, hasHeader, delimiter);
                 return tabular;
             });
+            DataCoreEventManager.RaiseDatasetImportCompleted(result);
+            return result;
         }
 
         private static bool IsNumeric(List<string> values, out List<double> doubleValues)
