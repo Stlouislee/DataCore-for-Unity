@@ -20,7 +20,7 @@ namespace AroAro.DataCore.Editor
         private string csvFilePath = "";
         private string csvDatasetName = "ImportedCSV";
         private bool csvHasHeader = true;
-        private char csvDelimiter = ',';
+        private string csvDelimiterStr = ",";
         
         // GraphML 导入相关字段
         private string graphmlFilePath = "";
@@ -315,10 +315,30 @@ namespace AroAro.DataCore.Editor
             
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.PrefixLabel("Delimiter");
-            csvDelimiter = EditorGUILayout.TextField(csvDelimiter.ToString(), GUILayout.Width(30)).FirstOrDefault();
-            if (csvDelimiter == '\0') csvDelimiter = ',';
+            csvDelimiterStr = EditorGUILayout.TextField(csvDelimiterStr, GUILayout.Width(50));
+            if (string.IsNullOrEmpty(csvDelimiterStr))
+            {
+                EditorGUILayout.LabelField("(defaults to comma)", EditorStyles.miniLabel);
+                csvDelimiterStr = ",";
+            }
+            else if (csvDelimiterStr.Length > 1 && csvDelimiterStr != "\\t" && csvDelimiterStr != "\\n")
+            {
+                EditorGUILayout.LabelField("⚠ Only first character used", EditorStyles.miniLabel);
+            }
             EditorGUILayout.EndHorizontal();
-            
+
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button(",", EditorStyles.miniButton, GUILayout.Width(25)))
+                csvDelimiterStr = ",";
+            if (GUILayout.Button(";", EditorStyles.miniButton, GUILayout.Width(25)))
+                csvDelimiterStr = ";";
+            if (GUILayout.Button("\\t", EditorStyles.miniButton, GUILayout.Width(25)))
+                csvDelimiterStr = "\\t";
+            if (GUILayout.Button("|", EditorStyles.miniButton, GUILayout.Width(25)))
+                csvDelimiterStr = "|";
+            EditorGUILayout.EndHorizontal();
+
             EditorGUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Import CSV", GUILayout.Width(100)))
@@ -328,6 +348,18 @@ namespace AroAro.DataCore.Editor
             EditorGUILayout.EndHorizontal();
             
             EditorGUILayout.EndVertical();
+        }
+
+        private char GetCsvDelimiter()
+        {
+            if (string.IsNullOrEmpty(csvDelimiterStr))
+                return ',';
+            return csvDelimiterStr switch
+            {
+                "\\t" => '\t',
+                "\\n" => '\n',
+                _ => csvDelimiterStr[0]
+            };
         }
 
         private void ImportCsv()
@@ -346,7 +378,7 @@ namespace AroAro.DataCore.Editor
             
             try
             {
-                var tabular = component.ImportCsvToTabular(csvFilePath, csvDatasetName, csvHasHeader, csvDelimiter);
+                var tabular = component.ImportCsvToTabular(csvFilePath, csvDatasetName, csvHasHeader, GetCsvDelimiter());
                 EditorUtility.DisplayDialog("Import CSV", $"Successfully imported {tabular.RowCount} rows.", "OK");
                 EditorUtility.SetDirty(component);
             }
