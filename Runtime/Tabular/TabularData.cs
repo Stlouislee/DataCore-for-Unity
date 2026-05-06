@@ -336,31 +336,30 @@ namespace AroAro.DataCore.Tabular
 
         public void ImportFromCsv(string csvContent, bool hasHeader = true, char delimiter = ',')
         {
-            var lines = csvContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length == 0) return;
+            var parsed = AroAro.DataCore.Import.CsvParser.ParseAll(csvContent, delimiter);
+            if (parsed.Count == 0) return;
 
             string[] headers;
             int dataStartIndex;
 
             if (hasHeader)
             {
-                headers = lines[0].Split(delimiter);
+                headers = parsed[0].ToArray();
                 dataStartIndex = 1;
             }
             else
             {
-                var firstRow = lines[0].Split(delimiter);
-                headers = Enumerable.Range(0, firstRow.Length).Select(i => $"Column{i}").ToArray();
+                headers = Enumerable.Range(0, parsed[0].Count).Select(i => $"Column{i}").ToArray();
                 dataStartIndex = 0;
             }
 
             // Detect column types from first data row
-            var firstDataRow = lines[dataStartIndex].Split(delimiter);
+            var firstDataRow = parsed[dataStartIndex];
             var isNumeric = new bool[headers.Length];
             
             for (int i = 0; i < headers.Length; i++)
             {
-                isNumeric[i] = double.TryParse(firstDataRow[i], out _);
+                isNumeric[i] = i < firstDataRow.Count && double.TryParse(firstDataRow[i], out _);
             }
 
             // Parse all data
@@ -375,10 +374,10 @@ namespace AroAro.DataCore.Tabular
                     stringCols[i] = new List<string>();
             }
 
-            for (int row = dataStartIndex; row < lines.Length; row++)
+            for (int row = dataStartIndex; row < parsed.Count; row++)
             {
-                var values = lines[row].Split(delimiter);
-                for (int col = 0; col < headers.Length && col < values.Length; col++)
+                var values = parsed[row];
+                for (int col = 0; col < headers.Length && col < values.Count; col++)
                 {
                     if (isNumeric[col])
                     {

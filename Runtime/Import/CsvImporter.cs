@@ -27,8 +27,8 @@ namespace AroAro.DataCore.Import
                 return;
             }
 
-            var lines = csvText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length < (hasHeader ? 2 : 1))
+            var rows = CsvParser.ParseAll(csvText, delimiter);
+            if (rows.Count < (hasHeader ? 2 : 1))
             {
                 Debug.LogError("CSV must have at least one data row");
                 return;
@@ -36,17 +36,15 @@ namespace AroAro.DataCore.Import
 
             int dataStartIndex = hasHeader ? 1 : 0;
             string[] headers;
-            
+
             if (hasHeader)
             {
-                headers = lines[0].Trim().Replace("\"", "").Split(delimiter);
+                headers = rows[0].ToArray();
             }
             else
             {
-                // 自动生成列名
-                var firstLine = lines[0].Trim().Split(delimiter);
-                headers = new string[firstLine.Length];
-                for (int i = 0; i < firstLine.Length; i++)
+                headers = new string[rows[0].Count];
+                for (int i = 0; i < rows[0].Count; i++)
                 {
                     headers[i] = $"Column{i + 1}";
                 }
@@ -59,16 +57,13 @@ namespace AroAro.DataCore.Import
             }
 
             // 读取数据
-            for (int i = dataStartIndex; i < lines.Length; i++)
+            for (int i = dataStartIndex; i < rows.Count; i++)
             {
-                var line = lines[i].Trim();
-                if (string.IsNullOrEmpty(line)) continue;
+                var values = rows[i];
 
-                var values = line.Split(delimiter);
-                
                 for (int j = 0; j < headers.Length; j++)
                 {
-                    string val = (j < values.Length) ? values[j].Trim().Trim('"') : "";
+                    string val = (j < values.Count) ? values[j] : "";
                     columnData[headers[j]].Add(val);
                 }
             }

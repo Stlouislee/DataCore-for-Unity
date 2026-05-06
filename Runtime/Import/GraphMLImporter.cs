@@ -83,10 +83,12 @@ namespace AroAro.DataCore.Import
             try
             {
                 var graphmlText = File.ReadAllText(graphmlPath);
-                // store.CreateGraph fires DatasetCreated event
-                var graph = store.CreateGraph(datasetName);
-                ImportToGraph(graphmlText, graph);
-                return graph;
+                return store.UnderlyingStore.ExecuteInTransaction(() =>
+                {
+                    var graph = store.CreateGraph(datasetName);
+                    ImportToGraph(graphmlText, graph);
+                    return graph;
+                });
             }
             catch (Exception ex)
             {
@@ -109,9 +111,12 @@ namespace AroAro.DataCore.Import
             try
             {
                 var graphmlText = File.ReadAllText(graphmlPath);
-                var graph = store.CreateGraph(datasetName);
-                ImportToGraph(graphmlText, graph);
-                return graph;
+                return store.ExecuteInTransaction(() =>
+                {
+                    var graph = store.CreateGraph(datasetName);
+                    ImportToGraph(graphmlText, graph);
+                    return graph;
+                });
             }
             catch (Exception ex)
             {

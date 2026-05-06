@@ -589,25 +589,24 @@ namespace AroAro.DataCore.LiteDb
             if (string.IsNullOrEmpty(csvContent))
                 throw new ArgumentException("CSV content cannot be null or empty", nameof(csvContent));
 
-            // NOTE: This method is designed for fast/atomic initial imports.
-            // It builds complete row documents and does a single InsertBulk.
-            var lines = csvContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length == 0) return;
+            // Use RFC 4180 compliant parser (supports quoted fields with delimiters/newlines)
+            var parsedRows = AroAro.DataCore.Import.CsvParser.ParseAll(csvContent, delimiter);
+            if (parsedRows.Count == 0) return;
 
             var headers = new List<string>();
             int dataStartIndex = 0;
 
             if (hasHeader)
             {
-                headers = ParseCsvLine(lines[0], delimiter);
+                headers = parsedRows[0];
                 dataStartIndex = 1;
             }
 
             var dataRows = new List<List<string>>();
-            for (int i = dataStartIndex; i < lines.Length; i++)
+            for (int i = dataStartIndex; i < parsedRows.Count; i++)
             {
-                if (!string.IsNullOrWhiteSpace(lines[i]))
-                    dataRows.Add(ParseCsvLine(lines[i], delimiter));
+                if (parsedRows[i].Count > 0)
+                    dataRows.Add(parsedRows[i]);
             }
 
             if (dataRows.Count == 0) return;
