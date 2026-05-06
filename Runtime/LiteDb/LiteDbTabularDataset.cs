@@ -549,7 +549,7 @@ namespace AroAro.DataCore.LiteDb
                     else
                     {
                         // 标量结果（COUNT/UPDATE/DELETE）
-                        return new RawResult(firstValue);
+                        return new RawResult(ConvertBsonToDataValue(firstValue));
                     }
                 }
                 
@@ -563,6 +563,21 @@ namespace AroAro.DataCore.LiteDb
             {
                 throw new DataCoreRawQueryException(sql, args, $"Unexpected error: {ex.Message}", ex);
             }
+        }
+
+        /// <summary>
+        /// 将 LiteDB BsonValue 转换为后端无关的 DataValue
+        /// </summary>
+        private static DataValue ConvertBsonToDataValue(BsonValue bv)
+        {
+            if (bv == null || bv.IsNull) return DataValue.Null;
+            if (bv.IsDouble) return new DataValue(bv.AsDouble);
+            if (bv.IsInt32) return new DataValue(bv.AsInt32);
+            if (bv.IsInt64) return new DataValue(bv.AsInt64);
+            if (bv.IsBoolean) return new DataValue(bv.AsBoolean);
+            if (bv.IsString) return new DataValue(bv.AsString);
+            if (bv.IsDateTime) return new DataValue(bv.AsDateTime);
+            return new DataValue(bv.ToString());
         }
 
         #endregion
