@@ -58,9 +58,19 @@ namespace AroAro.DataCore
         public IDataStore UnderlyingStore => _store;
 
         /// <summary>
-        /// 数据库路径
+        /// 数据库文件路径。仅在底层存储为 LiteDB 时可用。
         /// </summary>
-        public string DatabasePath => (_store as LiteDb.LiteDbDataStore)?.DatabasePath;
+        /// <exception cref="NotSupportedException">底层存储不支持路径查询时抛出</exception>
+        public string DatabasePath
+        {
+            get
+            {
+                if (_store is LiteDb.LiteDbDataStore liteDb)
+                    return liteDb.DatabasePath;
+                throw new NotSupportedException(
+                    $"DatabasePath is not supported for storage backend type '{_store.GetType().Name}'.");
+            }
+        }
 
         /// <summary>
         /// 所有数据集名称
