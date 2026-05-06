@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Assertions;
 
 namespace AroAro.DataCore.Tests
 {
@@ -24,10 +25,11 @@ namespace AroAro.DataCore.Tests
         private void TestLiteDbBackend()
         {
             var store = dataCore.GetStore();
-            
+
             // 测试1：检查Names属性是否正常工作
+            Assert.IsNotNull(store.Names, "Store.Names should not be null");
             Debug.Log($"Total datasets: {store.Names.Count}");
-            
+
             // 测试2：创建和访问数据集
             var testName = "lazy-load-test";
             if (!store.HasDataset(testName))
@@ -35,56 +37,30 @@ namespace AroAro.DataCore.Tests
                 var tabular = store.CreateTabular(testName);
                 tabular.AddNumericColumn("x", new double[] { 1, 2, 3 });
                 tabular.AddStringColumn("name", new[] { "a", "b", "c" });
+                Assert.AreEqual(3, tabular.RowCount, "Created dataset should have 3 rows");
+                Assert.AreEqual(2, tabular.ColumnCount, "Created dataset should have 2 columns");
                 Debug.Log($"Created test dataset: {testName}");
             }
-            
+
             // 测试3：访问数据集
-            foreach (var name in store.Names)
+            Assert.IsTrue(store.HasDataset(testName), "Store should contain the test dataset");
+            Assert.IsTrue(store.TryGet(testName, out var testDataset), "TryGet should succeed");
+            Assert.AreEqual(DataSetKind.Tabular, testDataset.Kind);
+
+            if (testDataset is ITabularDataset tabularData)
             {
-                // 尝试访问数据集
-                if (store.TryGet(name, out var dataset))
-                {
-                    Debug.Log($"Successfully accessed: {name}, Type: {dataset.Kind}");
-                    
-                    if (dataset is ITabularDataset tabular)
-                    {
-                        Debug.Log($"  Rows: {tabular.RowCount}, Columns: {tabular.ColumnCount}");
-                    }
-                    else if (dataset is IGraphDataset graph)
-                    {
-                        Debug.Log($"  Nodes: {graph.NodeCount}, Edges: {graph.EdgeCount}");
-                    }
-                }
-                else
-                {
-                    Debug.LogError($"Failed to access dataset: {name}");
-                }
+                Assert.AreEqual(3, tabularData.RowCount);
+                Assert.AreEqual(2, tabularData.ColumnCount);
             }
-            
-            // 测试4：检查点（强制写入）
-            try
-            {
-                store.Checkpoint();
-                Debug.Log("Checkpoint completed successfully");
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"Checkpoint failed: {ex.Message}");
-            }
-            
+
+            // 测试4：检查点
+            store.Checkpoint();
+            Debug.Log("Checkpoint completed successfully");
+
             // 测试5：删除测试数据集
-            if (store.HasDataset(testName))
-            {
-                if (store.Delete(testName))
-                {
-                    Debug.Log($"Successfully deleted dataset: {testName}");
-                }
-                else
-                {
-                    Debug.LogError($"Failed to delete dataset: {testName}");
-                }
-            }
-            
+            Assert.IsTrue(store.Delete(testName), "Delete should succeed");
+            Assert.IsFalse(store.HasDataset(testName), "Dataset should be deleted");
+
             Debug.Log("LiteDB backend test completed");
         }
         

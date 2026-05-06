@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Assertions;
 using Microsoft.Data.Analysis;
 using AroAro.DataCore.Session;
 
@@ -21,92 +22,40 @@ namespace AroAro.DataCore.Tests
 
         public void TestGroupByFunctionality()
         {
-            try
-            {
-                Debug.Log("=== DataFrame GroupBy Functionality Test ===");
-                
-                // 创建测试DataFrame
-                var df = new DataFrame();
-                df.Columns.Add(new StringDataFrameColumn("category", new string[] { "A", "B", "A", "B", "A" }));
-                df.Columns.Add(new DoubleDataFrameColumn("value", new double[] { 10, 20, 30, 40, 50 }));
-                df.Columns.Add(new DoubleDataFrameColumn("score", new double[] { 1, 2, 3, 4, 5 }));
-                
-                Debug.Log($"Original DataFrame: {df.Rows.Count} rows");
-                Debug.Log("Columns: " + string.Join(", ", df.Columns.Select(c => c.Name)));
+            Debug.Log("=== DataFrame GroupBy Functionality Test ===");
 
-                // 测试直接调用GroupBy
-                try
-                {
-                    var categoryColumn = df["category"];
-                    var groupBy = df.GroupBy(categoryColumn);
-                    Debug.Log("✅ GroupBy method exists and works!");
-                    
-                    // 测试Sum聚合
-                    var valueColumn = df["value"];
-                    var sumResult = groupBy.Sum(valueColumn);
-                    Debug.Log($"✅ Sum aggregation: {sumResult.Rows.Count} groups");
-                    Debug.Log("Sum result columns: " + string.Join(", ", sumResult.Columns.Select(c => c.Name)));
-                    
-                    // 测试Mean聚合
-                    var meanResult = groupBy.Mean(valueColumn);
-                    Debug.Log($"✅ Mean aggregation: {meanResult.Rows.Count} groups");
-                    
-                    // 测试Count聚合
-                    var countResult = groupBy.Count(valueColumn);
-                    Debug.Log($"✅ Count aggregation: {countResult.Rows.Count} groups");
-                    
-                    // 测试Min聚合
-                    var minResult = groupBy.Min(valueColumn);
-                    Debug.Log($"✅ Min aggregation: {minResult.Rows.Count} groups");
-                    
-                    // 测试Max聚合
-                    var maxResult = groupBy.Max(valueColumn);
-                    Debug.Log($"✅ Max aggregation: {maxResult.Rows.Count} groups");
-                    
-                    // 测试多个列聚合
-                    var scoreColumn = df["score"];
-                    var multiResult = groupBy.Sum(valueColumn, scoreColumn);
-                    Debug.Log($"✅ Multi-column aggregation: {multiResult.Rows.Count} groups");
-                    Debug.Log("Multi-column result columns: " + string.Join(", ", multiResult.Columns.Select(c => c.Name)));
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"❌ Direct GroupBy failed: {ex.Message}");
-                    Debug.LogError($"Stack trace: {ex.StackTrace}");
-                }
+            var df = new DataFrame();
+            df.Columns.Add(new StringDataFrameColumn("category", new string[] { "A", "B", "A", "B", "A" }));
+            df.Columns.Add(new DoubleDataFrameColumn("value", new double[] { 10, 20, 30, 40, 50 }));
+            df.Columns.Add(new DoubleDataFrameColumn("score", new double[] { 1, 2, 3, 4, 5 }));
 
-                // 测试SessionDataFrameQueryBuilder的GroupBy
-                try
-                {
-                    // 创建模拟Session
-                    var mockSession = new MockSession();
-                    mockSession.AddDataset("test", df);
-                    
-                    var queryBuilder = new SessionDataFrameQueryBuilder(mockSession, "test");
-                    
-                    // 构建GroupBy查询
-                    var resultDataSet = queryBuilder
-                        .GroupBy("category", 
-                            ("value", AggregateFunction.Sum),
-                            ("score", AggregateFunction.Average))
-                        .Execute("grouped_result");
-                    
-                    Debug.Log($"✅ SessionDataFrameQueryBuilder GroupBy succeeded!");
-                    Debug.Log($"Result dataset name: {resultDataSet.Name}");
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"❌ QueryBuilder GroupBy failed: {ex.Message}");
-                    Debug.LogError($"Stack trace: {ex.StackTrace}");
-                }
+            Assert.AreEqual(5, (int)df.Rows.Count);
 
-                Debug.Log("GroupBy functionality test completed");
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"❌ Test failed: {ex.Message}");
-                Debug.LogError($"Stack trace: {ex.StackTrace}");
-            }
+            var categoryColumn = df["category"];
+            var groupBy = df.GroupBy(categoryColumn);
+
+            var valueColumn = df["value"];
+            var sumResult = groupBy.Sum(valueColumn);
+            Assert.AreEqual(2, (int)sumResult.Rows.Count, "Sum should have 2 groups");
+
+            var meanResult = groupBy.Mean(valueColumn);
+            Assert.AreEqual(2, (int)meanResult.Rows.Count, "Mean should have 2 groups");
+
+            var countResult = groupBy.Count(valueColumn);
+            Assert.AreEqual(2, (int)countResult.Rows.Count, "Count should have 2 groups");
+
+            var minResult = groupBy.Min(valueColumn);
+            Assert.AreEqual(2, (int)minResult.Rows.Count, "Min should have 2 groups");
+
+            var maxResult = groupBy.Max(valueColumn);
+            Assert.AreEqual(2, (int)maxResult.Rows.Count, "Max should have 2 groups");
+
+            var scoreColumn = df["score"];
+            var multiResult = groupBy.Sum(valueColumn, scoreColumn);
+            Assert.AreEqual(2, (int)multiResult.Rows.Count, "Multi-column sum should have 2 groups");
+            Assert.IsTrue(multiResult.Columns.Count >= 3, "Multi-column result should have at least 3 columns");
+
+            Debug.Log("✅ GroupBy functionality test passed!");
         }
 
         [ContextMenu("Run GroupBy Test")]

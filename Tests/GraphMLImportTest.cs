@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Assertions;
 using System.IO;
 using AroAro.DataCore;
 using AroAro.DataCore.Import;
@@ -117,16 +118,14 @@ namespace AroAro.DataCore.Tests
         public void TestGraphMLTextImport()
         {
             Debug.Log("开始 GraphML 文本导入测试...");
-            
-            // Ensure clean state
+
             string dbPath = "graphml_text_test.db";
             if (File.Exists(dbPath))
             {
-                try { File.Delete(dbPath); } 
+                try { File.Delete(dbPath); }
                 catch {}
             }
 
-            // 简单的 GraphML 示例
             string graphmlText = @"<?xml version=""1.0"" encoding=""UTF-8""?>
 <graphml xmlns=""http://graphml.graphdrawing.org/xmlns"">
     <graph id=""simple"" edgedefault=""directed"">
@@ -141,38 +140,27 @@ namespace AroAro.DataCore.Tests
         </edge>
     </graph>
 </graphml>";
-            
-            try
+
+            using (var store = new DataCoreStore("graphml_text_test.db"))
             {
-                // 创建数据存储
-                using (var store = new DataCoreStore("graphml_text_test.db"))
-                {
-                    var graph = store.CreateGraph("SimpleGraph");
-                    
-                    // 导入 GraphML 文本
-                    GraphMLImporter.ImportToGraph(graphmlText, graph);
-                    
-                    Debug.Log($"GraphML 文本导入成功!");
-                    Debug.Log($"- 节点数: {graph.NodeCount}");
-                    Debug.Log($"- 边数: {graph.EdgeCount}");
-                    
-                    // 验证数据
-                    Debug.Log("验证导入的数据:");
-                    Debug.Log($"- 节点 n1 存在: {graph.HasNode("n1")}");
-                    Debug.Log($"- 节点 n2 存在: {graph.HasNode("n2")}");
-                    Debug.Log($"- 边 n1→n2 存在: {graph.HasEdge("n1", "n2")}");
-                    
-                    var n1Props = graph.GetNodeProperties("n1");
-                    Debug.Log($"- 节点 n1 属性 label: {n1Props["label"]}");
-                    
-                    var edgeProps = graph.GetEdgeProperties("n1", "n2");
-                    Debug.Log($"- 边 n1→n2 属性 weight: {edgeProps["weight"]}");
-                }
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"GraphML 文本导入测试失败: {ex.Message}");
-                Debug.LogError(ex.StackTrace);
+                var graph = store.CreateGraph("SimpleGraph");
+                GraphMLImporter.ImportToGraph(graphmlText, graph);
+
+                Assert.AreEqual(2, graph.NodeCount, "Should have 2 nodes");
+                Assert.AreEqual(1, graph.EdgeCount, "Should have 1 edge");
+                Assert.IsTrue(graph.HasNode("n1"), "Node n1 should exist");
+                Assert.IsTrue(graph.HasNode("n2"), "Node n2 should exist");
+                Assert.IsTrue(graph.HasEdge("n1", "n2"), "Edge n1→n2 should exist");
+
+                var n1Props = graph.GetNodeProperties("n1");
+                Assert.IsNotNull(n1Props);
+                Assert.AreEqual("Node 1", n1Props["label"]);
+
+                var edgeProps = graph.GetEdgeProperties("n1", "n2");
+                Assert.IsNotNull(edgeProps);
+                Assert.AreEqual("1.0", edgeProps["weight"].ToString());
+
+                Debug.Log("✅ GraphML text import test passed!");
             }
         }
     }
