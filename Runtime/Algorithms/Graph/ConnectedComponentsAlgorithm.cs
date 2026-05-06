@@ -193,17 +193,18 @@ namespace AroAro.DataCore.Algorithms.Graph
                 context.CancellationToken.ThrowIfCancellationRequested();
 
                 // Iterative DFS using explicit call stack
-                var callStack = new Stack<(int Node, IEnumerator<int> Neighbors, bool Initialized)>();
+                // Tuple: (Node, Neighbors, Parent) — explicitly track DFS parent
+                var callStack = new Stack<(int Node, IEnumerator<int> Neighbors, int Parent)>();
                 disc[i] = low[i] = time++;
                 onStack[i] = true;
                 stack.Push(i);
 
                 var neighbors_i = GetOutNeighborIndices(graph, nodeIds[i], idToIndex).GetEnumerator();
-                callStack.Push((i, neighbors_i, true));
+                callStack.Push((i, neighbors_i, -1));  // -1 = root, no parent
 
                 while (callStack.Count > 0)
                 {
-                    var (node, neighbors, initialized) = callStack.Pop();
+                    var (node, neighbors, parent) = callStack.Pop();
 
                     bool pushedChild = false;
                     while (neighbors.MoveNext())
@@ -215,9 +216,9 @@ namespace AroAro.DataCore.Algorithms.Graph
                             onStack[w] = true;
                             stack.Push(w);
 
-                            callStack.Push((node, neighbors, true));
+                            callStack.Push((node, neighbors, parent));  // Restore current node, preserve its parent
                             var w_neighbors = GetOutNeighborIndices(graph, nodeIds[w], idToIndex).GetEnumerator();
-                            callStack.Push((w, w_neighbors, true));
+                            callStack.Push((w, w_neighbors, node));  // w's DFS parent is node
                             pushedChild = true;
                             break;
                         }
@@ -229,11 +230,10 @@ namespace AroAro.DataCore.Algorithms.Graph
 
                     if (!pushedChild)
                     {
-                        // All neighbors processed — update parent's low
-                        if (callStack.Count > 0)
+                        // All neighbors processed — update actual parent's low-link
+                        if (parent >= 0)
                         {
-                            var parent = callStack.Peek();
-                            low[parent.Node] = Math.Min(low[parent.Node], low[node]);
+                            low[parent] = Math.Min(low[parent], low[node]);
                         }
 
                         // Check if this is a root of an SCC
