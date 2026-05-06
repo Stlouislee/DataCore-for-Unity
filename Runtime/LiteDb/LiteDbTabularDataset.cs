@@ -549,7 +549,7 @@ namespace AroAro.DataCore.LiteDb
                     else
                     {
                         // 标量结果（COUNT/UPDATE/DELETE）
-                        return new RawResult(firstValue);
+                        return new RawResult(ConvertBsonToDataValue(firstValue));
                     }
                 }
                 
@@ -565,6 +565,21 @@ namespace AroAro.DataCore.LiteDb
             }
         }
 
+        /// <summary>
+        /// 将 LiteDB BsonValue 转换为后端无关的 DataValue
+        /// </summary>
+        private static DataValue ConvertBsonToDataValue(BsonValue bv)
+        {
+            if (bv == null || bv.IsNull) return DataValue.Null;
+            if (bv.IsDouble) return new DataValue(bv.AsDouble);
+            if (bv.IsInt32) return new DataValue(bv.AsInt32);
+            if (bv.IsInt64) return new DataValue(bv.AsInt64);
+            if (bv.IsBoolean) return new DataValue(bv.AsBoolean);
+            if (bv.IsString) return new DataValue(bv.AsString);
+            if (bv.IsDateTime) return new DataValue(bv.AsDateTime);
+            return new DataValue(bv.ToString());
+        }
+
         #endregion
 
         #region CSV 导入导出
@@ -574,25 +589,24 @@ namespace AroAro.DataCore.LiteDb
             if (string.IsNullOrEmpty(csvContent))
                 throw new ArgumentException("CSV content cannot be null or empty", nameof(csvContent));
 
-            // NOTE: This method is designed for fast/atomic initial imports.
-            // It builds complete row documents and does a single InsertBulk.
-            var lines = csvContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length == 0) return;
+            // Use RFC 4180 compliant parser (supports quoted fields with delimiters/newlines)
+            var parsedRows = AroAro.DataCore.Import.CsvParser.ParseAll(csvContent, delimiter);
+            if (parsedRows.Count == 0) return;
 
             var headers = new List<string>();
             int dataStartIndex = 0;
 
             if (hasHeader)
             {
-                headers = ParseCsvLine(lines[0], delimiter);
+                headers = parsedRows[0];
                 dataStartIndex = 1;
             }
 
             var dataRows = new List<List<string>>();
-            for (int i = dataStartIndex; i < lines.Length; i++)
+            for (int i = dataStartIndex; i < parsedRows.Count; i++)
             {
-                if (!string.IsNullOrWhiteSpace(lines[i]))
-                    dataRows.Add(ParseCsvLine(lines[i], delimiter));
+                if (parsedRows[i].Count > 0)
+                    dataRows.Add(parsedRows[i]);
             }
 
             if (dataRows.Count == 0) return;

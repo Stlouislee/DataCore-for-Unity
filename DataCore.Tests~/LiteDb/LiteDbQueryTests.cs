@@ -688,6 +688,26 @@ namespace DataCore.Tests.LiteDb
             Assert.Empty(result);
         }
 
+        [Fact]
+        public void GraphQuery_TraverseOut_LargeGraph_CompletesQuickly()
+        {
+            // Performance test: BFS on 500-node linear chain
+            // Previously O(V²) due to repeated GetAllNodesInternal(); now O(V)
+            var g = _store.CreateGraph("perf-test");
+            for (int i = 0; i < 500; i++)
+                g.AddNode($"n{i}", new Dictionary<string, object> { ["idx"] = i });
+            for (int i = 0; i < 499; i++)
+                g.AddEdge($"n{i}", $"n{i + 1}");
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var result = g.Query().From("n0").TraverseOut().ToNodeIds().ToList();
+            sw.Stop();
+
+            Assert.Equal(500, result.Count);
+            Assert.True(sw.ElapsedMilliseconds < 2000,
+                $"BFS on 500-node graph took {sw.ElapsedMilliseconds}ms, expected < 2000ms");
+        }
+
         #endregion
 
         #region GraphQuery: Node/Edge filters

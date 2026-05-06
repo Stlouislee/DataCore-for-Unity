@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Assertions;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -907,16 +908,18 @@ namespace AroAro.DataCore.Tests
         private void PerformGraphQueries(IGraphDataset graph)
         {
             Debug.Log("\n=== Performing Graph Queries ===");
-            
-            // 找出度最高的节点
+
             var nodeIds = graph.GetNodeIds().ToList();
+            Assert.IsTrue(graph.NodeCount > 0, "Graph should have nodes");
+            Assert.IsTrue(graph.EdgeCount > 0, "Graph should have edges");
+
             if (nodeIds.Count > 0)
             {
                 var topNodes = nodeIds
                     .OrderByDescending(id => graph.GetOutDegree(id))
                     .Take(5)
                     .ToList();
-                
+
                 Debug.Log($"Top 5 nodes by out-degree:");
                 foreach (var nodeId in topNodes)
                 {
@@ -924,24 +927,18 @@ namespace AroAro.DataCore.Tests
                     var inDegree = graph.GetInDegree(nodeId);
                     var props = graph.GetNodeProperties(nodeId);
                     var nodeName = props.ContainsKey("name") ? props["name"] : nodeId;
-                    
+
                     Debug.Log($"  - {nodeName}: Out={outDegree}, In={inDegree}");
+                    Assert.IsTrue(outDegree >= 0, $"Out-degree of {nodeId} should be non-negative");
                 }
             }
-            
-            // 随机选择一个节点并显示其邻居
+
             if (nodeIds.Count > 0)
             {
-                var randomNode = nodeIds[Random.Range(0, nodeIds.Count)];
+                var randomNode = nodeIds[0];
                 var neighbors = graph.GetNeighbors(randomNode).ToList();
                 var props = graph.GetNodeProperties(randomNode);
-                var nodeName = props.ContainsKey("name") ? props["name"] : randomNode;
-                
-                Debug.Log($"\nRandom node '{nodeName}' has {neighbors.Count} neighbors");
-                if (neighbors.Count > 0 && neighbors.Count <= 10)
-                {
-                    Debug.Log($"Neighbors: {string.Join(", ", neighbors)}");
-                }
+                Assert.IsNotNull(props, $"Properties of {randomNode} should not be null");
             }
         }
 

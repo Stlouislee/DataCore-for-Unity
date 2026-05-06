@@ -14,11 +14,11 @@ namespace AroAro.DataCore.Examples
             Console.WriteLine("=== 事件监听示例 ===");
 
             // 订阅事件
-            DataCoreEventManager.DatasetCreated += OnDatasetCreated;
-            DataCoreEventManager.DatasetModified += OnDatasetModified;
-            DataCoreEventManager.SessionDatasetAdded += OnSessionDatasetAdded;
-            DataCoreEventManager.SessionDatasetCreated += OnSessionDatasetCreated;
-            DataCoreEventManager.SessionQueryResultSaved += OnSessionQueryResultSaved;
+            DataCoreEventManager.SubscribeDatasetCreated(OnDatasetCreated);
+            DataCoreEventManager.SubscribeDatasetModified(OnDatasetModified);
+            DataCoreEventManager.SubscribeSessionDatasetAdded(OnSessionDatasetAdded);
+            DataCoreEventManager.SubscribeSessionDatasetCreated(OnSessionDatasetCreated);
+            DataCoreEventManager.SubscribeSessionQueryResultSaved(OnSessionQueryResultSaved);
 
             try
             {

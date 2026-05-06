@@ -18,7 +18,7 @@ namespace AroAro.DataCore.Tabular
         private readonly string _id;
         private readonly List<string> _columnNames = new();
         private readonly Dictionary<string, ColumnType> _columnTypes = new();
-        private readonly Dictionary<string, NDArray> _numericData = new();
+        private readonly Dictionary<string, double[]> _numericData = new();
         private readonly Dictionary<string, string[]> _stringData = new();
         private int _rowCount = 0;
 
@@ -42,11 +42,11 @@ namespace AroAro.DataCore.Tabular
                 var colType = _columnTypes[colName];
                 if (colType == ColumnType.Numeric && _numericData.TryGetValue(colName, out var numData))
                 {
-                    copy.AddNumericColumn(colName, numData.Clone() as NDArray);
+                    copy.AddNumericColumn(colName, (double[])numData.Clone());
                 }
                 else if (colType == ColumnType.String && _stringData.TryGetValue(colName, out var strData))
                 {
-                    copy.AddStringColumn(colName, strData.ToArray());
+                    copy.AddStringColumn(colName, (string[])strData.Clone());
                 }
             }
             return copy;
@@ -62,7 +62,21 @@ namespace AroAro.DataCore.Tabular
 
         public void AddNumericColumn(string name, double[] data)
         {
-            AddNumericColumn(name, np.array(data));
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentNullException(nameof(name));
+            if (data == null)
+                throw new ArgumentNullException(nameof(data));
+
+            if (_numericData.ContainsKey(name) || _stringData.ContainsKey(name))
+                throw new ArgumentException($"Column '{name}' already exists");
+
+            if (_columnNames.Count > 0 && data.Length != _rowCount)
+                throw new ArgumentException($"Row count mismatch: expected {_rowCount}, got {data.Length}");
+
+            _columnNames.Add(name);
+            _columnTypes[name] = ColumnType.Numeric;
+            _numericData[name] = data;
+            _rowCount = data.Length;
         }
 
         public void AddNumericColumn(string name, NDArray data)
@@ -71,18 +85,8 @@ namespace AroAro.DataCore.Tabular
                 throw new ArgumentNullException(nameof(name));
             if (data == null)
                 throw new ArgumentNullException(nameof(data));
-            
-            if (_numericData.ContainsKey(name) || _stringData.ContainsKey(name))
-                throw new ArgumentException($"Column '{name}' already exists");
 
-            int newRowCount = (int)data.shape[0];
-            if (_columnNames.Count > 0 && newRowCount != _rowCount)
-                throw new ArgumentException($"Row count mismatch: expected {_rowCount}, got {newRowCount}");
-
-            _columnNames.Add(name);
-            _columnTypes[name] = ColumnType.Numeric;
-            _numericData[name] = data;
-            _rowCount = newRowCount;
+            AddNumericColumn(name, data.ToArray<double>());
         }
 
         public void AddStringColumn(string name, string[] data)
@@ -126,6 +130,16 @@ namespace AroAro.DataCore.Tabular
         {
             if (!_numericData.TryGetValue(name, out var data))
                 throw new KeyNotFoundException($"Numeric column '{name}' not found");
+            return np.array(data);
+        }
+
+        /// <summary>
+        /// 获取数值列的原始 double[] 数组（避免 NDArray 转换开销）
+        /// </summary>
+        internal double[] GetNumericColumnRaw(string name)
+        {
+            if (!_numericData.TryGetValue(name, out var data))
+                throw new KeyNotFoundException($"Numeric column '{name}' not found");
             return data;
         }
 
@@ -157,7 +171,7 @@ namespace AroAro.DataCore.Tabular
                     if (kvp.Value is double or int or float or long)
                     {
                         _columnTypes[kvp.Key] = ColumnType.Numeric;
-                        _numericData[kvp.Key] = np.array(new double[] { Convert.ToDouble(kvp.Value) });
+                        _numericData[kvp.Key] = new[] { Convert.ToDouble(kvp.Value) };
                     }
                     else
                     {
@@ -169,7 +183,7 @@ namespace AroAro.DataCore.Tabular
                 return;
             }
 
-            // Add to existing columns
+            // Add to existing columns — O(1) amortized per column
             foreach (var colName in _columnNames)
             {
                 var value = values.TryGetValue(colName, out var v) ? v : null;
@@ -177,19 +191,17 @@ namespace AroAro.DataCore.Tabular
 
                 if (type == ColumnType.Numeric)
                 {
-                    var currentData = _numericData[colName].ToArray<double>();
-                    var newData = new double[currentData.Length + 1];
-                    Array.Copy(currentData, newData, currentData.Length);
-                    newData[currentData.Length] = value != null ? Convert.ToDouble(value) : 0.0;
-                    _numericData[colName] = np.array(newData);
+                    var data = _numericData[colName];
+                    Array.Resize(ref data, data.Length + 1);
+                    data[data.Length - 1] = value != null ? Convert.ToDouble(value) : 0.0;
+                    _numericData[colName] = data;
                 }
                 else
                 {
-                    var currentData = _stringData[colName];
-                    var newData = new string[currentData.Length + 1];
-                    Array.Copy(currentData, newData, currentData.Length);
-                    newData[currentData.Length] = value?.ToString() ?? "";
-                    _stringData[colName] = newData;
+                    var data = _stringData[colName];
+                    Array.Resize(ref data, data.Length + 1);
+                    data[data.Length - 1] = value?.ToString() ?? "";
+                    _stringData[colName] = data;
                 }
             }
             _rowCount++;
@@ -218,16 +230,9 @@ namespace AroAro.DataCore.Tabular
 
                 var type = _columnTypes[kvp.Key];
                 if (type == ColumnType.Numeric)
-                {
-                    var data = _numericData[kvp.Key].ToArray<double>();
-                    data[rowIndex] = Convert.ToDouble(kvp.Value);
-                    _numericData[kvp.Key] = np.array(data);
-                }
+                    _numericData[kvp.Key][rowIndex] = Convert.ToDouble(kvp.Value);
                 else
-                {
-                    var data = _stringData[kvp.Key];
-                    data[rowIndex] = kvp.Value?.ToString() ?? "";
-                }
+                    _stringData[kvp.Key][rowIndex] = kvp.Value?.ToString() ?? "";
             }
             return true;
         }
@@ -237,20 +242,25 @@ namespace AroAro.DataCore.Tabular
             if (rowIndex < 0 || rowIndex >= _rowCount)
                 return false;
 
+            int newLen = _rowCount - 1;
             foreach (var colName in _columnNames)
             {
                 var type = _columnTypes[colName];
                 if (type == ColumnType.Numeric)
                 {
-                    var data = _numericData[colName].ToArray<double>().ToList();
-                    data.RemoveAt(rowIndex);
-                    _numericData[colName] = np.array(data.ToArray());
+                    var data = _numericData[colName];
+                    if (rowIndex < newLen)
+                        Array.Copy(data, rowIndex + 1, data, rowIndex, newLen - rowIndex);
+                    Array.Resize(ref data, newLen);
+                    _numericData[colName] = data;
                 }
                 else
                 {
-                    var data = _stringData[colName].ToList();
-                    data.RemoveAt(rowIndex);
-                    _stringData[colName] = data.ToArray();
+                    var data = _stringData[colName];
+                    if (rowIndex < newLen)
+                        Array.Copy(data, rowIndex + 1, data, rowIndex, newLen - rowIndex);
+                    Array.Resize(ref data, newLen);
+                    _stringData[colName] = data;
                 }
             }
             _rowCount--;
@@ -267,13 +277,9 @@ namespace AroAro.DataCore.Tabular
             {
                 var type = _columnTypes[colName];
                 if (type == ColumnType.Numeric)
-                {
-                    row[colName] = _numericData[colName].GetDouble(rowIndex);
-                }
+                    row[colName] = _numericData[colName][rowIndex];
                 else
-                {
                     row[colName] = _stringData[colName][rowIndex];
-                }
             }
             return row;
         }
@@ -292,7 +298,7 @@ namespace AroAro.DataCore.Tabular
             foreach (var colName in _columnNames.ToList())
             {
                 if (_numericData.ContainsKey(colName))
-                    _numericData[colName] = np.array(new double[0]);
+                    _numericData[colName] = Array.Empty<double>();
                 if (_stringData.ContainsKey(colName))
                     _stringData[colName] = Array.Empty<string>();
             }
@@ -312,55 +318,65 @@ namespace AroAro.DataCore.Tabular
 
         public double Sum(string columnName)
         {
-            var data = GetNumericColumn(columnName);
-            return data.ToArray<double>().Sum();
+            var data = GetNumericColumnRaw(columnName);
+            double sum = 0;
+            for (int i = 0; i < data.Length; i++) sum += data[i];
+            return sum;
         }
 
         public double Average(string columnName)
         {
-            var data = GetNumericColumn(columnName);
-            return data.ToArray<double>().Average();
+            var data = GetNumericColumnRaw(columnName);
+            if (data.Length == 0) return 0;
+            double sum = 0;
+            for (int i = 0; i < data.Length; i++) sum += data[i];
+            return sum / data.Length;
         }
 
         public double Min(string columnName)
         {
-            var data = GetNumericColumn(columnName);
-            return data.ToArray<double>().Min();
+            var data = GetNumericColumnRaw(columnName);
+            if (data.Length == 0) return 0;
+            double min = double.MaxValue;
+            for (int i = 0; i < data.Length; i++) { if (data[i] < min) min = data[i]; }
+            return min;
         }
 
         public double Max(string columnName)
         {
-            var data = GetNumericColumn(columnName);
-            return data.ToArray<double>().Max();
+            var data = GetNumericColumnRaw(columnName);
+            if (data.Length == 0) return 0;
+            double max = double.MinValue;
+            for (int i = 0; i < data.Length; i++) { if (data[i] > max) max = data[i]; }
+            return max;
         }
 
         public void ImportFromCsv(string csvContent, bool hasHeader = true, char delimiter = ',')
         {
-            var lines = csvContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length == 0) return;
+            var parsed = AroAro.DataCore.Import.CsvParser.ParseAll(csvContent, delimiter);
+            if (parsed.Count == 0) return;
 
             string[] headers;
             int dataStartIndex;
 
             if (hasHeader)
             {
-                headers = lines[0].Split(delimiter);
+                headers = parsed[0].ToArray();
                 dataStartIndex = 1;
             }
             else
             {
-                var firstRow = lines[0].Split(delimiter);
-                headers = Enumerable.Range(0, firstRow.Length).Select(i => $"Column{i}").ToArray();
+                headers = Enumerable.Range(0, parsed[0].Count).Select(i => $"Column{i}").ToArray();
                 dataStartIndex = 0;
             }
 
             // Detect column types from first data row
-            var firstDataRow = lines[dataStartIndex].Split(delimiter);
+            var firstDataRow = parsed[dataStartIndex];
             var isNumeric = new bool[headers.Length];
             
             for (int i = 0; i < headers.Length; i++)
             {
-                isNumeric[i] = double.TryParse(firstDataRow[i], out _);
+                isNumeric[i] = i < firstDataRow.Count && double.TryParse(firstDataRow[i], out _);
             }
 
             // Parse all data
@@ -375,10 +391,10 @@ namespace AroAro.DataCore.Tabular
                     stringCols[i] = new List<string>();
             }
 
-            for (int row = dataStartIndex; row < lines.Length; row++)
+            for (int row = dataStartIndex; row < parsed.Count; row++)
             {
-                var values = lines[row].Split(delimiter);
-                for (int col = 0; col < headers.Length && col < values.Length; col++)
+                var values = parsed[row];
+                for (int col = 0; col < headers.Length && col < values.Count; col++)
                 {
                     if (isNumeric[col])
                     {
@@ -417,7 +433,7 @@ namespace AroAro.DataCore.Tabular
                 {
                     var type = _columnTypes[colName];
                     if (type == ColumnType.Numeric)
-                        values.Add(_numericData[colName].GetDouble(i).ToString());
+                        values.Add(_numericData[colName][i].ToString());
                     else
                         values.Add(_stringData[colName][i]);
                 }
@@ -445,7 +461,7 @@ namespace AroAro.DataCore.Tabular
                 {
                     var type = _columnTypes[colName];
                     if (type == ColumnType.Numeric)
-                        values.Add(_numericData[colName].GetDouble(i).ToString());
+                        values.Add(_numericData[colName][i].ToString());
                     else
                         values.Add(_stringData[colName][i]);
                 }
@@ -462,39 +478,66 @@ namespace AroAro.DataCore.Tabular
 
         public double Std(string columnName)
         {
-            var data = GetNumericColumn(columnName).ToArray<double>();
+            var data = GetNumericColumnRaw(columnName);
             if (data.Length == 0) return 0;
             
-            var mean = data.Average();
-            var sumSquares = data.Sum(x => (x - mean) * (x - mean));
+            double sum = 0;
+            for (int i = 0; i < data.Length; i++) sum += data[i];
+            var mean = sum / data.Length;
+
+            double sumSquares = 0;
+            for (int i = 0; i < data.Length; i++)
+            {
+                var d = data[i] - mean;
+                sumSquares += d * d;
+            }
             return Math.Sqrt(sumSquares / data.Length);
         }
 
         public int[] Where(string column, QueryOp op, object value)
         {
+            if (!_columnNames.Contains(column))
+                return Array.Empty<int>();
+
             var indices = new List<int>();
-            for (int i = 0; i < _rowCount; i++)
+            var type = _columnTypes[column];
+
+            if (type == ColumnType.Numeric)
             {
-                var row = GetRow(i);
-                if (!row.TryGetValue(column, out var cellValue))
-                    continue;
-
-                bool match = op switch
+                var data = _numericData[column];
+                var cmpVal = Convert.ToDouble(value);
+                for (int i = 0; i < _rowCount; i++)
                 {
-                    QueryOp.Eq => Equals(cellValue, value),
-                    QueryOp.Ne => !Equals(cellValue, value),
-                    QueryOp.Gt => Convert.ToDouble(cellValue) > Convert.ToDouble(value),
-                    QueryOp.Ge => Convert.ToDouble(cellValue) >= Convert.ToDouble(value),
-                    QueryOp.Lt => Convert.ToDouble(cellValue) < Convert.ToDouble(value),
-                    QueryOp.Le => Convert.ToDouble(cellValue) <= Convert.ToDouble(value),
-                    QueryOp.Contains => cellValue?.ToString().Contains(value?.ToString() ?? "") ?? false,
-                    QueryOp.StartsWith => cellValue?.ToString().StartsWith(value?.ToString() ?? "") ?? false,
-                    QueryOp.EndsWith => cellValue?.ToString().EndsWith(value?.ToString() ?? "") ?? false,
-                    _ => false
-                };
-
-                if (match)
-                    indices.Add(i);
+                    bool match = op switch
+                    {
+                        QueryOp.Eq => data[i] == cmpVal,
+                        QueryOp.Ne => data[i] != cmpVal,
+                        QueryOp.Gt => data[i] > cmpVal,
+                        QueryOp.Ge => data[i] >= cmpVal,
+                        QueryOp.Lt => data[i] < cmpVal,
+                        QueryOp.Le => data[i] <= cmpVal,
+                        _ => false
+                    };
+                    if (match) indices.Add(i);
+                }
+            }
+            else
+            {
+                var data = _stringData[column];
+                var cmpStr = value?.ToString() ?? "";
+                for (int i = 0; i < _rowCount; i++)
+                {
+                    bool match = op switch
+                    {
+                        QueryOp.Eq => data[i] == cmpStr,
+                        QueryOp.Ne => data[i] != cmpStr,
+                        QueryOp.Contains => data[i].Contains(cmpStr),
+                        QueryOp.StartsWith => data[i].StartsWith(cmpStr),
+                        QueryOp.EndsWith => data[i].EndsWith(cmpStr),
+                        _ => false
+                    };
+                    if (match) indices.Add(i);
+                }
             }
             return indices.ToArray();
         }

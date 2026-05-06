@@ -40,7 +40,7 @@ namespace DataCore.Tests.Events
         public void DatasetCreated_FiresOnCreateTabular()
         {
             DatasetCreatedEventArgs receivedArgs = null;
-            DataCoreEventManager.DatasetCreated += (sender, args) => receivedArgs = args;
+            DataCoreEventManager.SubscribeDatasetCreated((sender, args) => receivedArgs = args);
 
             _store.CreateTabular("testTable");
 
@@ -53,7 +53,7 @@ namespace DataCore.Tests.Events
         public void DatasetCreated_FiresOnCreateGraph()
         {
             DatasetCreatedEventArgs receivedArgs = null;
-            DataCoreEventManager.DatasetCreated += (sender, args) => receivedArgs = args;
+            DataCoreEventManager.SubscribeDatasetCreated((sender, args) => receivedArgs = args);
 
             _store.CreateGraph("testGraph");
 
@@ -72,7 +72,7 @@ namespace DataCore.Tests.Events
             _store.CreateTabular("toDelete");
 
             DatasetDeletedEventArgs receivedArgs = null;
-            DataCoreEventManager.DatasetDeleted += (sender, args) => receivedArgs = args;
+            DataCoreEventManager.SubscribeDatasetDeleted((sender, args) => receivedArgs = args);
 
             _store.Delete("toDelete");
 
@@ -87,7 +87,7 @@ namespace DataCore.Tests.Events
             _store.CreateGraph("graphToDelete");
 
             DatasetDeletedEventArgs receivedArgs = null;
-            DataCoreEventManager.DatasetDeleted += (sender, args) => receivedArgs = args;
+            DataCoreEventManager.SubscribeDatasetDeleted((sender, args) => receivedArgs = args);
 
             _store.Delete("graphToDelete");
 
@@ -103,7 +103,7 @@ namespace DataCore.Tests.Events
         public void DatasetModified_FiresWhenRaised()
         {
             DatasetModifiedEventArgs receivedArgs = null;
-            DataCoreEventManager.DatasetModified += (sender, args) => receivedArgs = args;
+            DataCoreEventManager.SubscribeDatasetModified((sender, args) => receivedArgs = args);
 
             var tabular = new TabularData("test");
             tabular.AddNumericColumn("x", new double[] { 1, 2, 3 });
@@ -124,7 +124,7 @@ namespace DataCore.Tests.Events
         public void DatasetQueried_FiresWhenRaised()
         {
             DatasetQueriedEventArgs receivedArgs = null;
-            DataCoreEventManager.DatasetQueried += (sender, args) => receivedArgs = args;
+            DataCoreEventManager.SubscribeDatasetQueried((sender, args) => receivedArgs = args);
 
             var tabular = new TabularData("test");
             tabular.AddNumericColumn("x", new double[] { 1, 2, 3 });
@@ -146,8 +146,8 @@ namespace DataCore.Tests.Events
             bool called1 = false;
             bool called2 = false;
 
-            DataCoreEventManager.DatasetCreated += (s, e) => called1 = true;
-            DataCoreEventManager.DatasetDeleted += (s, e) => called2 = true;
+            DataCoreEventManager.SubscribeDatasetCreated((s, e) => called1 = true);
+            DataCoreEventManager.SubscribeDatasetDeleted((s, e) => called2 = true);
 
             DataCoreEventManager.ClearAllSubscriptions();
 
@@ -164,8 +164,8 @@ namespace DataCore.Tests.Events
             bool startedCalled = false;
             bool completedCalled = false;
 
-            DataCoreEventManager.AlgorithmStarted += (s, e) => startedCalled = true;
-            DataCoreEventManager.AlgorithmCompleted += (s, e) => completedCalled = true;
+            DataCoreEventManager.SubscribeAlgorithmStarted((s, e) => startedCalled = true);
+            DataCoreEventManager.SubscribeAlgorithmCompleted((s, e) => completedCalled = true);
 
             DataCoreEventManager.ClearAllSubscriptions();
 
@@ -185,9 +185,9 @@ namespace DataCore.Tests.Events
         {
             int callCount = 0;
 
-            DataCoreEventManager.DatasetCreated += (s, e) => Interlocked.Increment(ref callCount);
-            DataCoreEventManager.DatasetCreated += (s, e) => Interlocked.Increment(ref callCount);
-            DataCoreEventManager.DatasetCreated += (s, e) => Interlocked.Increment(ref callCount);
+            DataCoreEventManager.SubscribeDatasetCreated((s, e) => Interlocked.Increment(ref callCount));
+            DataCoreEventManager.SubscribeDatasetCreated((s, e) => Interlocked.Increment(ref callCount));
+            DataCoreEventManager.SubscribeDatasetCreated((s, e) => Interlocked.Increment(ref callCount));
 
             _store.CreateTabular("test");
 
@@ -200,8 +200,8 @@ namespace DataCore.Tests.Events
             DatasetCreatedEventArgs args1 = null;
             DatasetCreatedEventArgs args2 = null;
 
-            DataCoreEventManager.DatasetCreated += (s, e) => args1 = e;
-            DataCoreEventManager.DatasetCreated += (s, e) => args2 = e;
+            DataCoreEventManager.SubscribeDatasetCreated((s, e) => args1 = e);
+            DataCoreEventManager.SubscribeDatasetCreated((s, e) => args2 = e);
 
             _store.CreateTabular("shared");
 
@@ -219,7 +219,7 @@ namespace DataCore.Tests.Events
         public void DatasetCreated_CorrectDatasetName()
         {
             string receivedName = null;
-            DataCoreEventManager.DatasetCreated += (s, e) => receivedName = e.DatasetName;
+            DataCoreEventManager.SubscribeDatasetCreated((s, e) => receivedName = e.DatasetName);
 
             _store.CreateTabular("MyDataset");
 
@@ -230,7 +230,7 @@ namespace DataCore.Tests.Events
         public void DatasetCreated_CorrectDatasetKind()
         {
             DataSetKind? receivedKind = null;
-            DataCoreEventManager.DatasetCreated += (s, e) => receivedKind = e.DatasetKind;
+            DataCoreEventManager.SubscribeDatasetCreated((s, e) => receivedKind = e.DatasetKind);
 
             _store.CreateGraph("MyGraph");
 
@@ -244,11 +244,11 @@ namespace DataCore.Tests.Events
 
             string receivedName = null;
             DataSetKind? receivedKind = null;
-            DataCoreEventManager.DatasetDeleted += (s, e) =>
+            DataCoreEventManager.SubscribeDatasetDeleted((s, e) =>
             {
                 receivedName = e.DatasetName;
                 receivedKind = e.DatasetKind;
-            };
+            });
 
             _store.Delete("toDelete");
 
@@ -260,7 +260,7 @@ namespace DataCore.Tests.Events
         public void DatasetModified_CorrectOperation()
         {
             string receivedOp = null;
-            DataCoreEventManager.DatasetModified += (s, e) => receivedOp = e.Operation;
+            DataCoreEventManager.SubscribeDatasetModified((s, e) => receivedOp = e.Operation);
 
             var tabular = new TabularData("test");
             DataCoreEventManager.RaiseDatasetModified(tabular, "AddRow");
@@ -276,7 +276,7 @@ namespace DataCore.Tests.Events
         public void SessionDatasetCreated_FiresOnCreateDataset()
         {
             SessionDatasetCreatedEventArgs receivedArgs = null;
-            DataCoreEventManager.SessionDatasetCreated += (s, e) => receivedArgs = e;
+            DataCoreEventManager.SubscribeSessionDatasetCreated((s, e) => receivedArgs = e);
 
             var session = new AroAro.DataCore.Session.Session("Test", _store);
             session.CreateDataset("newDs", DataSetKind.Tabular);
@@ -290,7 +290,7 @@ namespace DataCore.Tests.Events
         public void SessionDatasetRemoved_FiresOnRemoveDataset()
         {
             SessionDatasetRemovedEventArgs receivedArgs = null;
-            DataCoreEventManager.SessionDatasetRemoved += (s, e) => receivedArgs = e;
+            DataCoreEventManager.SubscribeSessionDatasetRemoved((s, e) => receivedArgs = e);
 
             _store.CreateTabular("source");
             var session = new AroAro.DataCore.Session.Session("Test", _store);
@@ -309,7 +309,7 @@ namespace DataCore.Tests.Events
         public void DataFrameCreated_FiresOnCreateDataFrame()
         {
             DataFrameCreatedEventArgs receivedArgs = null;
-            DataCoreEventManager.DataFrameCreated += (s, e) => receivedArgs = e;
+            DataCoreEventManager.SubscribeDataFrameCreated((s, e) => receivedArgs = e);
 
             var session = new AroAro.DataCore.Session.Session("Test", _store);
             session.CreateDataFrame("myDf");
@@ -323,7 +323,7 @@ namespace DataCore.Tests.Events
         public void DataFrameRemoved_FiresOnRemoveDataFrame()
         {
             DataFrameRemovedEventArgs receivedArgs = null;
-            DataCoreEventManager.DataFrameRemoved += (s, e) => receivedArgs = e;
+            DataCoreEventManager.SubscribeDataFrameRemoved((s, e) => receivedArgs = e);
 
             var session = new AroAro.DataCore.Session.Session("Test", _store);
             session.CreateDataFrame("myDf");
@@ -341,7 +341,7 @@ namespace DataCore.Tests.Events
         public void AlgorithmStarted_FiresOnExecution()
         {
             AlgorithmStartedEventArgs receivedArgs = null;
-            DataCoreEventManager.AlgorithmStarted += (s, e) => receivedArgs = e;
+            DataCoreEventManager.SubscribeAlgorithmStarted((s, e) => receivedArgs = e);
 
             var graph = new GraphData("test");
             graph.AddNode("A");
@@ -356,7 +356,7 @@ namespace DataCore.Tests.Events
         public void AlgorithmCompleted_FiresOnCompletion()
         {
             AlgorithmCompletedEventArgs receivedArgs = null;
-            DataCoreEventManager.AlgorithmCompleted += (s, e) => receivedArgs = e;
+            DataCoreEventManager.SubscribeAlgorithmCompleted((s, e) => receivedArgs = e);
 
             DataCoreEventManager.RaiseAlgorithmCompleted("PageRank", null, null, true, TimeSpan.FromMilliseconds(100));
 
@@ -370,7 +370,7 @@ namespace DataCore.Tests.Events
         public void PipelineCompleted_FiresOnCompletion()
         {
             PipelineCompletedEventArgs receivedArgs = null;
-            DataCoreEventManager.PipelineCompleted += (s, e) => receivedArgs = e;
+            DataCoreEventManager.SubscribePipelineCompleted((s, e) => receivedArgs = e);
 
             DataCoreEventManager.RaisePipelineCompleted("MyPipeline", 3, true, TimeSpan.FromMilliseconds(500));
 
@@ -385,21 +385,12 @@ namespace DataCore.Tests.Events
         // ────────────────────────────────────────────────────────────────
 
         [Fact]
-        [Trait("Bug", "event-thread-safety")]
-        public async Task ThreadSafety_ConcurrentSubscribeAndRaise_NoGuarantee()
+        public async Task ThreadSafety_ConcurrentSubscribeAndRaise_NoExceptions()
         {
-            // Known issue: DataCoreEventManager uses standard C# events which are
-            // not thread-safe. Concurrent subscribe/raise operations can lead to
-            // race conditions, lost events, or exceptions.
-            //
-            // This test documents the issue by running concurrent operations.
-            // In a correct implementation, events would use ConcurrentDictionary
-            // or similar thread-safe mechanisms.
             var errors = new System.Collections.Concurrent.ConcurrentBag<Exception>();
             var receivedCount = 0;
 
-            // Subscribe handler
-            DataCoreEventManager.DatasetCreated += (s, e) => Interlocked.Increment(ref receivedCount);
+            DataCoreEventManager.SubscribeDatasetCreated((s, e) => Interlocked.Increment(ref receivedCount));
 
             var tasks = new List<Task>();
 
@@ -427,8 +418,8 @@ namespace DataCore.Tests.Events
                     try
                     {
                         EventHandler<DatasetCreatedEventArgs> handler = (s, e) => { };
-                        DataCoreEventManager.DatasetCreated += handler;
-                        DataCoreEventManager.DatasetCreated -= handler;
+                        DataCoreEventManager.SubscribeDatasetCreated(handler);
+                        DataCoreEventManager.UnsubscribeDatasetCreated(handler);
                     }
                     catch (Exception ex)
                     {
@@ -439,30 +430,18 @@ namespace DataCore.Tests.Events
 
             await Task.WhenAll(tasks.ToArray());
 
-            // Document: some events may be lost or exceptions may occur
-            // In a thread-safe implementation, receivedCount would be exactly 20
-            // and errors would be empty.
-            Assert.True(receivedCount <= 20, $"Expected at most 20 events, got {receivedCount}");
-
-            if (errors.Count > 0)
-            {
-                // Document that race conditions occurred
-                Assert.True(true, $"Race conditions detected: {errors.Count} exceptions during concurrent access");
-            }
+            Assert.Empty(errors);
+            Assert.Equal(20, receivedCount);
         }
 
         [Fact]
-        public async Task ClearAllSubscriptions_CalledDuringRaise_NoGuarantee()
+        public async Task ClearAllSubscriptions_CalledDuringRaise_NoExceptions()
         {
-            // Known issue: clearing subscriptions while events are being raised
-            // can lead to NullReferenceException because the event delegate
-            // is set to null mid-invocation.
             var errors = new System.Collections.Concurrent.ConcurrentBag<Exception>();
             var tasks = new List<Task>();
 
-            DataCoreEventManager.DatasetCreated += (s, e) => { };
+            DataCoreEventManager.SubscribeDatasetCreated((s, e) => { });
 
-            // Raise events concurrently with clearing
             for (int i = 0; i < 10; i++)
             {
                 tasks.Add(Task.Run(() =>
@@ -492,8 +471,7 @@ namespace DataCore.Tests.Events
 
             await Task.WhenAll(tasks.ToArray());
 
-            // This test documents potential issues; no assertion on errors
-            // since the behavior is inherently racy.
+            Assert.Empty(errors);
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -505,11 +483,29 @@ namespace DataCore.Tests.Events
         {
             DataCoreEventManager.ClearAllSubscriptions();
 
-            // Should not throw even with no subscribers
             var ex = Record.Exception(() =>
                 DataCoreEventManager.RaiseDatasetCreated(new TabularData("test")));
 
             Assert.Null(ex);
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // DatasetImportCompleted event (#111)
+        // ────────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void DatasetImportCompleted_FiresAfterImport()
+        {
+            DatasetImportCompletedEventArgs receivedArgs = null;
+            DataCoreEventManager.SubscribeDatasetImportCompleted((s, e) => receivedArgs = e);
+
+            var tabular = _store.CreateTabular("import-test");
+            tabular.AddNumericColumn("x", new double[] { 1, 2, 3 });
+            DataCoreEventManager.RaiseDatasetImportCompleted(tabular);
+
+            Assert.NotNull(receivedArgs);
+            Assert.Equal("import-test", receivedArgs.DatasetName);
+            Assert.Equal(3, ((ITabularDataset)receivedArgs.Dataset).RowCount);
         }
     }
 }

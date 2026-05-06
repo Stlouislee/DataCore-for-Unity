@@ -129,6 +129,11 @@ namespace AroAro.DataCore.LiteDb
             if (!_dataset.HasNode(_startNodeId))
                 yield break;
 
+            // Pre-load all nodes into dictionary for O(1) lookup
+            // Single O(V) cost instead of O(V) per BFS step
+            var nodeMap = _dataset.GetAllNodesInternal()
+                .ToDictionary(n => n.NodeId, n => n);
+
             var visited = new HashSet<string>();
             var queue = new Queue<(string nodeId, int depth)>();
             
@@ -139,9 +144,8 @@ namespace AroAro.DataCore.LiteDb
             {
                 var (current, depth) = queue.Dequeue();
                 
-                // 检查节点是否通过过滤器
-                var node = _dataset.GetAllNodesInternal().FirstOrDefault(n => n.NodeId == current);
-                if (node != null)
+                // O(1) dictionary lookup replaces O(N) linear scan per step
+                if (nodeMap.TryGetValue(current, out var node))
                 {
                     bool passesFilter = true;
                     foreach (var filter in _nodeFilters)

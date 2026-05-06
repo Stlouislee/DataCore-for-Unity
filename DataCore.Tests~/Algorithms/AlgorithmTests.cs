@@ -783,6 +783,176 @@ namespace DataCore.Tests.Algorithms
             Assert.True(output.GetNodeProperties("A").ContainsKey("componentId"));
         }
 
+        [Fact]
+        public void TarjanSCC_DirectedCycle_ReturnsOneComponent()
+        {
+            // A→B→C→A forms a single SCC
+            var graph = new GraphData("cycle");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B");
+            graph.AddEdge("B", "C");
+            graph.AddEdge("C", "A");
+
+            var algo = new ConnectedComponentsAlgorithm();
+            var ctx = AlgorithmContext.Create().WithParameter("directed", true).Build();
+            var result = algo.Execute(graph, ctx);
+
+            Assert.True(result.Success);
+            Assert.Equal(1, (int)result.Metrics["componentCount"]);
+        }
+
+        [Fact]
+        public void TarjanSCC_TwoSeparateSCCs_CorrectCount()
+        {
+            // SCC1: A→B→A, SCC2: C→D→C (no edges between them)
+            var graph = new GraphData("two_scc");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddNode("D");
+            graph.AddEdge("A", "B");
+            graph.AddEdge("B", "A");
+            graph.AddEdge("C", "D");
+            graph.AddEdge("D", "C");
+
+            var algo = new ConnectedComponentsAlgorithm();
+            var ctx = AlgorithmContext.Create().WithParameter("directed", true).Build();
+            var result = algo.Execute(graph, ctx);
+
+            Assert.Equal(2, (int)result.Metrics["componentCount"]);
+        }
+
+        [Fact]
+        public void TarjanSCC_NestedSCCs_CorrectAssignment()
+        {
+            // A→B→C→B (SCC: {B,C}), A is separate
+            // This tests that parent low-link is correctly tracked
+            var graph = new GraphData("nested");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B");
+            graph.AddEdge("B", "C");
+            graph.AddEdge("C", "B");
+
+            var algo = new ConnectedComponentsAlgorithm();
+            var ctx = AlgorithmContext.Create().WithParameter("directed", true).Build();
+            var result = algo.Execute(graph, ctx);
+            var output = result.OutputDataset as GraphData;
+
+            Assert.Equal(2, (int)result.Metrics["componentCount"]);
+
+            // B and C should be in the same SCC
+            var compB = Convert.ToInt32(output.GetNodeProperties("B")["componentId"]);
+            var compC = Convert.ToInt32(output.GetNodeProperties("C")["componentId"]);
+            Assert.Equal(compB, compC);
+
+            // A should be in a different SCC
+            var compA = Convert.ToInt32(output.GetNodeProperties("A")["componentId"]);
+            Assert.NotEqual(compA, compB);
+        }
+
+        [Fact]
+        public void TarjanSCC_DiamondGraph_CorrectSCCs()
+        {
+            // Diamond: A→B, A→C, B→D, C→D
+            // All individual nodes (no cycles) → 4 SCCs
+            var graph = new GraphData("diamond");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddNode("D");
+            graph.AddEdge("A", "B");
+            graph.AddEdge("A", "C");
+            graph.AddEdge("B", "D");
+            graph.AddEdge("C", "D");
+
+            var algo = new ConnectedComponentsAlgorithm();
+            var ctx = AlgorithmContext.Create().WithParameter("directed", true).Build();
+            var result = algo.Execute(graph, ctx);
+
+            Assert.Equal(4, (int)result.Metrics["componentCount"]);
+        }
+
+        [Fact]
+        public void TarjanSCC_ComplexGraph_CorrectComponentCount()
+        {
+            // Graph with mixed SCCs and DAG edges:
+            // SCC1: 1→2→3→1
+            // SCC2: 4→5→4
+            // Edge: 3→4 (cross-SCC)
+            var graph = new GraphData("complex");
+            graph.AddNode("1");
+            graph.AddNode("2");
+            graph.AddNode("3");
+            graph.AddNode("4");
+            graph.AddNode("5");
+            graph.AddEdge("1", "2");
+            graph.AddEdge("2", "3");
+            graph.AddEdge("3", "1");
+            graph.AddEdge("3", "4");
+            graph.AddEdge("4", "5");
+            graph.AddEdge("5", "4");
+
+            var algo = new ConnectedComponentsAlgorithm();
+            var ctx = AlgorithmContext.Create().WithParameter("directed", true).Build();
+            var result = algo.Execute(graph, ctx);
+            var output = result.OutputDataset as GraphData;
+
+            Assert.Equal(2, (int)result.Metrics["componentCount"]);
+
+            // Nodes 1,2,3 in same SCC
+            var c1 = Convert.ToInt32(output.GetNodeProperties("1")["componentId"]);
+            var c2 = Convert.ToInt32(output.GetNodeProperties("2")["componentId"]);
+            var c3 = Convert.ToInt32(output.GetNodeProperties("3")["componentId"]);
+            Assert.Equal(c1, c2);
+            Assert.Equal(c2, c3);
+
+            // Nodes 4,5 in same SCC
+            var c4 = Convert.ToInt32(output.GetNodeProperties("4")["componentId"]);
+            var c5 = Convert.ToInt32(output.GetNodeProperties("5")["componentId"]);
+            Assert.Equal(c4, c5);
+
+            // Different SCCs
+            Assert.NotEqual(c1, c4);
+        }
+
+        [Fact]
+        public void TarjanSCC_SingleNode_ReturnsOneComponent()
+        {
+            var graph = new GraphData("single_directed");
+            graph.AddNode("only");
+
+            var algo = new ConnectedComponentsAlgorithm();
+            var ctx = AlgorithmContext.Create().WithParameter("directed", true).Build();
+            var result = algo.Execute(graph, ctx);
+
+            Assert.True(result.Success);
+            Assert.Equal(1, (int)result.Metrics["componentCount"]);
+        }
+
+        [Fact]
+        public void TarjanSCC_LinearChain_AllSeparateSCCs()
+        {
+            // A→B→C→D (no cycles) → 4 separate SCCs
+            var graph = new GraphData("chain");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddNode("D");
+            graph.AddEdge("A", "B");
+            graph.AddEdge("B", "C");
+            graph.AddEdge("C", "D");
+
+            var algo = new ConnectedComponentsAlgorithm();
+            var ctx = AlgorithmContext.Create().WithParameter("directed", true).Build();
+            var result = algo.Execute(graph, ctx);
+
+            Assert.Equal(4, (int)result.Metrics["componentCount"]);
+        }
+
         // ════════════════════════════════════════════════════════════════
         // MinMaxNormalize
         // ════════════════════════════════════════════════════════════════
