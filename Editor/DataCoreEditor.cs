@@ -90,9 +90,24 @@ namespace AroAro.DataCore.Editor
                         names = store.Names.ToList();
                     }
                 }
-                catch
+                catch (ObjectDisposedException)
                 {
-                    // Ignore transient errors or disposed object exceptions during UI draw
+                    EditorGUILayout.HelpBox("Store has been disposed.", MessageType.Warning);
+                    EditorGUI.indentLevel--;
+                    return;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    EditorGUILayout.HelpBox($"Store error: {ex.Message}", MessageType.Warning);
+                    EditorGUI.indentLevel--;
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[DataCoreEditor] Unexpected error accessing store: {ex}");
+                    EditorGUILayout.HelpBox($"Unexpected error: {ex.Message}", MessageType.Error);
+                    EditorGUI.indentLevel--;
+                    return;
                 }
                 
                 if (store == null)
