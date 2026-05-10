@@ -40,6 +40,16 @@ namespace AroAro.DataCore.Tests
         }
         
         /// <summary>
+        /// 获取测试文件的绝对路径，基于 Application.dataPath 解析相对路径
+        /// </summary>
+        private string GetResolvedFilePath()
+        {
+            if (Path.IsPathRooted(graphmlFilePath))
+                return graphmlFilePath;
+            return Path.Combine(Application.dataPath, graphmlFilePath);
+        }
+
+        /// <summary>
         /// 运行 GraphML 导入测试
         /// </summary>
         [ContextMenu("Run GraphML Import Test")]
@@ -62,13 +72,11 @@ namespace AroAro.DataCore.Tests
                 }
             }
 
-            // 检查文件是否存在
-            if (!File.Exists(graphmlFilePath))
-            {
-                Debug.LogError($"GraphML 文件不存在: {graphmlFilePath}");
-                importSuccess = false;
-                return;
-            }
+            // 解析绝对路径并断言文件存在
+            string resolvedPath = GetResolvedFilePath();
+            Assert.IsTrue(File.Exists(resolvedPath),
+                $"GraphML 测试文件不存在: {resolvedPath} (原始路径: {graphmlFilePath})");
+            graphmlFilePath = resolvedPath;
             
             try
             {

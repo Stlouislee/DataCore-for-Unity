@@ -10,19 +10,34 @@ namespace AroAro.DataCore.SampleDatasets
     /// </summary>
     public static class CaliforniaHousingDataset
     {
+        private static System.Collections.Generic.Dictionary<string, double[]> _cachedData;
+
         /// <summary>
         /// Get the built-in California housing data as a dictionary
         /// </summary>
         public static System.Collections.Generic.Dictionary<string, double[]> GetSampleData()
         {
+            if (_cachedData != null) return _cachedData;
+
             var csvFile = Resources.Load<TextAsset>("AroAro/DataCore/california_housing_test");
             if (csvFile != null)
             {
-                return ParseCsv(csvFile.text);
+                _cachedData = ParseCsv(csvFile.text);
             }
-            
-            Debug.LogWarning("Could not find California Housing CSV in Resources. Using fallback small dataset.");
-            return GetFallbackData();
+            else
+            {
+                Debug.LogWarning("Could not find California Housing CSV in Resources. Using fallback small dataset.");
+                _cachedData = GetFallbackData();
+            }
+            return _cachedData;
+        }
+
+        /// <summary>
+        /// Clear cache (for testing or forced reload)
+        /// </summary>
+        public static void ClearCache()
+        {
+            _cachedData = null;
         }
 
         private static System.Collections.Generic.Dictionary<string, double[]> ParseCsv(string csvText)
