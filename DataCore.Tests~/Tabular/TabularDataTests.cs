@@ -455,6 +455,104 @@ namespace DataCore.Tests.Tabular
 
         #endregion
 
+        #region Issue #53 — AddRow numeric type detection for all IConvertible types
+
+        [Fact]
+        public void AddRow_DecimalValue_ColumnDetectedAsNumeric()
+        {
+            var t = new TabularData("test");
+            t.AddRow(new Dictionary<string, object> { ["price"] = 19.99m });
+
+            Assert.Equal(ColumnType.Numeric, t.GetColumnType("price"));
+            Assert.Equal(1, t.RowCount);
+        }
+
+        [Fact]
+        public void AddRow_ShortValue_ColumnDetectedAsNumeric()
+        {
+            var t = new TabularData("test");
+            t.AddRow(new Dictionary<string, object> { ["val"] = (short)42 });
+
+            Assert.Equal(ColumnType.Numeric, t.GetColumnType("val"));
+        }
+
+        [Fact]
+        public void AddRow_ByteValue_ColumnDetectedAsNumeric()
+        {
+            var t = new TabularData("test");
+            t.AddRow(new Dictionary<string, object> { ["val"] = (byte)255 });
+
+            Assert.Equal(ColumnType.Numeric, t.GetColumnType("val"));
+        }
+
+        [Fact]
+        public void AddRow_UIntValue_ColumnDetectedAsNumeric()
+        {
+            var t = new TabularData("test");
+            t.AddRow(new Dictionary<string, object> { ["val"] = (uint)100000 });
+
+            Assert.Equal(ColumnType.Numeric, t.GetColumnType("val"));
+        }
+
+        [Fact]
+        public void AddRow_ULongValue_ColumnDetectedAsNumeric()
+        {
+            var t = new TabularData("test");
+            t.AddRow(new Dictionary<string, object> { ["val"] = (ulong)9999999999 });
+
+            Assert.Equal(ColumnType.Numeric, t.GetColumnType("val"));
+        }
+
+        [Fact]
+        public void AddRow_SByteValue_ColumnDetectedAsNumeric()
+        {
+            var t = new TabularData("test");
+            t.AddRow(new Dictionary<string, object> { ["val"] = (sbyte)-10 });
+
+            Assert.Equal(ColumnType.Numeric, t.GetColumnType("val"));
+        }
+
+        [Fact]
+        public void AddRow_UShortValue_ColumnDetectedAsNumeric()
+        {
+            var t = new TabularData("test");
+            t.AddRow(new Dictionary<string, object> { ["val"] = (ushort)65535 });
+
+            Assert.Equal(ColumnType.Numeric, t.GetColumnType("val"));
+        }
+
+        [Fact]
+        public void AddRow_DecimalValues_MultipleRows_RetrievableAsDouble()
+        {
+            var t = new TabularData("test");
+            t.AddRow(new Dictionary<string, object> { ["price"] = 9.99m });
+            t.AddRow(new Dictionary<string, object> { ["price"] = 19.99m });
+
+            Assert.Equal(ColumnType.Numeric, t.GetColumnType("price"));
+            Assert.Equal(2, t.RowCount);
+            // Values should be convertible via GetNumericColumn
+            var col = t.GetNumericColumn("price");
+            Assert.Equal(9.99, col.GetDouble(0), 2);
+            Assert.Equal(19.99, col.GetDouble(1), 2);
+        }
+
+        [Fact]
+        public void AddRow_MixedIConvertibleTypes_AllDetectedAsNumeric()
+        {
+            var t = new TabularData("test");
+            // First row initializes column types
+            t.AddRow(new Dictionary<string, object> { ["a"] = (decimal)1.1m, ["b"] = (short)2, ["c"] = (byte)3 });
+            // Subsequent rows with different IConvertible types
+            t.AddRow(new Dictionary<string, object> { ["a"] = (uint)4, ["b"] = (ulong)5, ["c"] = (sbyte)6 });
+
+            Assert.Equal(ColumnType.Numeric, t.GetColumnType("a"));
+            Assert.Equal(ColumnType.Numeric, t.GetColumnType("b"));
+            Assert.Equal(ColumnType.Numeric, t.GetColumnType("c"));
+            Assert.Equal(2, t.RowCount);
+        }
+
+        #endregion
+
         #region Helpers
 
         private static TabularData CreateNumericTable(int rows)

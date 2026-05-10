@@ -977,5 +977,123 @@ namespace DataCore.Tests.Graph
 
             Assert.Equal(3, graph.Query().CountEdges());
         }
+
+        // ────────────────────────────────────────────────────────────────
+        // Issue #34 — CompareNumeric safely handles non-numeric values
+        // ────────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void CompareNumeric_NonNumericString_DoesNotCrash()
+        {
+            // Query with Gt on a string property — should not throw
+            var graph = new GraphData("test");
+            graph.AddNode("A", new Dictionary<string, object> { ["label"] = "hello" });
+            graph.AddNode("B", new Dictionary<string, object> { ["label"] = "world" });
+            graph.AddEdge("A", "B", new Dictionary<string, object> { ["weight"] = "not-a-number" });
+
+            // Gt comparison with non-numeric string should return 0 (incomparable), not crash
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .WhereEdgeProperty("weight", QueryOp.Gt, "also-not-a-number")
+                .ToNodeIds()
+                .ToList();
+
+            // CompareNumeric returns 0 for incomparable, so Gt (> 0) is false → filtered out
+            Assert.DoesNotContain("B", result);
+        }
+
+        [Fact]
+        public void CompareNumeric_NullPropertyValue_DoesNotCrash()
+        {
+            // Null property value compared with numeric — should not throw
+            var graph = new GraphData("test");
+            graph.AddNode("A", new Dictionary<string, object> { ["val"] = null });
+            graph.AddNode("B", new Dictionary<string, object> { ["val"] = 42.0 });
+            graph.AddEdge("A", "B");
+
+            // Query with Gt on null property value should not crash
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .WhereNodeProperty("val", QueryOp.Gt, 0.0)
+                .ToNodeIds()
+                .ToList();
+
+            // A has null val → TryConvertToDouble returns false → CompareNumeric returns 0 → Gt is false
+            Assert.DoesNotContain("A", result);
+            // B has 42.0 → CompareNumeric returns 1 → Gt is true
+            Assert.Contains("B", result);
+        }
+
+        [Fact]
+        public void CompareNumeric_MixedTypes_NumericAndString_NoCrash()
+        {
+            // One node has numeric, another has string for the same property
+            var graph = new GraphData("test");
+            graph.AddNode("A", new Dictionary<string, object> { ["score"] = 100.0 });
+            graph.AddNode("B", new Dictionary<string, object> { ["score"] = "high" });
+            graph.AddEdge("A", "B");
+
+            // Gt comparison with mixed types
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .WhereNodeProperty("score", QueryOp.Gt, 50.0)
+                .ToNodeIds()
+                .ToList();
+
+            // A: 100.0 > 50.0 → true
+            Assert.Contains("A", result);
+            // B: "high" can't convert → CompareNumeric returns 0 → 0 > 0 is false
+            Assert.DoesNotContain("B", result);
+        }
+
+        [Fact]
+        public void CompareNumeric_Lt_WithNonNumericString_DoesNotCrash()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A", new Dictionary<string, object> { ["val"] = "abc" });
+            graph.AddEdge("A", "A");
+
+            // Lt comparison — should not throw
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .WhereNodeProperty("val", QueryOp.Lt, 999.0)
+                .ToNodeIds()
+                .ToList();
+
+            // "abc" can't convert → CompareNumeric returns 0 → 0 < 999 is true... wait no
+            // CompareNumeric returns 0 when TryConvertToDouble fails
+            // So for Lt: 0 < 999 is actually true... but left is "abc" not 0
+            // Let me re-check: CompareNumeric returns 0 when EITHER side fails
+            // So 0.CompareTo(999) = -1, and -1 < 0 is true, so Lt would be true
+            // Actually wait: CompareNumeric returns leftVal.CompareTo(rightVal) only when both succeed
+            // If either fails, it returns 0 (treated as equal)
+            // So Lt: 0 < 0 is false → filtered out
+            Assert.Empty(result);
+        }
+
+        [Fact]
+        public void CompareNumeric_Eq_NonNumericVsNonNumeric_DoesNotCrash()
+        {
+            // Two string values compared with Eq via numeric path
+            var graph = new GraphData("test");
+            graph.AddNode("A", new Dictionary<string, object> { ["tag"] = "foo" });
+            graph.AddNode("B", new Dictionary<string, object> { ["tag"] = "bar" });
+            graph.AddEdge("A", "B");
+
+            // Gt on two non-numeric values — both fail TryConvertToDouble → returns 0 → not Gt
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .WhereNodeProperty("tag", QueryOp.Gt, "baz")
+                .ToNodeIds()
+                .ToList();
+
+            // All non-numeric → CompareNumeric returns 0 → Gt is false
+            Assert.DoesNotContain("B", result);
+        }
     }
 }

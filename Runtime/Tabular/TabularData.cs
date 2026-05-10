@@ -568,6 +568,12 @@ namespace AroAro.DataCore.Tabular
             // No-op for in-memory implementation
         }
 
+        public void Compact()
+        {
+            // In-memory implementation has no gaps — DeleteRow already shifts elements.
+            // No-op for interface compatibility.
+        }
+
         #endregion
 
         #region 异步操作
