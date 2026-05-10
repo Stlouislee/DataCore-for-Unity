@@ -19,7 +19,36 @@ namespace AroAro.DataCore.Tests
         [SerializeField] private int importedNodeCount;
         [SerializeField] private int importedEdgeCount;
         [SerializeField] private bool importSuccess;
+
+        private static readonly string TestDir = Path.Combine(Path.GetTempPath(), "DataCoreGraphMLTests");
+
+        private static string GetTestDbPath(string name)
+        {
+            Directory.CreateDirectory(TestDir);
+            return Path.Combine(TestDir, name);
+        }
+
+        private void OnDisable()
+        {
+            // Cleanup temp files when the test component is disabled/destroyed
+            try
+            {
+                if (Directory.Exists(TestDir))
+                    Directory.Delete(TestDir, true);
+            }
+            catch { }
+        }
         
+        /// <summary>
+        /// 获取测试文件的绝对路径，基于 Application.dataPath 解析相对路径
+        /// </summary>
+        private string GetResolvedFilePath()
+        {
+            if (Path.IsPathRooted(graphmlFilePath))
+                return graphmlFilePath;
+            return Path.Combine(Application.dataPath, graphmlFilePath);
+        }
+
         /// <summary>
         /// 运行 GraphML 导入测试
         /// </summary>
@@ -29,7 +58,7 @@ namespace AroAro.DataCore.Tests
             Debug.Log("开始 GraphML 导入测试...");
             
             // Ensure clean state
-            string dbPath = "graphml_test.db";
+            string dbPath = GetTestDbPath("graphml_test.db");
             if (File.Exists(dbPath))
             {
                 try 
@@ -43,18 +72,16 @@ namespace AroAro.DataCore.Tests
                 }
             }
 
-            // 检查文件是否存在
-            if (!File.Exists(graphmlFilePath))
-            {
-                Debug.LogError($"GraphML 文件不存在: {graphmlFilePath}");
-                importSuccess = false;
-                return;
-            }
+            // 解析绝对路径并断言文件存在
+            string resolvedPath = GetResolvedFilePath();
+            Assert.IsTrue(File.Exists(resolvedPath),
+                $"GraphML 测试文件不存在: {resolvedPath} (原始路径: {graphmlFilePath})");
+            graphmlFilePath = resolvedPath;
             
             try
             {
                 // 创建数据存储
-                using (var store = new DataCoreStore("graphml_test.db"))
+                using (var store = new DataCoreStore(dbPath))
                 {
                     // 导入 GraphML
                     var graph = GraphMLImporter.ImportFromFile(store.UnderlyingStore, graphmlFilePath, datasetName);
@@ -119,7 +146,7 @@ namespace AroAro.DataCore.Tests
         {
             Debug.Log("开始 GraphML 文本导入测试...");
 
-            string dbPath = "graphml_text_test.db";
+            string dbPath = GetTestDbPath("graphml_text_test.db");
             if (File.Exists(dbPath))
             {
                 try { File.Delete(dbPath); }
@@ -141,7 +168,7 @@ namespace AroAro.DataCore.Tests
     </graph>
 </graphml>";
 
-            using (var store = new DataCoreStore("graphml_text_test.db"))
+            using (var store = new DataCoreStore(dbPath))
             {
                 var graph = store.CreateGraph("SimpleGraph");
                 GraphMLImporter.ImportToGraph(graphmlText, graph);

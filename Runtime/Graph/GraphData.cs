@@ -554,10 +554,24 @@ namespace AroAro.DataCore.Graph
                 };
             }
 
+            private static bool TryConvertToDouble(object value, out double result)
+            {
+                result = 0;
+                if (value == null) return false;
+                if (value is double d) { result = d; return true; }
+                if (value is int i) { result = i; return true; }
+                if (value is float f) { result = f; return true; }
+                if (value is long l) { result = l; return true; }
+                if (value is string s) return double.TryParse(s, out result);
+                try { result = Convert.ToDouble(value); return true; }
+                catch { return false; }
+            }
+
             private static int CompareNumeric(object left, object right)
             {
-                var leftVal = Convert.ToDouble(left);
-                var rightVal = Convert.ToDouble(right);
+                if (!TryConvertToDouble(left, out var leftVal) ||
+                    !TryConvertToDouble(right, out var rightVal))
+                    return 0; // Incomparable values treated as equal
                 return leftVal.CompareTo(rightVal);
             }
         }

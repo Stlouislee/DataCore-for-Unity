@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Xml;
 using AroAro.DataCore.Events;
 using UnityEngine;
@@ -73,7 +74,7 @@ namespace AroAro.DataCore.Import
         /// <summary>
         /// 从 GraphML 文件解析数据并创建新的图数据集（使用 DataCoreStore，会触发事件）
         /// </summary>
-        public static IGraphDataset ImportFromFile(DataCoreStore store, string graphmlPath, string datasetName)
+        public static IGraphDataset ImportFromFile(DataCoreStore store, string graphmlPath, string datasetName, Encoding encoding = null)
         {
             if (!File.Exists(graphmlPath))
             {
@@ -83,7 +84,10 @@ namespace AroAro.DataCore.Import
 
             try
             {
-                var graphmlText = File.ReadAllText(graphmlPath);
+                using var reader = encoding != null
+                    ? new StreamReader(graphmlPath, encoding)
+                    : new StreamReader(graphmlPath, detectEncodingFromByteOrderMarks: true);
+                var graphmlText = reader.ReadToEnd();
                 var result = store.UnderlyingStore.ExecuteInTransaction(() =>
                 {
                     var graph = store.CreateGraph(datasetName);
@@ -103,7 +107,7 @@ namespace AroAro.DataCore.Import
         /// <summary>
         /// 从 GraphML 文件解析数据并创建新的图数据集（底层 IDataStore，不触发事件）
         /// </summary>
-        public static IGraphDataset ImportFromFile(IDataStore store, string graphmlPath, string datasetName)
+        public static IGraphDataset ImportFromFile(IDataStore store, string graphmlPath, string datasetName, Encoding encoding = null)
         {
             if (!File.Exists(graphmlPath))
             {
@@ -113,7 +117,10 @@ namespace AroAro.DataCore.Import
 
             try
             {
-                var graphmlText = File.ReadAllText(graphmlPath);
+                using var reader = encoding != null
+                    ? new StreamReader(graphmlPath, encoding)
+                    : new StreamReader(graphmlPath, detectEncodingFromByteOrderMarks: true);
+                var graphmlText = reader.ReadToEnd();
                 return store.ExecuteInTransaction(() =>
                 {
                     var graph = store.CreateGraph(datasetName);

@@ -21,7 +21,9 @@ namespace AroAro.DataCore.LiteDb
         private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
         private bool _disposed;
         private int _pendingMetadataUpdates;
-        private const int MetadataUpdateBatchSize = 100; // Batch metadata updates
+        private const int MetadataUpdateBatchSize = 10; // Reduced from 100 to minimize crash-time data loss (fix #77)
+        private System.Threading.Timer _idleFlushTimer;
+        private const int IdleFlushDelayMs = 2000; // Auto-flush after 2 seconds of inactivity
 
         internal LiteDbGraphDataset(LiteDatabase database, GraphMetadata metadata)
         {
@@ -33,6 +35,8 @@ namespace AroAro.DataCore.LiteDb
             _nodes.EnsureIndex(n => n.NodeId, true);
             _edges.EnsureIndex(e => e.FromNodeId);
             _edges.EnsureIndex(e => e.ToNodeId);
+            _idleFlushTimer = new System.Threading.Timer(_ => FlushMetadata(), null, Timeout.Infinite, Timeout.Infinite);
+            RegisterLifecycleCallbacks();
         }
 
         /// <summary>
@@ -50,6 +54,9 @@ namespace AroAro.DataCore.LiteDb
         internal void MarkDisposed()
         {
             _disposed = true;
+            _idleFlushTimer?.Dispose();
+            _idleFlushTimer = null;
+            UnregisterLifecycleCallbacks();
         }
 
         /// <summary>
@@ -517,6 +524,11 @@ namespace AroAro.DataCore.LiteDb
             {
                 ForceUpdateMetadata();
                 _pendingMetadataUpdates = 0;
+                _idleFlushTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+            }
+            else
+            {
+                _idleFlushTimer?.Change(IdleFlushDelayMs, Timeout.Infinite);
             }
         }
 
@@ -544,6 +556,34 @@ namespace AroAro.DataCore.LiteDb
                 throw new ObjectDisposedException(nameof(LiteDbGraphDataset), $"Database has been disposed: {ex.Message}");
             }
         }
+
+        private void RegisterLifecycleCallbacks()
+        {
+#if UNITY_2019_1_OR_NEWER
+            UnityEngine.Application.focusChanged += OnFocusChanged;
+            UnityEngine.Application.quitting += OnApplicationQuitting;
+#endif
+        }
+
+        private void UnregisterLifecycleCallbacks()
+        {
+#if UNITY_2019_1_OR_NEWER
+            UnityEngine.Application.focusChanged -= OnFocusChanged;
+            UnityEngine.Application.quitting -= OnApplicationQuitting;
+#endif
+        }
+
+#if UNITY_2019_1_OR_NEWER
+        private void OnFocusChanged(bool hasFocus)
+        {
+            if (!hasFocus) FlushMetadata();
+        }
+
+        private void OnApplicationQuitting()
+        {
+            FlushMetadata();
+        }
+#endif
 
 
 

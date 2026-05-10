@@ -147,7 +147,7 @@ namespace AroAro.DataCore.Tabular
         {
             if (!_stringData.TryGetValue(name, out var data))
                 throw new KeyNotFoundException($"String column '{name}' not found");
-            return data;
+            return (string[])data.Clone();
         }
 
         public ColumnType GetColumnType(string name)
@@ -168,7 +168,7 @@ namespace AroAro.DataCore.Tabular
                 foreach (var kvp in values)
                 {
                     _columnNames.Add(kvp.Key);
-                    if (kvp.Value is double or int or float or long)
+                    if (kvp.Value is IConvertible && kvp.Value is not bool and not char and not string)
                     {
                         _columnTypes[kvp.Key] = ColumnType.Numeric;
                         _numericData[kvp.Key] = new[] { Convert.ToDouble(kvp.Value) };
@@ -568,6 +568,12 @@ namespace AroAro.DataCore.Tabular
             // No-op for in-memory implementation
         }
 
+        public void Compact()
+        {
+            // In-memory implementation has no gaps — DeleteRow already shifts elements.
+            // No-op for interface compatibility.
+        }
+
         #endregion
 
         #region 异步操作
@@ -603,6 +609,34 @@ namespace AroAro.DataCore.Tabular
         {
             ct.ThrowIfCancellationRequested();
             return Task.FromResult(Clear());
+        }
+
+        /// <summary>
+        /// 异步执行原生查询（内存实现，直接委托同步方法）
+        /// </summary>
+        public Task<RawResult> ExecuteRawAsync(string sql, object[] args, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(ExecuteRaw(sql, args));
+        }
+
+        /// <summary>
+        /// 异步导出为 CSV（内存实现，直接委托同步方法）
+        /// </summary>
+        public Task<string> ExportToCsvAsync(char delimiter = ',', bool includeHeader = true, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(ExportToCsv(delimiter, includeHeader));
+        }
+
+        /// <summary>
+        /// 异步从 CSV 导入（内存实现，直接委托同步方法）
+        /// </summary>
+        public Task ImportFromCsvAsync(string csvContent, bool hasHeader = true, char delimiter = ',', CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            ImportFromCsv(csvContent, hasHeader, delimiter);
+            return Task.CompletedTask;
         }
 
         #endregion
@@ -783,9 +817,19 @@ namespace AroAro.DataCore.Tabular
 
                 if (!string.IsNullOrEmpty(_orderByColumn))
                 {
-                    result = _orderDescending
-                        ? result.OrderByDescending(x => x.row[_orderByColumn])
-                        : result.OrderBy(x => x.row[_orderByColumn]);
+                    var colType = _source.GetColumnType(_orderByColumn);
+                    if (colType == ColumnType.Numeric)
+                    {
+                        result = _orderDescending
+                            ? result.OrderByDescending(x => Convert.ToDouble(x.row[_orderByColumn]))
+                            : result.OrderBy(x => Convert.ToDouble(x.row[_orderByColumn]));
+                    }
+                    else
+                    {
+                        result = _orderDescending
+                            ? result.OrderByDescending(x => x.row[_orderByColumn]?.ToString() ?? "")
+                            : result.OrderBy(x => x.row[_orderByColumn]?.ToString() ?? "");
+                    }
                 }
 
                 var rows = result.Skip(_skip).Take(_take).Select(x => x.row);

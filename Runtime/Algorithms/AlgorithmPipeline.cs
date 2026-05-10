@@ -10,6 +10,13 @@ namespace AroAro.DataCore.Algorithms
     /// The output dataset of step N becomes the input of step N+1.
     /// Each step's result (metrics, metadata) is preserved in
     /// <see cref="PipelineResult.StepResults"/>.
+    ///
+    /// <para>
+    /// Base context properties (<see cref="AlgorithmContext.CancellationToken"/>,
+    /// <see cref="AlgorithmContext.Store"/>, <see cref="AlgorithmContext.OutputName"/>)
+    /// are propagated to every step. Step-specific configuration callbacks can
+    /// override any of these inherited values.
+    /// </para>
     /// </summary>
     public class AlgorithmPipeline
     {
@@ -55,6 +62,14 @@ namespace AroAro.DataCore.Algorithms
         /// Execute the entire pipeline.
         /// Each step receives the previous step's output dataset as input.
         /// Stops immediately on the first failure.
+        ///
+        /// <para>
+        /// Context propagation: <see cref="AlgorithmContext.CancellationToken"/>,
+        /// <see cref="AlgorithmContext.Store"/>, and <see cref="AlgorithmContext.OutputName"/>
+        /// are inherited from <paramref name="baseContext"/>. Step-specific configuration
+        /// (via <see cref="PipelineStep.Configure"/>) is applied afterward and may override
+        /// any inherited value, including <c>OutputName</c>.
+        /// </para>
         /// </summary>
         public PipelineResult Execute(IDataSet input, AlgorithmContext baseContext = null)
         {
@@ -70,12 +85,19 @@ namespace AroAro.DataCore.Algorithms
 
                 baseContext.CancellationToken.ThrowIfCancellationRequested();
 
-                // Build step-specific context (inherits base cancellation + store)
+                // Build step-specific context (inherits base cancellation + store + output name)
                 var stepBuilder = AlgorithmContext.Create()
                     .WithCancellation(baseContext.CancellationToken)
                     .WithStore(baseContext.Store);
 
-                // Apply step-specific configuration
+                // Propagate OutputName from base context when set;
+                // step-specific config below can still override it.
+                if (!string.IsNullOrEmpty(baseContext.OutputName))
+                {
+                    stepBuilder.WithOutputName(baseContext.OutputName);
+                }
+
+                // Apply step-specific configuration (may override OutputName)
                 step.Configure?.Invoke(stepBuilder);
 
                 // Progress: partition the 0→1 range across steps

@@ -278,19 +278,26 @@ namespace DataCore.Tests.Algorithms
 
         [Fact]
         [Trait("Bug", "context-immutability")]
-        public void Context_Parameters_CastCanBypassImmutability()
+        public void Context_Parameters_CastCannotBypassImmutability()
         {
-            // Known issue: Parameters returns IReadOnlyDictionary but the underlying
-            // dictionary is a regular Dictionary. Code can cast to IDictionary<string, object>
-            // and modify the parameters, violating immutability.
+            // Fix #120: Parameters now returns ReadOnlyDictionary, which does NOT
+            // implement IDictionary<string, object>, so the unsafe cast throws.
             var context = AlgorithmContext.Create()
                 .WithParameter("key", 42)
                 .Build();
 
-            // The Parameters property is IReadOnlyDictionary, but the underlying
-            // _parameters field is a mutable Dictionary. In practice, external code
-            // could cast and modify, though this requires reflection or unsafe casts.
             Assert.Equal(42, context.Parameters["key"]);
+
+            // ReadOnlyDictionary explicitly implements IDictionary but throws on mutation
+            Assert.Throws<NotSupportedException>(() =>
+            {
+                var mutable = (IDictionary<string, object>)context.Parameters;
+                mutable.Add("evil", true);
+            });
+
+            // Original value must remain intact
+            Assert.Equal(42, context.Parameters["key"]);
+            Assert.Single(context.Parameters);
         }
 
         [Fact]

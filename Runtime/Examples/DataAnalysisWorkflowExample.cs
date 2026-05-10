@@ -64,16 +64,8 @@ namespace AroAro.DataCore.Examples
             Console.WriteLine("选择需要持久化的分析结果...");
             
             // 通常只持久化最终的分析结果，而不是中间数据
-            try
-            {
-                session.PersistDataset("HighValueCustomers", "Final_HighValueCustomers");
-                session.PersistDataset("SalesByRegion", "Final_SalesByRegion");
-                Console.WriteLine("已持久化最终分析结果");
-            }
-            catch (NotImplementedException)
-            {
-                Console.WriteLine("持久化功能需要实现");
-            }
+            // PersistDataset is not yet implemented — see DATACORE_V2_Roadmap.md
+            Console.WriteLine("ℹ️ PersistDataset is planned for a future release. See DATACORE_V2_Roadmap.md.");
 
             // 9. 清理会话中的临时数据
             session.Clear();

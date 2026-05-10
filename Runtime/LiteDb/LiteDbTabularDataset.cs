@@ -22,8 +22,11 @@ namespace AroAro.DataCore.LiteDb
         private readonly object _lock = new object();
         private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
         private bool _disposed;
+        private bool _needsCompaction;
         private int _pendingMetadataUpdates;
-        private const int MetadataUpdateBatchSize = 100; // Batch metadata updates
+        private const int MetadataUpdateBatchSize = 10; // Reduced from 100 to minimize crash-time data loss (fix #77)
+        private System.Threading.Timer _idleFlushTimer;
+        private const int IdleFlushDelayMs = 2000; // Auto-flush after 2 seconds of inactivity
 
         internal LiteDbTabularDataset(LiteDatabase database, TabularMetadata metadata)
         {
@@ -31,6 +34,8 @@ namespace AroAro.DataCore.LiteDb
             _metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
             _rows = _database.GetCollection<TabularRow>($"tabular_{metadata.Id}");
             _rows.EnsureIndex(r => r.RowIndex, true);
+            _idleFlushTimer = new System.Threading.Timer(_ => FlushMetadata(), null, Timeout.Infinite, Timeout.Infinite);
+            RegisterLifecycleCallbacks();
         }
 
         /// <summary>
@@ -48,6 +53,9 @@ namespace AroAro.DataCore.LiteDb
         internal void MarkDisposed()
         {
             _disposed = true;
+            _idleFlushTimer?.Dispose();
+            _idleFlushTimer = null;
+            UnregisterLifecycleCallbacks();
         }
 
         /// <summary>
@@ -254,6 +262,7 @@ namespace AroAro.DataCore.LiteDb
             double[] data;
             lock (_lock)
             {
+                EnsureCompacted();
                 data = _rows.FindAll().OrderBy(r => r.RowIndex)
                     .Select(r => r.Data.TryGetValue(name, out var v) && !v.IsNull ? v.AsDouble : 0.0)
                     .ToArray();
@@ -272,6 +281,7 @@ namespace AroAro.DataCore.LiteDb
             string[] data;
             lock (_lock)
             {
+                EnsureCompacted();
                 data = _rows.FindAll().OrderBy(r => r.RowIndex)
                     .Select(r => r.Data.TryGetValue(name, out var v) && !v.IsNull ? v.AsString : null)
                     .ToArray();
@@ -362,6 +372,7 @@ namespace AroAro.DataCore.LiteDb
             bool updated;
             lock (_lock)
             {
+                EnsureCompacted();
                 var row = _rows.FindOne(r => r.RowIndex == rowIndex);
                 if (row == null) { updated = false; }
                 else
@@ -390,21 +401,18 @@ namespace AroAro.DataCore.LiteDb
             bool deleted;
             lock (_lock)
             {
+                // Compact first if there are gaps from previous deletes,
+                // so we can find the correct row by its logical index
+                if (_needsCompaction)
+                    CompactInternal();
+
                 var row = _rows.FindOne(r => r.RowIndex == rowIndex);
                 if (row == null) { deleted = false; }
                 else
                 {
                     _rows.Delete(row.Id);
-
-                    // 更新后续行索引
-                    var subsequentRows = _rows.Find(r => r.RowIndex > rowIndex).ToList();
-                    foreach (var r in subsequentRows)
-                    {
-                        r.RowIndex--;
-                        _rows.Update(r);
-                    }
-
                     _metadata.RowCount--;
+                    _needsCompaction = true;
                     ForceUpdateMetadata();
                     deleted = true;
                 }
@@ -424,6 +432,7 @@ namespace AroAro.DataCore.LiteDb
             TabularRow row;
             lock (_lock)
             {
+                EnsureCompacted();
                 row = _rows.FindOne(r => r.RowIndex == rowIndex);
             }
             if (row == null) return null;
@@ -443,6 +452,7 @@ namespace AroAro.DataCore.LiteDb
             List<TabularRow> rows;
             lock (_lock)
             {
+                EnsureCompacted();
                 rows = _rows.Find(r => r.RowIndex >= startIndex && r.RowIndex < startIndex + count)
                     .OrderBy(r => r.RowIndex)
                     .ToList();
@@ -705,6 +715,10 @@ namespace AroAro.DataCore.LiteDb
                 sb.AppendLine(string.Join(delimiter.ToString(), columns.Select(EscapeCsvField)));
             }
 
+            lock (_lock)
+            {
+                EnsureCompacted();
+            }
             foreach (var row in _rows.FindAll().OrderBy(r => r.RowIndex))
             {
                 var values = columns.Select(col =>
@@ -741,12 +755,56 @@ namespace AroAro.DataCore.LiteDb
 
         #region 内部方法
 
+        /// <summary>
+        /// Re-index all rows sequentially to fill gaps left by deletes.
+        /// Must be called under _lock.
+        /// </summary>
+        private void CompactInternal()
+        {
+            if (!_needsCompaction) return;
+
+            var allRows = _rows.FindAll().OrderBy(r => r.RowIndex).ToList();
+            for (int i = 0; i < allRows.Count; i++)
+            {
+                if (allRows[i].RowIndex != i)
+                {
+                    allRows[i].RowIndex = i;
+                    _rows.Update(allRows[i]);
+                }
+            }
+            _needsCompaction = false;
+        }
+
+        /// <summary>
+        /// Ensure rows are re-indexed without gaps. Called before read operations.
+        /// Must be called under _lock.
+        /// </summary>
+        private void EnsureCompacted()
+        {
+            if (_needsCompaction)
+                CompactInternal();
+        }
+
+        /// <summary>
+        /// Re-index all rows sequentially. Call after batch deletes to restore
+        /// contiguous RowIndex values before reading.
+        /// </summary>
+        public void Compact()
+        {
+            ThrowIfDisposed();
+            lock (_lock)
+            {
+                CompactInternal();
+            }
+        }
+
         internal IEnumerable<TabularRow> GetAllRowsInternal()
         {
             ThrowIfDisposed();
             List<TabularRow> rows;
             lock (_lock)
             {
+                EnsureCompacted();
                 rows = _rows.FindAll().OrderBy(r => r.RowIndex).ToList();
             }
             return rows;
@@ -783,6 +841,11 @@ namespace AroAro.DataCore.LiteDb
             {
                 ForceUpdateMetadata();
                 _pendingMetadataUpdates = 0;
+                _idleFlushTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+            }
+            else
+            {
+                _idleFlushTimer?.Change(IdleFlushDelayMs, Timeout.Infinite);
             }
         }
 
@@ -810,6 +873,34 @@ namespace AroAro.DataCore.LiteDb
                 throw new ObjectDisposedException(nameof(LiteDbTabularDataset), $"Database has been disposed: {ex.Message}");
             }
         }
+
+        private void RegisterLifecycleCallbacks()
+        {
+#if UNITY_2019_1_OR_NEWER
+            UnityEngine.Application.focusChanged += OnFocusChanged;
+            UnityEngine.Application.quitting += OnApplicationQuitting;
+#endif
+        }
+
+        private void UnregisterLifecycleCallbacks()
+        {
+#if UNITY_2019_1_OR_NEWER
+            UnityEngine.Application.focusChanged -= OnFocusChanged;
+            UnityEngine.Application.quitting -= OnApplicationQuitting;
+#endif
+        }
+
+#if UNITY_2019_1_OR_NEWER
+        private void OnFocusChanged(bool hasFocus)
+        {
+            if (!hasFocus) FlushMetadata();
+        }
+
+        private void OnApplicationQuitting()
+        {
+            FlushMetadata();
+        }
+#endif
 
 
 
@@ -931,6 +1022,69 @@ namespace AroAro.DataCore.LiteDb
             try
             {
                 return await Task.Run(() => Clear(), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        /// <summary>
+        /// 异步执行原生 LiteDB SQL-like 命令（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. Use this for complex queries on large datasets.</para>
+        /// </remarks>
+        public async Task<RawResult> ExecuteRawAsync(string sql, object[] args, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                return await Task.Run(() => ExecuteRaw(sql, args), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        /// <summary>
+        /// 异步导出为 CSV 字符串（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. Recommended for datasets with &gt;10000 rows.</para>
+        /// </remarks>
+        public async Task<string> ExportToCsvAsync(char delimiter = ',', bool includeHeader = true, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                return await Task.Run(() => ExportToCsv(delimiter, includeHeader), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        /// <summary>
+        /// 异步从 CSV 字符串导入数据（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. Recommended for large CSV imports.</para>
+        /// </remarks>
+        public async Task ImportFromCsvAsync(string csvContent, bool hasHeader = true, char delimiter = ',', CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await Task.Run(() => ImportFromCsv(csvContent, hasHeader, delimiter), ct).ConfigureAwait(false);
             }
             finally
             {

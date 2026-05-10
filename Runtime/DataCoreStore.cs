@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using AroAro.DataCore.Events;
 using AroAro.DataCore.Session;
 
@@ -24,7 +26,7 @@ namespace AroAro.DataCore
     public sealed class DataCoreStore : IDisposable
     {
         private readonly IDataStore _store;
-        private SessionManager _sessionManager;
+        private readonly Lazy<SessionManager> _sessionManager;
         private bool _disposed;
 
         /// <summary>
@@ -41,6 +43,7 @@ namespace AroAro.DataCore
         public DataCoreStore(string dbPath)
         {
             _store = DataStoreFactory.Create(dbPath);
+            _sessionManager = new Lazy<SessionManager>(() => new SessionManager(this));
         }
 
         /// <summary>
@@ -50,6 +53,7 @@ namespace AroAro.DataCore
         public DataCoreStore(IDataStore store)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
+            _sessionManager = new Lazy<SessionManager>(() => new SessionManager(this));
         }
 
         /// <summary>
@@ -90,14 +94,7 @@ namespace AroAro.DataCore
         /// <summary>
         /// 会话管理器
         /// </summary>
-        public SessionManager SessionManager
-        {
-            get
-            {
-                _sessionManager ??= new SessionManager(this);
-                return _sessionManager;
-            }
-        }
+        public SessionManager SessionManager => _sessionManager.Value;
 
         #region 创建数据集
 
@@ -306,13 +303,135 @@ namespace AroAro.DataCore
 
         #endregion
 
+        #region 异步操作
+
+        /// <summary>
+        /// 异步清空所有数据（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. Use this instead of <see cref="ClearAll"/> when working with
+        /// large datasets to prevent frame drops.</para>
+        /// </remarks>
+        /// <param name="ct">取消令牌</param>
+        public Task ClearAllAsync(CancellationToken ct = default)
+        {
+            return Task.Run(() => ClearAll(), ct);
+        }
+
+        /// <summary>
+        /// 异步执行检查点（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. Checkpoint flushes data to disk and may be slow for large databases.</para>
+        /// </remarks>
+        /// <param name="ct">取消令牌</param>
+        public Task CheckpointAsync(CancellationToken ct = default)
+        {
+            return Task.Run(() => Checkpoint(), ct);
+        }
+
+        /// <summary>
+        /// 异步在事务中执行操作（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. The entire action executes atomically inside a transaction.</para>
+        /// </remarks>
+        /// <param name="action">要执行的操作</param>
+        /// <param name="ct">取消令牌</param>
+        public Task ExecuteInTransactionAsync(Action action, CancellationToken ct = default)
+        {
+            return Task.Run(() => ExecuteInTransaction(action), ct);
+        }
+
+        /// <summary>
+        /// 异步在事务中执行操作并返回结果（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. The entire function executes atomically inside a transaction.</para>
+        /// </remarks>
+        /// <typeparam name="T">返回值类型</typeparam>
+        /// <param name="func">要执行的函数</param>
+        /// <param name="ct">取消令牌</param>
+        /// <returns>操作结果</returns>
+        public Task<T> ExecuteInTransactionAsync<T>(Func<T> func, CancellationToken ct = default)
+        {
+            return Task.Run(() => ExecuteInTransaction(func), ct);
+        }
+
+        /// <summary>
+        /// 异步执行原生 LiteDB SQL 查询（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. Recommended for complex queries on large datasets.</para>
+        /// </remarks>
+        /// <param name="datasetName">数据集名称</param>
+        /// <param name="sql">SQL-like 查询语句</param>
+        /// <param name="args">参数值（@0, @1...）</param>
+        /// <param name="ct">取消令牌</param>
+        /// <returns>执行结果</returns>
+        /// <exception cref="KeyNotFoundException">数据集不存在时抛出</exception>
+        /// <exception cref="InvalidOperationException">数据集不是表格类型时抛出</exception>
+        public Task<RawResult> ExecuteRawAsync(string datasetName, string sql, object[] args, CancellationToken ct = default)
+        {
+            var tabular = GetTabular(datasetName);
+            return tabular.ExecuteRawAsync(sql, args, ct);
+        }
+
+        /// <summary>
+        /// 异步导出数据集为 CSV 字符串（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. Recommended for datasets with &gt;10000 rows.</para>
+        /// </remarks>
+        /// <param name="datasetName">数据集名称</param>
+        /// <param name="delimiter">分隔符</param>
+        /// <param name="includeHeader">是否包含表头</param>
+        /// <param name="ct">取消令牌</param>
+        /// <returns>CSV 字符串</returns>
+        /// <exception cref="KeyNotFoundException">数据集不存在时抛出</exception>
+        /// <exception cref="InvalidOperationException">数据集不是表格类型时抛出</exception>
+        public Task<string> ExportToCsvAsync(string datasetName, char delimiter = ',', bool includeHeader = true, CancellationToken ct = default)
+        {
+            var tabular = GetTabular(datasetName);
+            return tabular.ExportToCsvAsync(delimiter, includeHeader, ct);
+        }
+
+        /// <summary>
+        /// 异步从 CSV 字符串导入数据到数据集（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. Recommended for large CSV imports.</para>
+        /// </remarks>
+        /// <param name="datasetName">数据集名称</param>
+        /// <param name="csvContent">CSV 内容</param>
+        /// <param name="hasHeader">是否包含表头</param>
+        /// <param name="delimiter">分隔符</param>
+        /// <param name="ct">取消令牌</param>
+        /// <exception cref="KeyNotFoundException">数据集不存在时抛出</exception>
+        /// <exception cref="InvalidOperationException">数据集不是表格类型时抛出</exception>
+        public Task ImportFromCsvAsync(string datasetName, string csvContent, bool hasHeader = true, char delimiter = ',', CancellationToken ct = default)
+        {
+            var tabular = GetTabular(datasetName);
+            return tabular.ImportFromCsvAsync(csvContent, hasHeader, delimiter, ct);
+        }
+
+        #endregion
+
         #region IDisposable
 
         public void Dispose()
         {
             if (_disposed) return;
             
-            _sessionManager?.CloseAllSessions();
+            if (_sessionManager.IsValueCreated)
+                _sessionManager.Value.CloseAllSessions();
             _store?.Dispose();
             _disposed = true;
         }

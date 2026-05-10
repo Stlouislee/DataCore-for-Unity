@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using LiteDB;
 
 #if UNITY_2019_1_OR_NEWER
@@ -21,6 +22,46 @@ namespace AroAro.DataCore.LiteDb
         private readonly Dictionary<string, LiteDbGraphDataset> _graphCache = new(StringComparer.Ordinal);
         private readonly object _lock = new object();
         private bool _disposed;
+
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+        /// <summary>
+        /// Concurrency guard for mobile platforms using Direct mode.
+        /// Direct mode has no file lock protection, so we serialize all
+        /// LiteDB operations through this semaphore to prevent data corruption
+        /// from concurrent access (coroutines, Task.Run, UniTask, etc.).
+        /// </summary>
+        private static readonly SemaphoreSlim _dbSemaphore = new SemaphoreSlim(1, 1);
+
+        /// <summary>
+        /// Execute an operation while holding the mobile concurrency lock.
+        /// On non-mobile platforms this is a no-op (the caller uses lock(_lock) instead).
+        /// </summary>
+        private T ExecuteWithMobileLock<T>(Func<T> operation)
+        {
+            _dbSemaphore.Wait();
+            try
+            {
+                return operation();
+            }
+            finally
+            {
+                _dbSemaphore.Release();
+            }
+        }
+
+        private void ExecuteWithMobileLock(Action operation)
+        {
+            _dbSemaphore.Wait();
+            try
+            {
+                operation();
+            }
+            finally
+            {
+                _dbSemaphore.Release();
+            }
+        }
+#endif
 
         public string DatabasePath { get; }
 
@@ -73,26 +114,23 @@ namespace AroAro.DataCore.LiteDb
                 {
                     retryCount++;
                     
-                    // If corruption detected (PAGE_SIZE error), dispose, delete and retry
-                    _database?.Dispose();
-                    _database = null;
+                    // Ensure complete disposal — flush handles first
+                    if (_database != null)
+                    {
+                        try { _database.Checkpoint(); } catch { /* best-effort flush */ }
+                        _database.Dispose();
+                        _database = null;
+                    }
 
                     try
                     {
-                        if (File.Exists(DatabasePath)) File.Delete(DatabasePath);
-                        // Also delete log file
-                        var logPath = DatabasePath + "-log";
-                        if (File.Exists(logPath)) File.Delete(logPath);
+                        // Wait for file release with retry instead of fragile GC.Collect + Sleep
+                        DeleteFileWithRetry(DatabasePath, maxWaitMs: 1000);
+                        DeleteFileWithRetry(DatabasePath + "-log", maxWaitMs: 1000);
 
 #if UNITY_2019_1_OR_NEWER
                         Debug.LogWarning($"[LiteDbDataStore] Database corruption detected ({ex.Message}). Deleted and retrying ({retryCount}/{maxRetries}): {DatabasePath}");
 #endif
-                        // Force GC to release file handles
-                        GC.Collect();
-                        GC.WaitForPendingFinalizers();
-                        
-                        // Short delay before retry
-                        System.Threading.Thread.Sleep(100);
                     }
                     catch (Exception deleteEx)
                     {
@@ -409,25 +447,34 @@ namespace AroAro.DataCore.LiteDb
         {
             ThrowIfDisposed();
             
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+            return ExecuteWithMobileLock(() => DeleteGraphUnlocked(name));
+#else
             lock (_lock)
             {
-                // Mark cached dataset as disposed before removing
-                if (_graphCache.TryGetValue(name, out var cachedDataset))
-                {
-                    cachedDataset.MarkDisposed();
-                }
-                _graphCache.Remove(name);
-
-                var meta = _database.GetCollection<GraphMetadata>("graph_meta");
-                var metadata = meta.FindOne(m => m.Name == name);
-                if (metadata == null) return false;
-
-                // 删除数据
-                _database.DropCollection($"graph_{metadata.Id}_nodes");
-                _database.DropCollection($"graph_{metadata.Id}_edges");
-
-                return meta.Delete(metadata.Id);
+                return DeleteGraphUnlocked(name);
             }
+#endif
+        }
+
+        private bool DeleteGraphUnlocked(string name)
+        {
+            // Mark cached dataset as disposed before removing
+            if (_graphCache.TryGetValue(name, out var cachedDataset))
+            {
+                cachedDataset.MarkDisposed();
+            }
+            _graphCache.Remove(name);
+
+            var meta = _database.GetCollection<GraphMetadata>("graph_meta");
+            var metadata = meta.FindOne(m => m.Name == name);
+            if (metadata == null) return false;
+
+            // 删除数据
+            _database.DropCollection($"graph_{metadata.Id}_nodes");
+            _database.DropCollection($"graph_{metadata.Id}_edges");
+
+            return meta.Delete(metadata.Id);
         }
 
         #endregion
@@ -437,54 +484,101 @@ namespace AroAro.DataCore.LiteDb
         public bool BeginTransaction()
         {
             ThrowIfDisposed();
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+            return ExecuteWithMobileLock(() => _database.BeginTrans());
+#else
             return _database.BeginTrans();
+#endif
         }
         
         public bool Commit()
         {
             ThrowIfDisposed();
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+            return ExecuteWithMobileLock(() => _database.Commit());
+#else
             return _database.Commit();
+#endif
         }
         
         public bool Rollback()
         {
             ThrowIfDisposed();
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+            return ExecuteWithMobileLock(() => _database.Rollback());
+#else
             return _database.Rollback();
+#endif
         }
 
         public void ExecuteInTransaction(Action action)
         {
             ThrowIfDisposed();
             
-            BeginTransaction();
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+            ExecuteWithMobileLock(() =>
+            {
+                _database.BeginTrans();
+                try
+                {
+                    action?.Invoke();
+                    _database.Commit();
+                }
+                catch
+                {
+                    _database.Rollback();
+                    throw;
+                }
+            });
+#else
+            _database.BeginTrans();
             try
             {
                 action?.Invoke();
-                Commit();
+                _database.Commit();
             }
             catch
             {
-                Rollback();
+                _database.Rollback();
                 throw;
             }
+#endif
         }
 
         public T ExecuteInTransaction<T>(Func<T> action)
         {
             ThrowIfDisposed();
             
-            BeginTransaction();
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+            return ExecuteWithMobileLock(() =>
+            {
+                _database.BeginTrans();
+                try
+                {
+                    var result = action != null ? action() : default;
+                    _database.Commit();
+                    return result;
+                }
+                catch
+                {
+                    _database.Rollback();
+                    throw;
+                }
+            });
+#else
+            _database.BeginTrans();
             try
             {
                 var result = action != null ? action() : default;
-                Commit();
+                _database.Commit();
                 return result;
             }
             catch
             {
-                Rollback();
+                _database.Rollback();
                 throw;
             }
+#endif
         }
 
         #endregion
@@ -495,6 +589,22 @@ namespace AroAro.DataCore.LiteDb
         {
             ThrowIfDisposed();
             
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+            ExecuteWithMobileLock(() =>
+            {
+                // First flush all pending metadata updates in cached datasets
+                foreach (var graph in _graphCache.Values)
+                {
+                    graph.FlushMetadata();
+                }
+                foreach (var tabular in _tabularCache.Values)
+                {
+                    tabular.FlushMetadata();
+                }
+                
+                _database.Checkpoint();
+            });
+#else
             // First flush all pending metadata updates in cached datasets
             lock (_lock)
             {
@@ -509,53 +619,67 @@ namespace AroAro.DataCore.LiteDb
             }
             
             _database.Checkpoint();
+#endif
         }
 
         public void ClearAll()
         {
             ThrowIfDisposed();
             
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+            ExecuteWithMobileLock(() => ClearAllUnlocked());
+#else
             lock (_lock)
             {
-                // Step 1: Mark all cached datasets as disposed first
-                foreach (var graph in _graphCache.Values)
-                {
-                    graph.MarkDisposed();
-                }
-                foreach (var tabular in _tabularCache.Values)
-                {
-                    tabular.MarkDisposed();
-                }
-
-                // Step 2: Delete from database (read names from DB, not cache)
-                var tabularMeta = _database.GetCollection<TabularMetadata>("tabular_meta");
-                var graphMeta = _database.GetCollection<GraphMetadata>("graph_meta");
-
-                foreach (var metadata in tabularMeta.FindAll().ToList())
-                {
-                    var rows = _database.GetCollection<TabularRow>($"tabular_{metadata.Id}");
-                    rows.DeleteAll();
-                    _database.DropCollection($"tabular_{metadata.Id}");
-                    tabularMeta.Delete(metadata.Id);
-                }
-
-                foreach (var metadata in graphMeta.FindAll().ToList())
-                {
-                    _database.DropCollection($"graph_{metadata.Id}_nodes");
-                    _database.DropCollection($"graph_{metadata.Id}_edges");
-                    graphMeta.Delete(metadata.Id);
-                }
-
-                // Step 3: Clear caches last
-                _tabularCache.Clear();
-                _graphCache.Clear();
+                ClearAllUnlocked();
             }
+#endif
+        }
+
+        private void ClearAllUnlocked()
+        {
+            // Step 1: Mark all cached datasets as disposed first
+            foreach (var graph in _graphCache.Values)
+            {
+                graph.MarkDisposed();
+            }
+            foreach (var tabular in _tabularCache.Values)
+            {
+                tabular.MarkDisposed();
+            }
+
+            // Step 2: Delete from database (read names from DB, not cache)
+            var tabularMeta = _database.GetCollection<TabularMetadata>("tabular_meta");
+            var graphMeta = _database.GetCollection<GraphMetadata>("graph_meta");
+
+            foreach (var metadata in tabularMeta.FindAll().ToList())
+            {
+                var rows = _database.GetCollection<TabularRow>($"tabular_{metadata.Id}");
+                rows.DeleteAll();
+                _database.DropCollection($"tabular_{metadata.Id}");
+                tabularMeta.Delete(metadata.Id);
+            }
+
+            foreach (var metadata in graphMeta.FindAll().ToList())
+            {
+                _database.DropCollection($"graph_{metadata.Id}_nodes");
+                _database.DropCollection($"graph_{metadata.Id}_edges");
+                graphMeta.Delete(metadata.Id);
+            }
+
+            // Step 3: Clear caches last
+            _tabularCache.Clear();
+            _graphCache.Clear();
         }
 
         public long Shrink()
         {
             ThrowIfDisposed();
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+            return ExecuteWithMobileLock(() => _database.Rebuild());
+#else
             return _database.Rebuild();
+#endif
         }
 
         public long GetDatabaseSize()
@@ -577,6 +701,27 @@ namespace AroAro.DataCore.LiteDb
 
             var graphMeta = _database.GetCollection<GraphMetadata>("graph_meta");
             graphMeta.EnsureIndex(m => m.Name, true);
+        }
+
+        private static void DeleteFileWithRetry(string path, int maxWaitMs = 1000)
+        {
+            if (!File.Exists(path)) return;
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < maxWaitMs)
+            {
+                try
+                {
+                    File.Delete(path);
+                    return;
+                }
+                catch (IOException)
+                {
+                    System.Threading.Thread.Sleep(50); // Short wait, retry
+                }
+            }
+
+            File.Delete(path); // Final attempt — let exception propagate if still locked
         }
 
         private static string ResolvePath(string path)
@@ -609,6 +754,25 @@ namespace AroAro.DataCore.LiteDb
             if (_disposed) return;
             _disposed = true;
             
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+            ExecuteWithMobileLock(() =>
+            {
+                // Mark all cached datasets as disposed before clearing
+                foreach (var graph in _graphCache.Values)
+                {
+                    graph.MarkDisposed();
+                }
+                foreach (var tabular in _tabularCache.Values)
+                {
+                    tabular.MarkDisposed();
+                }
+                
+                _tabularCache.Clear();
+                _graphCache.Clear();
+                
+                _database?.Dispose();
+            });
+#else
             lock (_lock)
             {
                 // Mark all cached datasets as disposed before clearing
@@ -626,6 +790,7 @@ namespace AroAro.DataCore.LiteDb
             }
             
             _database?.Dispose();
+#endif
         }
     }
 

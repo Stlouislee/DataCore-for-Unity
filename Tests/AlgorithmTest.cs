@@ -403,35 +403,39 @@ namespace AroAro.DataCore.Tests
 
         void TestEventsFireCorrectly()
         {
-            bool startedFired = false;
-            bool completedFired = false;
-            string capturedAlgoName = null;
-
-            DataCoreEventManager.SubscribeAlgorithmStarted((s, e) =>
+            try
             {
-                startedFired = true;
-                capturedAlgoName = e.AlgorithmName;
-            });
+                bool startedFired = false;
+                bool completedFired = false;
+                string capturedAlgoName = null;
 
-            DataCoreEventManager.SubscribeAlgorithmCompleted((s, e) =>
+                DataCoreEventManager.SubscribeAlgorithmStarted((s, e) =>
+                {
+                    startedFired = true;
+                    capturedAlgoName = e.AlgorithmName;
+                });
+
+                DataCoreEventManager.SubscribeAlgorithmCompleted((s, e) =>
+                {
+                    completedFired = true;
+                    Assert(e.Success, "Completed event should report success");
+                    Assert(e.Duration.TotalMilliseconds >= 0, "Duration should be non-negative");
+                });
+
+                var graph = new GraphData("event-test");
+                graph.AddNode("A"); graph.AddNode("B");
+                graph.AddEdge("A", "B");
+
+                new PageRankAlgorithm().Execute(graph, AlgorithmContext.Empty);
+
+                Assert(startedFired, "AlgorithmStarted event should have fired");
+                Assert(completedFired, "AlgorithmCompleted event should have fired");
+                Assert(capturedAlgoName == "PageRank", $"Event should capture algo name, got '{capturedAlgoName}'");
+            }
+            finally
             {
-                completedFired = true;
-                Assert(e.Success, "Completed event should report success");
-                Assert(e.Duration.TotalMilliseconds >= 0, "Duration should be non-negative");
-            });
-
-            var graph = new GraphData("event-test");
-            graph.AddNode("A"); graph.AddNode("B");
-            graph.AddEdge("A", "B");
-
-            new PageRankAlgorithm().Execute(graph, AlgorithmContext.Empty);
-
-            Assert(startedFired, "AlgorithmStarted event should have fired");
-            Assert(completedFired, "AlgorithmCompleted event should have fired");
-            Assert(capturedAlgoName == "PageRank", $"Event should capture algo name, got '{capturedAlgoName}'");
-
-            // Clean up subscriptions
-            DataCoreEventManager.ClearAllSubscriptions();
+                DataCoreEventManager.ClearAllSubscriptions();
+            }
         }
 
         #endregion

@@ -52,6 +52,9 @@ namespace AroAro.DataCore.Tests
         [ContextMenu("Run Graph Test")]
         public void RunGraphTest()
         {
+            // Fixed seed for reproducible test data
+            Random.InitState(42);
+            
             Debug.Log($"=== Starting Graph Dataset Test: {graphType} ===");
             
             var store = dataCore.GetStore();
