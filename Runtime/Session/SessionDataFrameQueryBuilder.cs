@@ -247,15 +247,18 @@ namespace AroAro.DataCore.Session
 
             _operations.Add(df =>
             {
-                int skip = Math.Min(count, (int)df.Rows.Count);
+                int totalRows = (int)df.Rows.Count;
+                int skip = Math.Min(count, totalRows);
                 if (skip == 0) return df;
-                // Use Head to get a copy, then remove first N rows via column slicing
-                var columns = new List<DataFrameColumn>();
-                foreach (var col in df.Columns)
-                {
-                    columns.Add(col.Clone(skip, null)); // Clone from index 'skip' to end
-                }
-                return new DataFrame(columns);
+                if (skip >= totalRows) return new DataFrame();
+
+                // Create a boolean mask: false for first 'skip' rows, true for the rest
+                var mask = new bool[totalRows];
+                for (int i = skip; i < totalRows; i++)
+                    mask[i] = true;
+
+                var maskColumn = new PrimitiveDataFrameColumn<bool>("__offset_mask__", mask);
+                return df.Filter(maskColumn);
             });
             return this;
         }

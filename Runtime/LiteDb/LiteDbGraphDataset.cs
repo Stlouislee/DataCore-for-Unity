@@ -498,6 +498,14 @@ namespace AroAro.DataCore.LiteDb
         }
 
         /// <summary>
+        /// Find an edge by from/to IDs without locking (for use inside locked sections)
+        /// </summary>
+        internal GraphEdge FindEdgeInternal(string fromId, string toId)
+        {
+            return _edges.FindOne(e => e.FromNodeId == fromId && e.ToNodeId == toId);
+        }
+
+        /// <summary>
         /// Batched metadata update - only writes to DB after threshold or on ForceUpdateMetadata
         /// </summary>
         private void UpdateMetadata()
