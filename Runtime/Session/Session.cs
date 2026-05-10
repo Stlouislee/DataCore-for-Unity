@@ -234,6 +234,8 @@ namespace AroAro.DataCore.Session
             lock (_lock)
             {
                 _datasets.Clear();
+                _dataFrameCache.Clear();
+                _weakDataFrames.Clear();
             }
             Touch();
         }

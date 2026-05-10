@@ -324,8 +324,8 @@ namespace DataCore.Tests.Session
 
             session.Clear();
 
-            // Clear only clears _datasets, not _dataFrameCache
-            Assert.True(session.HasDataFrame("df1"));
+            // Clear now clears both _datasets and _dataFrameCache (fix #99/#100)
+            Assert.False(session.HasDataFrame("df1"));
         }
 
         // ────────────────────────────────────────────────────────────────
