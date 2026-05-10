@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Analysis;
@@ -11,10 +12,11 @@ namespace AroAro.DataCore.Session
     /// </summary>
     public class Session : ISession
     {
-        private readonly Dictionary<string, IDataSet> _datasets = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, DataFrame> _dataFrameCache = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, WeakReference<DataFrame>> _weakDataFrames = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, IDataSet> _datasets = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, DataFrame> _dataFrameCache = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, WeakReference<DataFrame>> _weakDataFrames = new(StringComparer.Ordinal);
         private readonly DataCoreStore _store;
+        private readonly object _lock = new object();
         private bool _disposed = false;
 
         public string Id { get; }
@@ -23,7 +25,7 @@ namespace AroAro.DataCore.Session
         public DateTime LastActivityAt { get; private set; }
 
         public int DatasetCount => _datasets.Count;
-        public IReadOnlyCollection<string> DatasetNames => _datasets.Keys;
+        public IReadOnlyCollection<string> DatasetNames => _datasets.Keys.ToList().AsReadOnly();
 
         /// <summary>
         /// DataFrame缓存数量
@@ -33,7 +35,7 @@ namespace AroAro.DataCore.Session
         /// <summary>
         /// DataFrame名称列表
         /// </summary>
-        public IReadOnlyCollection<string> DataFrameNames => _dataFrameCache.Keys;
+        public IReadOnlyCollection<string> DataFrameNames => _dataFrameCache.Keys.ToList().AsReadOnly();
 
         public Session(string name, DataCoreStore store)
         {
@@ -81,9 +83,6 @@ namespace AroAro.DataCore.Session
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Dataset name cannot be null or empty", nameof(name));
 
-            if (_datasets.ContainsKey(name))
-                throw new InvalidOperationException($"Dataset already exists in session: {name}");
-
             IDataSet dataset;
             switch (kind)
             {
@@ -97,7 +96,8 @@ namespace AroAro.DataCore.Session
                     throw new NotSupportedException($"Unsupported dataset kind: {kind}");
             }
 
-            _datasets[name] = dataset;
+            if (!_datasets.TryAdd(name, dataset))
+                throw new InvalidOperationException($"Dataset already exists in session: {name}");
 
             // 触发会话数据集创建事件
             DataCoreEventManager.RaiseSessionDatasetCreated(this, dataset);
@@ -122,11 +122,8 @@ namespace AroAro.DataCore.Session
 
         public bool RemoveDataset(string name)
         {
-            if (!_datasets.ContainsKey(name))
+            if (!_datasets.TryRemove(name, out var dataset))
                 return false;
-
-            var dataset = _datasets[name];
-            _datasets.Remove(name);
 
             // 触发会话数据集移除事件
             DataCoreEventManager.RaiseSessionDatasetRemoved(this, dataset);
@@ -140,9 +137,6 @@ namespace AroAro.DataCore.Session
             if (string.IsNullOrWhiteSpace(newName))
                 throw new ArgumentException("New dataset name cannot be null or empty", nameof(newName));
 
-            if (_datasets.ContainsKey(newName))
-                throw new InvalidOperationException($"Dataset already exists in session: {newName}");
-
             // 获取源数据集
             var source = GetDataset(sourceName);
             
@@ -151,7 +145,8 @@ namespace AroAro.DataCore.Session
             
             // 重命名结果
             var renamedResult = result.WithName(newName);
-            _datasets[newName] = renamedResult;
+            if (!_datasets.TryAdd(newName, renamedResult))
+                throw new InvalidOperationException($"Dataset already exists in session: {newName}");
 
             // 触发会话查询结果保存事件
             DataCoreEventManager.RaiseSessionQueryResultSaved(this, source, renamedResult);
@@ -226,7 +221,10 @@ namespace AroAro.DataCore.Session
 
         public void Clear()
         {
-            _datasets.Clear();
+            lock (_lock)
+            {
+                _datasets.Clear();
+            }
             Touch();
         }
 
@@ -239,10 +237,13 @@ namespace AroAro.DataCore.Session
         {
             if (!_disposed)
             {
-                _datasets.Clear();
-                _dataFrameCache.Clear();
-                _weakDataFrames.Clear();
-                _disposed = true;
+                lock (_lock)
+                {
+                    _datasets.Clear();
+                    _dataFrameCache.Clear();
+                    _weakDataFrames.Clear();
+                    _disposed = true;
+                }
             }
         }
 
@@ -256,11 +257,9 @@ namespace AroAro.DataCore.Session
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("DataFrame name cannot be null or empty", nameof(name));
 
-            if (_dataFrameCache.ContainsKey(name))
-                throw new InvalidOperationException($"DataFrame already exists in session: {name}");
-
             var df = new DataFrame();
-            _dataFrameCache[name] = df;
+            if (!_dataFrameCache.TryAdd(name, df))
+                throw new InvalidOperationException($"DataFrame already exists in session: {name}");
 
             // 触发DataFrame创建事件
             DataCoreEventManager.RaiseSessionDataFrameCreated(this, name);
@@ -294,10 +293,8 @@ namespace AroAro.DataCore.Session
         /// </summary>
         public bool RemoveDataFrame(string name)
         {
-            if (!_dataFrameCache.ContainsKey(name))
+            if (!_dataFrameCache.TryRemove(name, out _))
                 return false;
-
-            _dataFrameCache.Remove(name);
 
             // 触发DataFrame移除事件
             DataCoreEventManager.RaiseSessionDataFrameRemoved(this, name);
@@ -317,9 +314,6 @@ namespace AroAro.DataCore.Session
             if (string.IsNullOrWhiteSpace(resultName))
                 throw new ArgumentException("Result dataset name cannot be null or empty", nameof(resultName));
 
-            if (_datasets.ContainsKey(resultName))
-                throw new InvalidOperationException($"Dataset already exists in session: {resultName}");
-
             // 获取源DataFrame
             var sourceDf = GetDataFrame(sourceName);
 
@@ -328,7 +322,8 @@ namespace AroAro.DataCore.Session
 
             // 创建DataFrame适配器
             var adapter = new DataFrameAdapter(resultName, resultDf);
-            _datasets[resultName] = adapter;
+            if (!_datasets.TryAdd(resultName, adapter))
+                throw new InvalidOperationException($"Dataset already exists in session: {resultName}");
 
             // 缓存结果DataFrame
             _dataFrameCache[resultName] = resultDf;
@@ -420,14 +415,12 @@ namespace AroAro.DataCore.Session
         /// </summary>
         public void CleanupWeakReferences()
         {
-            var toRemove = _weakDataFrames
-                .Where(kv => !kv.Value.TryGetTarget(out _))
-                .Select(kv => kv.Key)
-                .ToList();
-
-            foreach (var key in toRemove)
+            foreach (var kv in _weakDataFrames)
             {
-                _weakDataFrames.Remove(key);
+                if (!kv.Value.TryGetTarget(out _))
+                {
+                    _weakDataFrames.TryRemove(kv.Key, out _);
+                }
             }
         }
 
