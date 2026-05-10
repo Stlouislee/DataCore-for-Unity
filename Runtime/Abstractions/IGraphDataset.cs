@@ -8,6 +8,16 @@ namespace AroAro.DataCore
     /// <summary>
     /// 图数据集接口 - 提供图结构的操作
     /// </summary>
+    /// <remarks>
+    /// <para>⚠️ Performance note: All synchronous operations execute on the calling thread. For large
+    /// graphs, prefer the async variants (e.g. <see cref="AddNodesAsync"/>, <see cref="AddEdgesAsync"/>,
+    /// <see cref="ClearAsync"/>) to avoid blocking the Unity main thread:</para>
+    /// <code>
+    /// await graph.AddNodesAsync(nodeBatch);
+    /// await graph.AddEdgesAsync(edgeBatch);
+    /// var neighbors = await graph.GetOutNeighborsAsync(nodeId);
+    /// </code>
+    /// </remarks>
     public interface IGraphDataset : IDataSet
     {
         #region 属性
