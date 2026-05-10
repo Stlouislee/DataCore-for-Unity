@@ -288,8 +288,8 @@ namespace DataCore.Tests.Algorithms
 
             Assert.Equal(42, context.Parameters["key"]);
 
-            // ReadOnlyDictionary cannot be cast to IDictionary — this should throw InvalidCastException
-            Assert.Throws<InvalidCastException>(() =>
+            // ReadOnlyDictionary explicitly implements IDictionary but throws on mutation
+            Assert.Throws<NotSupportedException>(() =>
             {
                 var mutable = (IDictionary<string, object>)context.Parameters;
                 mutable.Add("evil", true);
