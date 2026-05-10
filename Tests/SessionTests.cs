@@ -122,110 +122,131 @@ namespace AroAro.DataCore.Tests
         {
             sb.AppendLine("Testing Session Manager Operations...");
             var store = new DataCoreStore();
-            var sessionManager = store.SessionManager;
+            try
+            {
+                var sessionManager = store.SessionManager;
 
-            // 测试多个会话
-            var session1 = sessionManager.CreateSession("ManagerTest1");
-            var session2 = sessionManager.CreateSession("ManagerTest2");
-            var session3 = sessionManager.CreateSession("ManagerTest3");
+                // 测试多个会话
+                var session1 = sessionManager.CreateSession("ManagerTest1");
+                var session2 = sessionManager.CreateSession("ManagerTest2");
+                var session3 = sessionManager.CreateSession("ManagerTest3");
 
-            // 测试会话ID获取
-            var sessionIds = sessionManager.SessionIds;
-            if (sessionIds.Count != 3) throw new Exception($"Expected 3 sessions, got {sessionIds.Count}");
-            sb.AppendLine("✅ Session manager session IDs OK");
+                // 测试会话ID获取
+                var sessionIds = sessionManager.SessionIds;
+                if (sessionIds.Count != 3) throw new Exception($"Expected 3 sessions, got {sessionIds.Count}");
+                sb.AppendLine("✅ Session manager session IDs OK");
 
-            // 测试会话获取
-            var retrievedSession = sessionManager.GetSession(session1.Id);
-            if (retrievedSession.Name != "ManagerTest1") throw new Exception("Session retrieval failed");
-            sb.AppendLine("✅ Session manager session retrieval OK");
+                // 测试会话获取
+                var retrievedSession = sessionManager.GetSession(session1.Id);
+                if (retrievedSession.Name != "ManagerTest1") throw new Exception("Session retrieval failed");
+                sb.AppendLine("✅ Session manager session retrieval OK");
 
-            // 测试会话存在检查
-            if (!sessionManager.HasSession(session1.Id)) throw new Exception("Session existence check failed");
-            if (sessionManager.HasSession("NonExistent")) throw new Exception("Non-existent session should return false");
-            sb.AppendLine("✅ Session manager session existence check OK");
+                // 测试会话存在检查
+                if (!sessionManager.HasSession(session1.Id)) throw new Exception("Session existence check failed");
+                if (sessionManager.HasSession("NonExistent")) throw new Exception("Non-existent session should return false");
+                sb.AppendLine("✅ Session manager session existence check OK");
 
-            // 测试会话关闭
-            if (!sessionManager.CloseSession(session1.Id)) throw new Exception("Session close failed");
-            if (sessionManager.SessionIds.Count != 2) throw new Exception($"Expected 2 sessions after close, got {sessionManager.SessionIds.Count}");
-            sb.AppendLine("✅ Session manager session close OK");
+                // 测试会话关闭
+                if (!sessionManager.CloseSession(session1.Id)) throw new Exception("Session close failed");
+                if (sessionManager.SessionIds.Count != 2) throw new Exception($"Expected 2 sessions after close, got {sessionManager.SessionIds.Count}");
+                sb.AppendLine("✅ Session manager session close OK");
 
-            // 测试统计信息
-            var stats = sessionManager.GetStatistics();
-            if (stats.TotalSessions != 2) throw new Exception($"Expected 2 sessions in stats, got {stats.TotalSessions}");
-            sb.AppendLine("✅ Session manager statistics OK");
+                // 测试统计信息
+                var stats = sessionManager.GetStatistics();
+                if (stats.TotalSessions != 2) throw new Exception($"Expected 2 sessions in stats, got {stats.TotalSessions}");
+                sb.AppendLine("✅ Session manager statistics OK");
 
-            // 测试关闭所有会话
-            sessionManager.CloseAllSessions();
-            if (sessionManager.SessionIds.Count != 0) throw new Exception("Close all sessions failed");
-            sb.AppendLine("✅ Session manager close all OK");
+                // 测试关闭所有会话
+                sessionManager.CloseAllSessions();
+                if (sessionManager.SessionIds.Count != 0) throw new Exception("Close all sessions failed");
+                sb.AppendLine("✅ Session manager close all OK");
+            }
+            finally
+            {
+                store.Dispose();
+            }
         }
 
         private static void TestSessionEvents(StringBuilder sb)
         {
             sb.AppendLine("Testing Session Events...");
             var store = new DataCoreStore();
-            var sessionManager = store.SessionManager;
-            var session = sessionManager.CreateSession("EventTestSession");
-
-            // 测试事件订阅（这里主要是验证事件系统正常工作）
-            bool datasetAddedEventFired = false;
-            bool datasetCreatedEventFired = false;
-
-            Events.DataCoreEventManager.SubscribeSessionDatasetAdded((sender, e) =>
+            try
             {
-                if (e.Session == session && e.Dataset.Name == "EventTestDataset")
-                    datasetAddedEventFired = true;
-            });
+                var sessionManager = store.SessionManager;
+                var session = sessionManager.CreateSession("EventTestSession");
 
-            Events.DataCoreEventManager.SubscribeSessionDatasetCreated((sender, e) =>
+                // 测试事件订阅（这里主要是验证事件系统正常工作）
+                bool datasetAddedEventFired = false;
+                bool datasetCreatedEventFired = false;
+
+                Events.DataCoreEventManager.SubscribeSessionDatasetAdded((sender, e) =>
+                {
+                    if (e.Session == session && e.Dataset.Name == "EventTestDataset")
+                        datasetAddedEventFired = true;
+                });
+
+                Events.DataCoreEventManager.SubscribeSessionDatasetCreated((sender, e) =>
+                {
+                    if (e.Session == session && e.Dataset.Name == "EventTestDataset")
+                        datasetCreatedEventFired = true;
+                });
+
+                // 创建数据集来触发事件
+                var dataset = session.CreateDataset("EventTestDataset", DataSetKind.Tabular);
+
+                // 验证事件是否触发（在Unity编辑器中事件是同步的）
+                if (!datasetCreatedEventFired) throw new Exception("Session dataset created event not fired");
+                sb.AppendLine("✅ Session events OK");
+
+                // 清理事件订阅
+                Events.DataCoreEventManager.ClearAllSubscriptions();
+            }
+            finally
             {
-                if (e.Session == session && e.Dataset.Name == "EventTestDataset")
-                    datasetCreatedEventFired = true;
-            });
-
-            // 创建数据集来触发事件
-            var dataset = session.CreateDataset("EventTestDataset", DataSetKind.Tabular);
-
-            // 验证事件是否触发（在Unity编辑器中事件是同步的）
-            if (!datasetCreatedEventFired) throw new Exception("Session dataset created event not fired");
-            sb.AppendLine("✅ Session events OK");
-
-            // 清理事件订阅
-            Events.DataCoreEventManager.ClearAllSubscriptions();
+                store.Dispose();
+            }
         }
 
         private static void TestSessionLifecycle(StringBuilder sb)
         {
             sb.AppendLine("Testing Session Lifecycle...");
             var store = new DataCoreStore();
-            var sessionManager = store.SessionManager;
-
-            // 测试空闲会话清理
-            var idleSession = sessionManager.CreateSession("IdleTestSession");
-            System.Threading.Thread.Sleep(10); // 确保有时间差
-
-            var cleanupCount = sessionManager.CleanupIdleSessions(TimeSpan.FromMilliseconds(1));
-            if (cleanupCount != 1) throw new Exception($"Expected 1 idle session cleaned up, got {cleanupCount}");
-            sb.AppendLine("✅ Session idle cleanup OK");
-
-            // 测试会话销毁
-            var disposableSession = sessionManager.CreateSession("DisposableTestSession");
-            disposableSession.Dispose();
-            
-            // 验证会话是否被正确清理
             try
             {
-                disposableSession.GetDataset("AnyDataset");
-                throw new Exception("Disposed session should throw exception");
+                var sessionManager = store.SessionManager;
+
+                // 测试空闲会话清理
+                var idleSession = sessionManager.CreateSession("IdleTestSession");
+                System.Threading.Thread.Sleep(10); // 确保有时间差
+
+                var cleanupCount = sessionManager.CleanupIdleSessions(TimeSpan.FromMilliseconds(1));
+                if (cleanupCount != 1) throw new Exception($"Expected 1 idle session cleaned up, got {cleanupCount}");
+                sb.AppendLine("✅ Session idle cleanup OK");
+
+                // 测试会话销毁
+                var disposableSession = sessionManager.CreateSession("DisposableTestSession");
+                disposableSession.Dispose();
+
+                // 验证会话是否被正确清理
+                try
+                {
+                    disposableSession.GetDataset("AnyDataset");
+                    throw new Exception("Disposed session should throw exception");
+                }
+                catch (ObjectDisposedException)
+                {
+                    // 这是预期的行为
+                    sb.AppendLine("✅ Session disposal OK");
+                }
+                catch (Exception)
+                {
+                    throw new Exception("Disposed session should throw ObjectDisposedException");
+                }
             }
-            catch (ObjectDisposedException)
+            finally
             {
-                // 这是预期的行为
-                sb.AppendLine("✅ Session disposal OK");
-            }
-            catch (Exception)
-            {
-                throw new Exception("Disposed session should throw ObjectDisposedException");
+                store.Dispose();
             }
         }
     }
