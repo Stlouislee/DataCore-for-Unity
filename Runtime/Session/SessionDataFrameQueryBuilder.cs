@@ -245,7 +245,18 @@ namespace AroAro.DataCore.Session
             if (count < 0)
                 throw new ArgumentException("Offset count cannot be negative", nameof(count));
 
-            _operations.Add(df => df.Tail(Math.Max(0, (int)(df.Rows.Count - count))));
+            _operations.Add(df =>
+            {
+                int skip = Math.Min(count, (int)df.Rows.Count);
+                if (skip == 0) return df;
+                // Use Head to get a copy, then remove first N rows via column slicing
+                var columns = new List<DataFrameColumn>();
+                foreach (var col in df.Columns)
+                {
+                    columns.Add(col.Clone(skip, null)); // Clone from index 'skip' to end
+                }
+                return new DataFrame(columns);
+            });
             return this;
         }
 
