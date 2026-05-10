@@ -1,3 +1,4 @@
+#if UNITY_2019_1_OR_NEWER
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -18,3 +19,4 @@ namespace AroAro.DataCore.SampleDatasets
         public IReadOnlyList<SampleDatasetDefinition> Datasets => datasets;
     }
 }
+#endif

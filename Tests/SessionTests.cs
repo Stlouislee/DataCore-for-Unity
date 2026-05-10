@@ -198,12 +198,11 @@ namespace AroAro.DataCore.Tests
                 // 验证事件是否触发（在Unity编辑器中事件是同步的）
                 if (!datasetCreatedEventFired) throw new Exception("Session dataset created event not fired");
                 sb.AppendLine("✅ Session events OK");
-
-                // 清理事件订阅
-                Events.DataCoreEventManager.ClearAllSubscriptions();
             }
             finally
             {
+                // 清理事件订阅（确保即使断言失败也能清理）
+                Events.DataCoreEventManager.ClearAllSubscriptions();
                 store.Dispose();
             }
         }
