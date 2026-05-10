@@ -179,6 +179,11 @@ namespace AroAro.DataCore.Session
                             var newTabular = _store.CreateTabular(target);
                             CopyTabularData(sourceTabular, newTabular);
                         }
+                        else
+                        {
+                            throw new InvalidOperationException(
+                                $"Dataset '{name}' has kind Tabular but does not implement ITabularDataset (actual type: {dataset.GetType().Name}). Cannot persist.");
+                        }
                     }
                     break;
                 case DataSetKind.Graph:
@@ -187,6 +192,11 @@ namespace AroAro.DataCore.Session
                         {
                             var newGraph = _store.CreateGraph(target);
                             CopyGraphData(sourceGraph, newGraph);
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException(
+                                $"Dataset '{name}' has kind Graph but does not implement IGraphDataset (actual type: {dataset.GetType().Name}). Cannot persist.");
                         }
                     }
                     break;
