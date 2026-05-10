@@ -97,7 +97,7 @@ namespace DataCore.Tests.Graph
             Assert.False(graph.RemoveNode("nonexistent"));
         }
 
-        [Fact(Skip = "Known issue: Edge count after RemoveNode differs from expected behavior")]
+        [Fact]
         public void RemoveNode_AlsoRemovesConnectedEdges()
         {
             var graph = new GraphData("test");
@@ -111,7 +111,7 @@ namespace DataCore.Tests.Graph
 
             Assert.False(graph.HasEdge("A", "B"));
             Assert.False(graph.HasEdge("B", "C"));
-            Assert.Equal(1, graph.EdgeCount); // Only A→C if it existed; it didn't, so 0
+            Assert.Equal(0, graph.EdgeCount); // Both edges connected to B are removed
         }
 
         [Fact]
@@ -513,17 +513,11 @@ namespace DataCore.Tests.Graph
         // BFS: edge filter direction bug when traverseIn=true
         // ────────────────────────────────────────────────────────────────
 
-        [Fact(Skip = "Known issue: Edge filter applied with wrong direction for inbound traversal")]
-        public void BFS_EdgeFilterDirection_WhenTraverseIn_WrongArgumentOrder()
+        [Fact]
+        public void BFS_EdgeFilterDirection_WhenTraverseIn_WorksCorrectly()
         {
-            // Known issue: In the BFS implementation, edge filters are called as
-            // f(current, neighbor) regardless of traversal direction. When traversing
-            // in-edges (TraverseIn), the actual edge direction is (neighbor → current),
-            // but the filter receives (current, neighbor). This means edge property
-            // lookups may fail or return incorrect results because the edge key
-            // is constructed as "current→neighbor" instead of "neighbor→current".
-            //
-            // This test documents the behavior.
+            // Fixed in #35: Edge filters now receive (from, to) in edge-storage order
+            // regardless of traversal direction.
             var graph = new GraphData("directionBug");
             graph.AddNode("A");
             graph.AddNode("B");
@@ -531,9 +525,8 @@ namespace DataCore.Tests.Graph
             graph.AddEdge("B", "A", new Dictionary<string, object> { ["weight"] = 1.0 });
             graph.AddEdge("C", "A", new Dictionary<string, object> { ["weight"] = 2.0 });
 
-            // Traverse in-edges from A: should find B and C (they point to A)
-            // But edge filter checks f(A, B) and f(A, C), looking for edges A→B and A→C
-            // which don't exist — the actual edges are B→A and C→A.
+            // Traverse in-edges from A: should find B (weight=1) and C (weight=2)
+            // Edge filter on weight=1 should only match B→A
             var result = graph.Query()
                 .From("A")
                 .TraverseIn()
@@ -541,15 +534,8 @@ namespace DataCore.Tests.Graph
                 .ToNodeIds()
                 .ToList();
 
-            // With the bug, the edge filter fails because it looks up edge (A, B)
-            // instead of (B, A). So the filter may not match anything.
-            // Correct behavior: B should be found (edge B→A has weight 1.0)
-            // Bug behavior: the filter may fail to find the edge
-
-            // Document the actual behavior:
-            // The result may or may not contain B depending on whether
-            // GetEdgeProperties(A, B) throws or returns wrong data.
-            // This test exists to document the known issue.
+            Assert.Contains("B", result);
+            Assert.DoesNotContain("C", result);
         }
 
         // ────────────────────────────────────────────────────────────────
