@@ -147,7 +147,7 @@ namespace AroAro.DataCore.Tabular
         {
             if (!_stringData.TryGetValue(name, out var data))
                 throw new KeyNotFoundException($"String column '{name}' not found");
-            return data;
+            return (string[])data.Clone();
         }
 
         public ColumnType GetColumnType(string name)
@@ -168,7 +168,7 @@ namespace AroAro.DataCore.Tabular
                 foreach (var kvp in values)
                 {
                     _columnNames.Add(kvp.Key);
-                    if (kvp.Value is double or int or float or long)
+                    if (kvp.Value is IConvertible && kvp.Value is not bool and not char and not string)
                     {
                         _columnTypes[kvp.Key] = ColumnType.Numeric;
                         _numericData[kvp.Key] = new[] { Convert.ToDouble(kvp.Value) };
@@ -783,9 +783,19 @@ namespace AroAro.DataCore.Tabular
 
                 if (!string.IsNullOrEmpty(_orderByColumn))
                 {
-                    result = _orderDescending
-                        ? result.OrderByDescending(x => x.row[_orderByColumn])
-                        : result.OrderBy(x => x.row[_orderByColumn]);
+                    var colType = _source.GetColumnType(_orderByColumn);
+                    if (colType == ColumnType.Numeric)
+                    {
+                        result = _orderDescending
+                            ? result.OrderByDescending(x => Convert.ToDouble(x.row[_orderByColumn]))
+                            : result.OrderBy(x => Convert.ToDouble(x.row[_orderByColumn]));
+                    }
+                    else
+                    {
+                        result = _orderDescending
+                            ? result.OrderByDescending(x => x.row[_orderByColumn]?.ToString() ?? "")
+                            : result.OrderBy(x => x.row[_orderByColumn]?.ToString() ?? "");
+                    }
                 }
 
                 var rows = result.Skip(_skip).Take(_take).Select(x => x.row);
