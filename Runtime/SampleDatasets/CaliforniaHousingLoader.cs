@@ -6,106 +6,34 @@ using AroAro.DataCore.Events;
 namespace AroAro.DataCore.SampleDatasets
 {
     /// <summary>
-    /// Built-in California housing dataset for DataCore
-    /// Contains 3000+ California properties with housing data
+    /// Provides query and statistics access to the California housing dataset.
+    /// Loading is handled exclusively by <see cref="SampleDatasetManager"/> to prevent
+    /// duplicate loading when both components are present in a scene.
     /// </summary>
     public class CaliforniaHousingLoader : MonoBehaviour
     {
         [Header("Configuration")]
         [SerializeField] private string datasetName = "california-housing";
-        [SerializeField] private bool loadOnStart = true;
 
         private void Start()
         {
-            if (loadOnStart)
-            {
-                // DataCoreEditorComponent.Awake() runs before all Start() calls,
-                // so Instance should be available here. But guard against edge cases
-                // (e.g., disabled DataCoreEditorComponent GameObject).
-                if (DataCoreEditorComponent.Instance != null)
-                {
-                    LoadDataset();
-                }
-                else
-                {
-                    // Fallback: wait for dataset creation event
-                    DataCoreEventManager.SubscribeDatasetCreated(OnDatasetCreated);
-                }
-            }
-        }
-
-        private void OnDisable()
-        {
-            DataCoreEventManager.UnsubscribeDatasetCreated(OnDatasetCreated);
-        }
-
-        private void OnDatasetCreated(object sender, DatasetCreatedEventArgs e)
-        {
-            // Once DataCore is available, load the dataset
-            if (DataCoreEditorComponent.Instance != null)
-            {
-                DataCoreEventManager.UnsubscribeDatasetCreated(OnDatasetCreated);
-                LoadDataset();
-            }
-        }
-
-        /// <summary>
-        /// Load the built-in California housing dataset into DataCore
-        /// </summary>
-        public void LoadDataset()
-        {
             if (DataCoreEditorComponent.Instance == null)
             {
-                Debug.LogError("DataCoreEditorComponent not found in scene! Please add it to a GameObject.");
+                Debug.LogWarning("DataCoreEditorComponent not found in scene. Dataset queries will not work.");
                 return;
             }
 
             var store = DataCoreEditorComponent.Instance.GetStore();
-            
-            // Remove existing dataset if it exists
-            if (store.HasDataset(datasetName))
+            if (!store.HasDataset(datasetName))
             {
-                store.Delete(datasetName);
-            }
-
-            try
-            {
-                var housingData = store.CreateTabular(datasetName);
-                
-                // Add built-in California housing data
-                AddCaliforniaHousingData(housingData);
-
-                Debug.Log($"✅ Loaded California housing dataset with {housingData.RowCount} rows and {housingData.ColumnNames.Count} columns");
-                Debug.Log($"Dataset name: {datasetName}");
-                Debug.Log($"Columns: {string.Join(", ", housingData.ColumnNames)}");
-
-                // Data is auto-saved with LiteDB
-                Debug.Log($"✅ Dataset auto-persisted to LiteDB");
-
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"Failed to load California housing dataset: {ex.Message}");
-                Debug.LogError($"Stack trace: {ex.StackTrace}");
+                Debug.LogWarning(
+                    $"Dataset '{datasetName}' not loaded. " +
+                    $"Add a SampleDatasetManager to your scene or call CaliforniaHousingDataset.LoadIntoDataCore() manually.");
             }
         }
 
         /// <summary>
-        /// Add built-in California housing data to the dataset
-        /// </summary>
-        private void AddCaliforniaHousingData(ITabularDataset housingData)
-        {
-            var sampleData = CaliforniaHousingDataset.GetSampleData();
-
-            // Add each column to the dataset
-            foreach (var column in sampleData)
-            {
-                housingData.AddNumericColumn(column.Key, np.array(column.Value));
-            }
-        }
-
-        /// <summary>
-        /// Get sample queries for the California housing dataset
+        /// Run sample queries against the loaded dataset
         /// </summary>
         public void RunSampleQueries()
         {
@@ -117,10 +45,10 @@ namespace AroAro.DataCore.SampleDatasets
 
             var store = DataCoreEditorComponent.Instance.GetStore();
             var housingData = store.GetTabular(datasetName);
-            
+
             if (housingData == null)
             {
-                Debug.LogError("Dataset not found. Please load it first.");
+                Debug.LogError("Dataset not found. Add a SampleDatasetManager to your scene to load it.");
                 return;
             }
 
@@ -156,10 +84,10 @@ namespace AroAro.DataCore.SampleDatasets
 
             var store = DataCoreEditorComponent.Instance.GetStore();
             var housingData = store.GetTabular(datasetName);
-            
+
             if (housingData == null)
             {
-                Debug.LogError("Dataset not found. Please load it first.");
+                Debug.LogError("Dataset not found. Add a SampleDatasetManager to your scene to load it.");
                 return;
             }
 
@@ -182,9 +110,6 @@ namespace AroAro.DataCore.SampleDatasets
                 }
             }
         }
-
-        [ContextMenu("Load California Housing Dataset")]
-        private void LoadDatasetMenu() => LoadDataset();
 
         [ContextMenu("Run Sample Queries")]
         private void RunSampleQueriesMenu() => RunSampleQueries();
