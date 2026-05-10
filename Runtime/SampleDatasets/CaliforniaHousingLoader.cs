@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using NumSharp;
+using AroAro.DataCore.Events;
 
 namespace AroAro.DataCore.SampleDatasets
 {
@@ -18,6 +19,32 @@ namespace AroAro.DataCore.SampleDatasets
         {
             if (loadOnStart)
             {
+                // DataCoreEditorComponent.Awake() runs before all Start() calls,
+                // so Instance should be available here. But guard against edge cases
+                // (e.g., disabled DataCoreEditorComponent GameObject).
+                if (DataCoreEditorComponent.Instance != null)
+                {
+                    LoadDataset();
+                }
+                else
+                {
+                    // Fallback: wait for dataset creation event
+                    DataCoreEventManager.SubscribeDatasetCreated(OnDatasetCreated);
+                }
+            }
+        }
+
+        private void OnDisable()
+        {
+            DataCoreEventManager.UnsubscribeDatasetCreated(OnDatasetCreated);
+        }
+
+        private void OnDatasetCreated(object sender, DatasetCreatedEventArgs e)
+        {
+            // Once DataCore is available, load the dataset
+            if (DataCoreEditorComponent.Instance != null)
+            {
+                DataCoreEventManager.UnsubscribeDatasetCreated(OnDatasetCreated);
                 LoadDataset();
             }
         }

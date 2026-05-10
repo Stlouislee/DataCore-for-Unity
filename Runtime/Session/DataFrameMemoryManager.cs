@@ -205,38 +205,7 @@ namespace AroAro.DataCore.Session
         /// </summary>
         private long EstimateMemoryUsage(DataFrame df)
         {
-            long totalBytes = 0;
-
-            foreach (var column in df.Columns)
-            {
-                if (column is PrimitiveDataFrameColumn<double> doubleColumn)
-                {
-                    totalBytes += doubleColumn.Length * sizeof(double);
-                }
-                else if (column is PrimitiveDataFrameColumn<float> floatColumn)
-                {
-                    totalBytes += floatColumn.Length * sizeof(float);
-                }
-                else if (column is PrimitiveDataFrameColumn<int> intColumn)
-                {
-                    totalBytes += intColumn.Length * sizeof(int);
-                }
-                else if (column is StringDataFrameColumn stringColumn)
-                {
-                    totalBytes += stringColumn.Sum(s => s?.Length * sizeof(char) ?? 0);
-                }
-                else if (column is BooleanDataFrameColumn boolColumn)
-                {
-                    totalBytes += boolColumn.Length * sizeof(bool);
-                }
-                else
-                {
-                    // 通用估算
-                    totalBytes += column.Length * 16; // 保守估计
-                }
-            }
-
-            return totalBytes;
+            return DataFrameUtils.EstimateMemoryUsage(df);
         }
 
         /// <summary>
@@ -244,40 +213,7 @@ namespace AroAro.DataCore.Session
         /// </summary>
         public DataFrame OptimizeMemory(DataFrame df)
         {
-            var optimizedDf = new DataFrame();
-
-            foreach (var column in df.Columns)
-            {
-                if (column is PrimitiveDataFrameColumn<double> doubleColumn)
-                {
-                    // 检查是否可以转换为更小的类型
-                    var min = (double)doubleColumn.Min();
-                    var max = (double)doubleColumn.Max();
-                    
-                    if (min >= float.MinValue && max <= float.MaxValue)
-                    {
-                        var floatData = doubleColumn.ToArray().Select(v => (float)v).ToArray();
-                        optimizedDf.Columns.Add(new SingleDataFrameColumn(column.Name, floatData));
-                    }
-                    else
-                    {
-                        optimizedDf.Columns.Add(doubleColumn.Clone());
-                    }
-                }
-                else if (column is StringDataFrameColumn stringColumn)
-                {
-                    // 使用Arrow字符串列节省内存
-                    var stringData = stringColumn.ToArray();
-                    optimizedDf.Columns.Add(new StringDataFrameColumn(column.Name, stringData));
-                }
-                else
-                {
-                    // 保持原样
-                    optimizedDf.Columns.Add(column.Clone());
-                }
-            }
-
-            return optimizedDf;
+            return DataFrameUtils.OptimizeMemory(df);
         }
     }
 

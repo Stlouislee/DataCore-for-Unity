@@ -35,6 +35,9 @@ namespace AroAro.DataCore.Session
         /// </summary>
         public SessionDataFrameQueryBuilder Where(string columnName, ComparisonOp op, double value)
         {
+            if (string.IsNullOrWhiteSpace(columnName))
+                throw new ArgumentException("Column name cannot be null or empty", nameof(columnName));
+
             _operations.Add(df =>
             {
                 if (df.Columns.IndexOf(columnName) == -1)
@@ -96,6 +99,9 @@ namespace AroAro.DataCore.Session
         /// </summary>
         public SessionDataFrameQueryBuilder Where(string columnName, ComparisonOp op, string value)
         {
+            if (string.IsNullOrWhiteSpace(columnName))
+                throw new ArgumentException("Column name cannot be null or empty", nameof(columnName));
+
             _operations.Add(df =>
             {
                 if (df.Columns.IndexOf(columnName) == -1)
@@ -154,6 +160,9 @@ namespace AroAro.DataCore.Session
         /// </summary>
         public SessionDataFrameQueryBuilder Where(string columnName, bool value)
         {
+            if (string.IsNullOrWhiteSpace(columnName))
+                throw new ArgumentException("Column name cannot be null or empty", nameof(columnName));
+
             _operations.Add(df =>
             {
                 if (df.Columns.IndexOf(columnName) == -1)
@@ -193,6 +202,11 @@ namespace AroAro.DataCore.Session
         /// </summary>
         public SessionDataFrameQueryBuilder Select(params string[] columns)
         {
+            if (columns == null || columns.Length == 0)
+                throw new ArgumentException("At least one column must be specified", nameof(columns));
+            if (columns.Any(c => string.IsNullOrWhiteSpace(c)))
+                throw new ArgumentException("Column names cannot be null or empty", nameof(columns));
+
             _operations.Add(df =>
             {
                 foreach (var columnName in columns)
@@ -213,6 +227,9 @@ namespace AroAro.DataCore.Session
         /// </summary>
         public SessionDataFrameQueryBuilder OrderBy(string columnName, bool ascending = true)
         {
+            if (string.IsNullOrWhiteSpace(columnName))
+                throw new ArgumentException("Column name cannot be null or empty", nameof(columnName));
+
             _operations.Add(df =>
             {
                 if (df.Columns.IndexOf(columnName) == -1)
@@ -245,7 +262,21 @@ namespace AroAro.DataCore.Session
             if (count < 0)
                 throw new ArgumentException("Offset count cannot be negative", nameof(count));
 
-            _operations.Add(df => df.Tail(Math.Max(0, (int)(df.Rows.Count - count))));
+            _operations.Add(df =>
+            {
+                int totalRows = (int)df.Rows.Count;
+                int skip = Math.Min(count, totalRows);
+                if (skip == 0) return df;
+                if (skip >= totalRows) return new DataFrame();
+
+                // Create a boolean mask: false for first 'skip' rows, true for the rest
+                var mask = new bool[totalRows];
+                for (int i = skip; i < totalRows; i++)
+                    mask[i] = true;
+
+                var maskColumn = new PrimitiveDataFrameColumn<bool>("__offset_mask__", mask);
+                return df.Filter(maskColumn);
+            });
             return this;
         }
 
@@ -342,13 +373,8 @@ namespace AroAro.DataCore.Session
             if (string.IsNullOrWhiteSpace(resultName))
                 throw new ArgumentException("Result dataset name cannot be null or empty", nameof(resultName));
 
-            // 获取Session的具体实现
-            var concreteSession = _session as Session;
-            if (concreteSession == null)
-                throw new InvalidOperationException("Session must be concrete implementation");
-
-            // 执行查询
-            return concreteSession.ExecuteDataFrameQuery(_sourceName, df =>
+            // Use ISession interface — no concrete cast needed
+            return _session.ExecuteDataFrameQuery(_sourceName, df =>
             {
                 var resultDf = df;
                 foreach (var operation in _operations)
@@ -364,11 +390,8 @@ namespace AroAro.DataCore.Session
         /// </summary>
         public DataFrame ExecuteAsDataFrame()
         {
-            var concreteSession = _session as Session;
-            if (concreteSession == null)
-                throw new InvalidOperationException("Session must be concrete implementation");
-
-            var sourceDf = concreteSession.GetDataFrame(_sourceName);
+            // Use ISession interface — no concrete cast needed
+            var sourceDf = _session.GetDataFrame(_sourceName);
             
             var resultDf = sourceDf;
             foreach (var operation in _operations)

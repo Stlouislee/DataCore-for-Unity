@@ -14,7 +14,7 @@ namespace AroAro.DataCore.LiteDb
     /// <summary>
     /// LiteDB 表格数据集实现
     /// </summary>
-    public sealed class LiteDbTabularDataset : ITabularDataset
+    public sealed class LiteDbTabularDataset : ITabularDataset, IFlushable
     {
         private readonly LiteDatabase _database;
         private readonly TabularMetadata _metadata;
@@ -251,9 +251,13 @@ namespace AroAro.DataCore.LiteDb
             if (!HasColumn(name))
                 throw new KeyNotFoundException($"Column '{name}' not found");
 
-            var data = _rows.FindAll().OrderBy(r => r.RowIndex)
-                .Select(r => r.Data.TryGetValue(name, out var v) && !v.IsNull ? v.AsDouble : 0.0)
-                .ToArray();
+            double[] data;
+            lock (_lock)
+            {
+                data = _rows.FindAll().OrderBy(r => r.RowIndex)
+                    .Select(r => r.Data.TryGetValue(name, out var v) && !v.IsNull ? v.AsDouble : 0.0)
+                    .ToArray();
+            }
 
             return np.array(data);
         }
@@ -265,9 +269,15 @@ namespace AroAro.DataCore.LiteDb
             if (!HasColumn(name))
                 throw new KeyNotFoundException($"Column '{name}' not found");
 
-            return _rows.FindAll().OrderBy(r => r.RowIndex)
-                .Select(r => r.Data.TryGetValue(name, out var v) && !v.IsNull ? v.AsString : null)
-                .ToArray();
+            string[] data;
+            lock (_lock)
+            {
+                data = _rows.FindAll().OrderBy(r => r.RowIndex)
+                    .Select(r => r.Data.TryGetValue(name, out var v) && !v.IsNull ? v.AsString : null)
+                    .ToArray();
+            }
+
+            return data;
         }
 
         public ColumnType GetColumnType(string name)
@@ -411,7 +421,11 @@ namespace AroAro.DataCore.LiteDb
             if (rowIndex < 0 || rowIndex >= _metadata.RowCount)
                 throw new ArgumentOutOfRangeException(nameof(rowIndex));
 
-            var row = _rows.FindOne(r => r.RowIndex == rowIndex);
+            TabularRow row;
+            lock (_lock)
+            {
+                row = _rows.FindOne(r => r.RowIndex == rowIndex);
+            }
             if (row == null) return null;
 
             var result = new Dictionary<string, object>();
@@ -426,8 +440,13 @@ namespace AroAro.DataCore.LiteDb
         {
             ThrowIfDisposed();
             
-            var rows = _rows.Find(r => r.RowIndex >= startIndex && r.RowIndex < startIndex + count)
-                .OrderBy(r => r.RowIndex);
+            List<TabularRow> rows;
+            lock (_lock)
+            {
+                rows = _rows.Find(r => r.RowIndex >= startIndex && r.RowIndex < startIndex + count)
+                    .OrderBy(r => r.RowIndex)
+                    .ToList();
+            }
 
             foreach (var row in rows)
             {
@@ -724,7 +743,13 @@ namespace AroAro.DataCore.LiteDb
 
         internal IEnumerable<TabularRow> GetAllRowsInternal()
         {
-            return _rows.FindAll().OrderBy(r => r.RowIndex);
+            ThrowIfDisposed();
+            List<TabularRow> rows;
+            lock (_lock)
+            {
+                rows = _rows.FindAll().OrderBy(r => r.RowIndex).ToList();
+            }
+            return rows;
         }
 
         private void EnsureColumn(string name, string type)

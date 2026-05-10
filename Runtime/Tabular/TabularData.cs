@@ -370,13 +370,25 @@ namespace AroAro.DataCore.Tabular
                 dataStartIndex = 0;
             }
 
-            // Detect column types from first data row
-            var firstDataRow = parsed[dataStartIndex];
+            // Detect column types from first 100 data rows (not just first row)
+            int sampleSize = Math.Min(100, parsed.Count - dataStartIndex);
             var isNumeric = new bool[headers.Length];
             
             for (int i = 0; i < headers.Length; i++)
             {
-                isNumeric[i] = i < firstDataRow.Count && double.TryParse(firstDataRow[i], out _);
+                int numericCount = 0;
+                int totalSampled = 0;
+                for (int s = 0; s < sampleSize; s++)
+                {
+                    var row = parsed[dataStartIndex + s];
+                    if (i < row.Count && !string.IsNullOrWhiteSpace(row[i]))
+                    {
+                        totalSampled++;
+                        if (double.TryParse(row[i], out _))
+                            numericCount++;
+                    }
+                }
+                isNumeric[i] = totalSampled > 0 && (double)numericCount / totalSampled > 0.7;
             }
 
             // Parse all data
@@ -423,7 +435,7 @@ namespace AroAro.DataCore.Tabular
             var sb = new StringBuilder();
             
             // Header
-            sb.AppendLine(string.Join(delimiter.ToString(), _columnNames));
+            sb.AppendLine(string.Join(delimiter.ToString(), _columnNames.Select(n => EscapeCsvField(n, delimiter))));
 
             // Data
             for (int i = 0; i < _rowCount; i++)
@@ -435,7 +447,7 @@ namespace AroAro.DataCore.Tabular
                     if (type == ColumnType.Numeric)
                         values.Add(_numericData[colName][i].ToString());
                     else
-                        values.Add(_stringData[colName][i]);
+                        values.Add(EscapeCsvField(_stringData[colName][i], delimiter));
                 }
                 sb.AppendLine(string.Join(delimiter.ToString(), values));
             }
@@ -450,7 +462,7 @@ namespace AroAro.DataCore.Tabular
             // Header
             if (includeHeader)
             {
-                sb.AppendLine(string.Join(delimiter.ToString(), _columnNames));
+                sb.AppendLine(string.Join(delimiter.ToString(), _columnNames.Select(n => EscapeCsvField(n, delimiter))));
             }
 
             // Data
@@ -463,12 +475,20 @@ namespace AroAro.DataCore.Tabular
                     if (type == ColumnType.Numeric)
                         values.Add(_numericData[colName][i].ToString());
                     else
-                        values.Add(_stringData[colName][i]);
+                        values.Add(EscapeCsvField(_stringData[colName][i], delimiter));
                 }
                 sb.AppendLine(string.Join(delimiter.ToString(), values));
             }
 
             return sb.ToString();
+        }
+
+        private static string EscapeCsvField(string field, char delimiter)
+        {
+            if (string.IsNullOrEmpty(field)) return "";
+            if (field.Contains(delimiter) || field.Contains('"') || field.Contains('\n') || field.Contains('\r'))
+                return $"\"{field.Replace("\"", "\"\"")}\"";
+            return field;
         }
 
         public double Mean(string columnName)

@@ -46,10 +46,10 @@ namespace AroAro.DataCore.Import
                     // 解析 GraphML 文档
                     ParseGraphMLDocument(doc, graph);
                     
-                    // Flush metadata after bulk import
-                    if (graph is LiteDb.LiteDbGraphDataset liteDbGraph)
+                    // Flush metadata after bulk import — use interface pattern to avoid LiteDB dependency
+                    if (graph is IFlushable flushable)
                     {
-                        liteDbGraph.FlushMetadata();
+                        flushable.FlushMetadata();
                     }
                 }
             }
@@ -58,7 +58,7 @@ namespace AroAro.DataCore.Import
                 Debug.LogError("Failed to parse GraphML: Database was disposed during import. Try restarting Unity.");
                 throw;
             }
-            catch (LiteDB.LiteException ex) when (ex.Message.Contains("PAGE_SIZE"))
+            catch (Exception ex) when (ex.GetType().Name == "LiteException" && ex.Message.Contains("PAGE_SIZE"))
             {
                 Debug.LogError($"Failed to parse GraphML: Database corruption detected ({ex.Message}). Try deleting the database file and reimporting.");
                 throw;

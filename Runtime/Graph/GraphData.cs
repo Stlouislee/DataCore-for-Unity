@@ -35,18 +35,40 @@ namespace AroAro.DataCore.Graph
         {
             var copy = new GraphData(newName);
             
-            // Copy nodes
+            // Copy nodes with properties
             foreach (var kvp in _nodes)
             {
                 copy._nodes[kvp.Key] = new Dictionary<string, object>(kvp.Value);
-                copy._outAdjacency[kvp.Key] = new HashSet<string>(_outAdjacency[kvp.Key]);
-                copy._inAdjacency[kvp.Key] = new HashSet<string>(_inAdjacency[kvp.Key]);
             }
             
-            // Copy edge properties
+            // Copy edge properties and rebuild adjacency lists from edges
             foreach (var kvp in _edgeProperties)
             {
-                copy._edgeProperties[kvp.Key] = new Dictionary<string, object>(kvp.Value);
+                var (from, to) = ParseEdgeKey(kvp.Key);
+                
+                // Only copy edges where both endpoints exist
+                if (copy._nodes.ContainsKey(from) && copy._nodes.ContainsKey(to))
+                {
+                    copy._edgeProperties[kvp.Key] = new Dictionary<string, object>(kvp.Value);
+                    
+                    // Ensure adjacency lists exist for both nodes
+                    if (!copy._outAdjacency.ContainsKey(from))
+                        copy._outAdjacency[from] = new HashSet<string>();
+                    if (!copy._inAdjacency.ContainsKey(to))
+                        copy._inAdjacency[to] = new HashSet<string>();
+                    
+                    copy._outAdjacency[from].Add(to);
+                    copy._inAdjacency[to].Add(from);
+                }
+            }
+            
+            // Ensure all nodes have adjacency entries (even isolated nodes)
+            foreach (var nodeId in copy._nodes.Keys)
+            {
+                if (!copy._outAdjacency.ContainsKey(nodeId))
+                    copy._outAdjacency[nodeId] = new HashSet<string>();
+                if (!copy._inAdjacency.ContainsKey(nodeId))
+                    copy._inAdjacency[nodeId] = new HashSet<string>();
             }
             
             return copy;
@@ -255,12 +277,44 @@ namespace AroAro.DataCore.Graph
 
         #region Private Helper Methods
 
-        private static string GetEdgeKey(string fromId, string toId) => $"{fromId}\0{toId}";
+        // Use a two-char separator that is extremely unlikely in node IDs.
+        // \x01\x02 avoids the \0 issue (Android JNI treats \0 as C string terminator).
+        private const string EdgeSeparator = "\x01\x02";
+
+        private static string GetEdgeKey(string fromId, string toId)
+        {
+            // Escape any accidental occurrences of the separator in node IDs
+            var safeFrom = fromId.Replace(EdgeSeparator, "\x01\x02\x01");
+            var safeTo = toId.Replace(EdgeSeparator, "\x01\x02\x01");
+            return $"{safeFrom}{EdgeSeparator}{safeTo}";
+        }
 
         private static (string From, string To) ParseEdgeKey(string key)
         {
-            var parts = key.Split('\0');
-            return (parts[0], parts[1]);
+            var sepIndex = FindSeparator(key);
+            var from = key.Substring(0, sepIndex).Replace("\x01\x02\x01", EdgeSeparator);
+            var to = key.Substring(sepIndex + EdgeSeparator.Length).Replace("\x01\x02\x01", EdgeSeparator);
+            return (from, to);
+        }
+
+        private static int FindSeparator(string key)
+        {
+            // Find the first unescaped separator
+            for (int i = 0; i <= key.Length - EdgeSeparator.Length; i++)
+            {
+                if (key.Substring(i, EdgeSeparator.Length) == EdgeSeparator)
+                {
+                    // Check if it's an escaped separator (\x01\x02\x01)
+                    if (i + EdgeSeparator.Length + 1 <= key.Length &&
+                        key.Substring(i + EdgeSeparator.Length, 1) == "\x01")
+                    {
+                        i += EdgeSeparator.Length + 1; // skip escaped
+                        continue;
+                    }
+                    return i;
+                }
+            }
+            throw new FormatException("Invalid edge key format: separator not found");
         }
 
         #endregion
@@ -462,8 +516,15 @@ namespace AroAro.DataCore.Graph
                         if (visited.Contains(neighbor))
                             continue;
 
-                        // Check edge filters
-                        bool edgePassesFilter = _edgeFilters.All(f => f(current, neighbor));
+                        // Check edge filters — always pass (from, to) in edge-storage order
+                        bool edgePassesFilter;
+                        if (_traverseOut)
+                            edgePassesFilter = _edgeFilters.All(f => f(current, neighbor));
+                        else if (_traverseIn)
+                            edgePassesFilter = _edgeFilters.All(f => f(neighbor, current));
+                        else
+                            edgePassesFilter = _edgeFilters.All(f => f(current, neighbor) || f(neighbor, current));
+
                         if (!edgePassesFilter)
                             continue;
 

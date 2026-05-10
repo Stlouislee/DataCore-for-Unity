@@ -517,7 +517,7 @@ namespace AroAro.DataCore.LiteDb
             
             lock (_lock)
             {
-                // Mark all cached datasets as disposed
+                // Step 1: Mark all cached datasets as disposed first
                 foreach (var graph in _graphCache.Values)
                 {
                     graph.MarkDisposed();
@@ -526,15 +526,29 @@ namespace AroAro.DataCore.LiteDb
                 {
                     tabular.MarkDisposed();
                 }
-                
+
+                // Step 2: Delete from database (read names from DB, not cache)
+                var tabularMeta = _database.GetCollection<TabularMetadata>("tabular_meta");
+                var graphMeta = _database.GetCollection<GraphMetadata>("graph_meta");
+
+                foreach (var metadata in tabularMeta.FindAll().ToList())
+                {
+                    var rows = _database.GetCollection<TabularRow>($"tabular_{metadata.Id}");
+                    rows.DeleteAll();
+                    _database.DropCollection($"tabular_{metadata.Id}");
+                    tabularMeta.Delete(metadata.Id);
+                }
+
+                foreach (var metadata in graphMeta.FindAll().ToList())
+                {
+                    _database.DropCollection($"graph_{metadata.Id}_nodes");
+                    _database.DropCollection($"graph_{metadata.Id}_edges");
+                    graphMeta.Delete(metadata.Id);
+                }
+
+                // Step 3: Clear caches last
                 _tabularCache.Clear();
                 _graphCache.Clear();
-
-                foreach (var name in TabularNames.ToList())
-                    DeleteTabular(name);
-
-                foreach (var name in GraphNames.ToList())
-                    DeleteGraph(name);
             }
         }
 

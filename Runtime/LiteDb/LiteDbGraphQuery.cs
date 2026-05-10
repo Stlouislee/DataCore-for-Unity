@@ -178,6 +178,32 @@ namespace AroAro.DataCore.LiteDb
                 {
                     if (!visited.Contains(neighbor))
                     {
+                        // Check edge filters — look up the actual edge from DB
+                        bool edgePassesFilter = true;
+                        if (_edgeFilters.Count > 0)
+                        {
+                            GraphEdge edge = null;
+                            if (_traverseOut && !_traverseIn)
+                                edge = _dataset.FindEdgeInternal(current, neighbor);
+                            else if (_traverseIn && !_traverseOut)
+                                edge = _dataset.FindEdgeInternal(neighbor, current);
+                            else
+                                edge = _dataset.FindEdgeInternal(current, neighbor)
+                                    ?? _dataset.FindEdgeInternal(neighbor, current);
+
+                            if (edge != null)
+                            {
+                                edgePassesFilter = _edgeFilters.All(f => f(edge));
+                            }
+                            else
+                            {
+                                edgePassesFilter = false;
+                            }
+                        }
+
+                        if (!edgePassesFilter)
+                            continue;
+
                         visited.Add(neighbor);
                         queue.Enqueue((neighbor, depth + 1));
                     }

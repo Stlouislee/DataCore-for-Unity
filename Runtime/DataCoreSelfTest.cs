@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using UnityEngine;
@@ -43,6 +44,10 @@ namespace AroAro.DataCore
                 sb.AppendLine($"❌ Test failed: {ex.Message}");
                 sb.AppendLine($"Stack trace: {ex.StackTrace}");
             }
+            finally
+            {
+                CleanupTestDb();
+            }
 
             var result = sb.ToString();
             if (logToConsole)
@@ -55,9 +60,29 @@ namespace AroAro.DataCore
         /// </summary>
         private static DataCoreStore CreateTestStore()
         {
-            var tempPath = System.IO.Path.Combine(
-                Application.temporaryCachePath, "DataCore", $"selftest_{System.Diagnostics.Process.GetCurrentProcess().Id}.db");
+            var tempPath = GetTestDbPath();
             return new DataCoreStore(tempPath);
+        }
+
+        private static string GetTestDbPath()
+        {
+            return System.IO.Path.Combine(
+                Application.temporaryCachePath, "DataCore", $"selftest_{System.Diagnostics.Process.GetCurrentProcess().Id}.db");
+        }
+
+        /// <summary>
+        /// Clean up temporary test database files
+        /// </summary>
+        private static void CleanupTestDb()
+        {
+            try
+            {
+                var path = GetTestDbPath();
+                if (File.Exists(path)) File.Delete(path);
+                var logPath = path + "-log";
+                if (File.Exists(logPath)) File.Delete(logPath);
+            }
+            catch (Exception) { /* best-effort cleanup */ }
         }
 
         private static void TestTabular(StringBuilder sb)

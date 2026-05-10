@@ -101,7 +101,7 @@ namespace DataCore.Tests.Session
         // OpenDataset / RemoveDataset / HasDataset
         // ────────────────────────────────────────────────────────────────
 
-        [Fact(Skip = "Known issue: LiteDbTabularDataset.WithName throws NotSupportedException")]
+        [Fact(Skip = "Test calls CreateDataset but setup already created same name; OpenDataset requires WithName which throws")]
         public void OpenDataset_AddsDatasetToSession()
         {
             CreateTabularDataset("source");
@@ -130,7 +130,7 @@ namespace DataCore.Tests.Session
             Assert.Equal("myCopy", ds.Name);
         }
 
-        [Fact(Skip = "Known issue: LiteDbTabularDataset.WithName throws NotSupportedException")]
+        [Fact(Skip = "Test logic incorrect: CreateDataset creates new dataset, does not throw")]
         public void OpenDataset_NonExistentDataset_ThrowsKeyNotFoundException()
         {
             var session = new AroAro.DataCore.Session.Session("Test", _store);
@@ -144,7 +144,7 @@ namespace DataCore.Tests.Session
             Assert.Throws<ArgumentException>(() => session.OpenDataset(""));
         }
 
-        [Fact(Skip = "Known issue: LiteDbTabularDataset.WithName throws NotSupportedException")]
+        [Fact]
         public void OpenDataset_DuplicateName_ThrowsInvalidOperationException()
         {
             var session = new AroAro.DataCore.Session.Session("Test", _store);
@@ -324,8 +324,8 @@ namespace DataCore.Tests.Session
 
             session.Clear();
 
-            // Clear only clears _datasets, not _dataFrameCache
-            Assert.True(session.HasDataFrame("df1"));
+            // Clear now clears both _datasets and _dataFrameCache (fix #99/#100)
+            Assert.False(session.HasDataFrame("df1"));
         }
 
         // ────────────────────────────────────────────────────────────────
