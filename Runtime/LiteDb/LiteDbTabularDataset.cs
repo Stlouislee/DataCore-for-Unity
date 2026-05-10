@@ -22,6 +22,7 @@ namespace AroAro.DataCore.LiteDb
         private readonly object _lock = new object();
         private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
         private bool _disposed;
+        private bool _needsCompaction;
         private int _pendingMetadataUpdates;
         private const int MetadataUpdateBatchSize = 10; // Reduced from 100 to minimize crash-time data loss (fix #77)
         private System.Threading.Timer _idleFlushTimer;
@@ -261,6 +262,7 @@ namespace AroAro.DataCore.LiteDb
             double[] data;
             lock (_lock)
             {
+                EnsureCompacted();
                 data = _rows.FindAll().OrderBy(r => r.RowIndex)
                     .Select(r => r.Data.TryGetValue(name, out var v) && !v.IsNull ? v.AsDouble : 0.0)
                     .ToArray();
@@ -279,6 +281,7 @@ namespace AroAro.DataCore.LiteDb
             string[] data;
             lock (_lock)
             {
+                EnsureCompacted();
                 data = _rows.FindAll().OrderBy(r => r.RowIndex)
                     .Select(r => r.Data.TryGetValue(name, out var v) && !v.IsNull ? v.AsString : null)
                     .ToArray();
@@ -369,6 +372,7 @@ namespace AroAro.DataCore.LiteDb
             bool updated;
             lock (_lock)
             {
+                EnsureCompacted();
                 var row = _rows.FindOne(r => r.RowIndex == rowIndex);
                 if (row == null) { updated = false; }
                 else
@@ -397,21 +401,18 @@ namespace AroAro.DataCore.LiteDb
             bool deleted;
             lock (_lock)
             {
+                // Compact first if there are gaps from previous deletes,
+                // so we can find the correct row by its logical index
+                if (_needsCompaction)
+                    CompactInternal();
+
                 var row = _rows.FindOne(r => r.RowIndex == rowIndex);
                 if (row == null) { deleted = false; }
                 else
                 {
                     _rows.Delete(row.Id);
-
-                    // 更新后续行索引
-                    var subsequentRows = _rows.Find(r => r.RowIndex > rowIndex).ToList();
-                    foreach (var r in subsequentRows)
-                    {
-                        r.RowIndex--;
-                        _rows.Update(r);
-                    }
-
                     _metadata.RowCount--;
+                    _needsCompaction = true;
                     ForceUpdateMetadata();
                     deleted = true;
                 }
@@ -431,6 +432,7 @@ namespace AroAro.DataCore.LiteDb
             TabularRow row;
             lock (_lock)
             {
+                EnsureCompacted();
                 row = _rows.FindOne(r => r.RowIndex == rowIndex);
             }
             if (row == null) return null;
@@ -450,6 +452,7 @@ namespace AroAro.DataCore.LiteDb
             List<TabularRow> rows;
             lock (_lock)
             {
+                EnsureCompacted();
                 rows = _rows.Find(r => r.RowIndex >= startIndex && r.RowIndex < startIndex + count)
                     .OrderBy(r => r.RowIndex)
                     .ToList();
@@ -712,6 +715,10 @@ namespace AroAro.DataCore.LiteDb
                 sb.AppendLine(string.Join(delimiter.ToString(), columns.Select(EscapeCsvField)));
             }
 
+            lock (_lock)
+            {
+                EnsureCompacted();
+            }
             foreach (var row in _rows.FindAll().OrderBy(r => r.RowIndex))
             {
                 var values = columns.Select(col =>
@@ -748,12 +755,56 @@ namespace AroAro.DataCore.LiteDb
 
         #region 内部方法
 
+        /// <summary>
+        /// Re-index all rows sequentially to fill gaps left by deletes.
+        /// Must be called under _lock.
+        /// </summary>
+        private void CompactInternal()
+        {
+            if (!_needsCompaction) return;
+
+            var allRows = _rows.FindAll().OrderBy(r => r.RowIndex).ToList();
+            for (int i = 0; i < allRows.Count; i++)
+            {
+                if (allRows[i].RowIndex != i)
+                {
+                    allRows[i].RowIndex = i;
+                    _rows.Update(allRows[i]);
+                }
+            }
+            _needsCompaction = false;
+        }
+
+        /// <summary>
+        /// Ensure rows are re-indexed without gaps. Called before read operations.
+        /// Must be called under _lock.
+        /// </summary>
+        private void EnsureCompacted()
+        {
+            if (_needsCompaction)
+                CompactInternal();
+        }
+
+        /// <summary>
+        /// Re-index all rows sequentially. Call after batch deletes to restore
+        /// contiguous RowIndex values before reading.
+        /// </summary>
+        public void Compact()
+        {
+            ThrowIfDisposed();
+            lock (_lock)
+            {
+                CompactInternal();
+            }
+        }
+
         internal IEnumerable<TabularRow> GetAllRowsInternal()
         {
             ThrowIfDisposed();
             List<TabularRow> rows;
             lock (_lock)
             {
+                EnsureCompacted();
                 rows = _rows.FindAll().OrderBy(r => r.RowIndex).ToList();
             }
             return rows;
