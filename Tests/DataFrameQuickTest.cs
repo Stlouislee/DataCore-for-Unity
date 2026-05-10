@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
+using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.Assertions;
 using Microsoft.Data.Analysis;
 using AroAro.DataCore.Session;
 
@@ -9,17 +9,12 @@ namespace AroAro.DataCore.Tests
 {
     /// <summary>
     /// DataFrame快速测试
+    /// Migrated from MonoBehaviour to NUnit for CI/CD compatibility.
     /// </summary>
-    public class DataFrameQuickTest : MonoBehaviour
+    [TestFixture]
+    public class DataFrameQuickTest
     {
-        [SerializeField] private bool runOnStart = true;
-
-        private void Start()
-        {
-            if (runOnStart)
-                RunQuickTest();
-        }
-
+        [Test]
         public void RunQuickTest()
         {
             Debug.Log("=== DataFrame Quick Test ===");
@@ -34,23 +29,23 @@ namespace AroAro.DataCore.Tests
                 df.Columns.Add(new DoubleDataFrameColumn("values", new double[] { 1, 2, 3, 4, 5 }));
                 df.Columns.Add(new StringDataFrameColumn("categories", new string[] { "A", "B", "A", "B", "A" }));
 
-                Assert.AreEqual(5, (int)df.Rows.Count, "DataFrame should have 5 rows");
-                Assert.AreEqual(2, (int)df.Columns.Count, "DataFrame should have 2 columns");
+                Assert.That(df.Rows.Count, Is.EqualTo(5), "DataFrame should have 5 rows");
+                Assert.That(df.Columns.Count, Is.EqualTo(2), "DataFrame should have 2 columns");
 
                 var result = session.QueryDataFrame("TestDF")
                     .Where("values", SessionDataFrameQueryBuilder.ComparisonOp.Gt, 2)
                     .Execute("FilteredResult");
 
-                Assert.IsNotNull(result, "Query result should not be null");
-                Assert.AreEqual("FilteredResult", result.Name);
+                Assert.That(result, Is.Not.Null, "Query result should not be null");
+                Assert.That(result.Name, Is.EqualTo("FilteredResult"));
 
                 if (result is DataFrameAdapter adapter)
                 {
-                    Assert.AreEqual(3, adapter.RowCount, "Filtered result should have 3 rows (values 3,4,5)");
-                    Assert.AreEqual(2, adapter.ColumnCount, "Filtered result should have 2 columns");
+                    Assert.That(adapter.RowCount, Is.EqualTo(3), "Filtered result should have 3 rows (values 3,4,5)");
+                    Assert.That(adapter.ColumnCount, Is.EqualTo(2), "Filtered result should have 2 columns");
 
                     var tabular = adapter.ToTabularData();
-                    Assert.AreEqual(3, tabular.RowCount, "Tabular conversion should preserve row count");
+                    Assert.That(tabular.RowCount, Is.EqualTo(3), "Tabular conversion should preserve row count");
                 }
                 else
                 {
@@ -63,12 +58,6 @@ namespace AroAro.DataCore.Tests
             {
                 store.Dispose();
             }
-        }
-
-        [ContextMenu("Run Quick Test")]
-        private void RunQuickTestMenu()
-        {
-            RunQuickTest();
         }
     }
 }

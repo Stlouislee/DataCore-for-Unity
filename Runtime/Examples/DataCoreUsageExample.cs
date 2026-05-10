@@ -1,3 +1,4 @@
+using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,7 +20,7 @@ namespace AroAro.DataCore.Examples
             // 创建数据存储（自动持久化到 LiteDB）
             using var store = DataStoreFactory.CreateLiteDb("data/mydata.db");
             
-            Console.WriteLine($"Storage Backend: {store.Backend}"); // 输出: LiteDb
+            Debug.Log($"Storage Backend: {store.Backend}"); // 输出: LiteDb
             
             // 创建表格数据集
             var tabular = store.CreateTabular("sales_data");
@@ -30,9 +31,9 @@ namespace AroAro.DataCore.Examples
             tabular.AddNumericColumn("Quantity", new double[] { 100, 150, 80, 60, 40 });
             
             // 基本统计
-            Console.WriteLine($"Row Count: {tabular.RowCount}");
-            Console.WriteLine($"Average Price: {tabular.Query().Average("Price"):F2}");
-            Console.WriteLine($"Total Quantity: {tabular.Sum("Quantity")}");
+            Debug.Log($"Row Count: {tabular.RowCount}");
+            Debug.Log($"Average Price: {tabular.Query().Average("Price"):F2}");
+            Debug.Log($"Total Quantity: {tabular.Sum("Quantity")}");
             
             // 查询
             var expensiveProducts = tabular.Query()
@@ -40,10 +41,10 @@ namespace AroAro.DataCore.Examples
                 .OrderByDescending("Price")
                 .ToDictionaries();
             
-            Console.WriteLine("Expensive products:");
+            Debug.Log("Expensive products:");
             foreach (var row in expensiveProducts)
             {
-                Console.WriteLine($"  {row["Product"]}: ${row["Price"]}");
+                Debug.Log($"  {row["Product"]}: ${row["Price"]}");
             }
         }
         
@@ -67,9 +68,9 @@ namespace AroAro.DataCore.Examples
             graph.AddEdge("Bob", "Carol");
             graph.AddEdge("Alice", "Carol");
             
-            Console.WriteLine($"Node Count: {graph.NodeCount}");
-            Console.WriteLine($"Edge Count: {graph.EdgeCount}");
-            Console.WriteLine($"Alice's neighbors: {string.Join(", ", graph.GetNeighbors("Alice"))}");
+            Debug.Log($"Node Count: {graph.NodeCount}");
+            Debug.Log($"Edge Count: {graph.EdgeCount}");
+            Debug.Log($"Alice's neighbors: {string.Join(", ", graph.GetNeighbors("Alice"))}");
             
             // 图遍历
             var reachable = graph.Query()
@@ -77,7 +78,7 @@ namespace AroAro.DataCore.Examples
                 .MaxDepth(2)
                 .ToNodeIds();
             
-            Console.WriteLine($"Nodes reachable from Alice: {string.Join(", ", reachable)}");
+            Debug.Log($"Nodes reachable from Alice: {string.Join(", ", reachable)}");
         }
         
         /// <summary>
@@ -99,7 +100,7 @@ namespace AroAro.DataCore.Examples
                 .ToDictionaries()
                 .ToList();
             
-            Console.WriteLine($"Rows where X > 1: {results.Count}");
+            Debug.Log($"Rows where X > 1: {results.Count}");
             
             // 创建图
             var graph = store.CreateGraph("my_graph");
@@ -118,7 +119,7 @@ namespace AroAro.DataCore.Examples
                 });
             });
             
-            Console.WriteLine("All operations persisted to LiteDB");
+            Debug.Log("All operations persisted to LiteDB");
         }
         
         /// <summary>
@@ -137,12 +138,12 @@ Carol,35,92.3";
             
             tabular.ImportFromCsv(csvContent);
             
-            Console.WriteLine($"Imported {tabular.RowCount} rows");
+            Debug.Log($"Imported {tabular.RowCount} rows");
             
             // 导出 CSV
             var exported = tabular.ExportToCsv();
-            Console.WriteLine("Exported CSV:");
-            Console.WriteLine(exported);
+            Debug.Log("Exported CSV:");
+            Debug.Log(exported);
         }
         
         /// <summary>
@@ -155,11 +156,11 @@ Carol,35,92.3";
             
             // 创建会话
             using var session = sessionManager.CreateSession("MySession");
-            Console.WriteLine($"Session created: {session.Name}");
+            Debug.Log($"Session created: {session.Name}");
             
             // 在会话中创建临时数据集
             var tempData = session.CreateDataset("TempData", DataSetKind.Tabular);
-            Console.WriteLine($"Temp dataset created: {tempData.Name}");
+            Debug.Log($"Temp dataset created: {tempData.Name}");
             
             // 会话结束时数据自动清理
         }

@@ -1,3 +1,4 @@
+using UnityEngine;
 using System;
 using AroAro.DataCore.Session;
 
@@ -15,23 +16,23 @@ namespace AroAro.DataCore.Examples
 
             // 创建会话
             var session = store.SessionManager.CreateSession("MyAnalysisSession");
-            Console.WriteLine($"Created session: {session.Name} (ID: {session.Id})");
+            Debug.Log($"Created session: {session.Name} (ID: {session.Id})");
 
             // 在会话中创建新的数据集
             var tabular = session.CreateDataset("SalesData", DataSetKind.Tabular);
-            Console.WriteLine($"Created dataset in session: {tabular.Name}");
+            Debug.Log($"Created dataset in session: {tabular.Name}");
 
             // 从全局存储打开数据集到会话（创建副本）
             // 首先在全局存储中创建一个数据集
             var globalData = store.CreateTabular("GlobalData");
             var copy = session.OpenDataset("GlobalData", "LocalCopy");
-            Console.WriteLine($"Opened dataset copy in session: {copy.Name}");
+            Debug.Log($"Opened dataset copy in session: {copy.Name}");
 
             // 检查会话中的数据集
-            Console.WriteLine($"Session has {session.DatasetCount} datasets:");
+            Debug.Log($"Session has {session.DatasetCount} datasets:");
             foreach (var name in session.DatasetNames)
             {
-                Console.WriteLine($"  - {name}");
+                Debug.Log($"  - {name}");
             }
 
             // 执行查询并保存结果
@@ -40,28 +41,28 @@ namespace AroAro.DataCore.Examples
                 // 这里应该执行实际查询，现在只是示例
                 return dataset.WithName("QueryResult");
             }, "FilteredData");
-            Console.WriteLine($"Saved query result: {queryResult.Name}");
+            Debug.Log($"Saved query result: {queryResult.Name}");
 
             // 持久化数据集到全局存储
             try
             {
                 var persisted = session.PersistDataset("SalesData", "PersistedSalesData");
-                Console.WriteLine($"Persisted dataset: {persisted}");
+                Debug.Log($"Persisted dataset: {persisted}");
             }
             catch (NotImplementedException)
             {
-                Console.WriteLine("Persisting datasets requires implementation");
+                Debug.Log("Persisting datasets requires implementation");
             }
 
             // 从会话中移除数据集
             session.RemoveDataset("LocalCopy");
-            Console.WriteLine($"Removed dataset from session");
+            Debug.Log($"Removed dataset from session");
 
             // 检查会话统计
             var stats = store.SessionManager.GetStatistics();
-            Console.WriteLine($"Session statistics: {stats.TotalSessions} sessions, {stats.TotalDatasets} total datasets");
+            Debug.Log($"Session statistics: {stats.TotalSessions} sessions, {stats.TotalDatasets} total datasets");
 
-            Console.WriteLine("Cleaned up resources");
+            Debug.Log("Cleaned up resources");
         }
     }
 }

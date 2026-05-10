@@ -332,6 +332,52 @@ namespace DataCore.Tests.Tabular
 
         #endregion
 
+        #region Issue #45 — GetNumericColumn returns defensive copy
+
+        [Fact]
+        public void GetNumericColumn_ReturnsDefensiveCopy_ModifyingResultDoesNotAffectInternal()
+        {
+            var t = new TabularData("test");
+            t.AddNumericColumn("x", new double[] { 1.0, 2.0, 3.0 });
+
+            // Get the numeric column
+            var col = t.GetNumericColumn("x");
+
+            // Modify the returned NDArray
+            col[0] = 999.0;
+            col[1] = 888.0;
+            col[2] = 777.0;
+
+            // Verify internal data is unaffected
+            var original = t.GetNumericColumn("x");
+            Assert.Equal(1.0, original.GetDouble(0));
+            Assert.Equal(2.0, original.GetDouble(1));
+            Assert.Equal(3.0, original.GetDouble(2));
+
+            // Also verify via GetRow
+            Assert.Equal(1.0, t.GetRow(0)["x"]);
+            Assert.Equal(2.0, t.GetRow(1)["x"]);
+            Assert.Equal(3.0, t.GetRow(2)["x"]);
+        }
+
+        [Fact]
+        public void GetNumericColumn_MultipleCallsReturnIndependentCopies()
+        {
+            var t = new TabularData("test");
+            t.AddNumericColumn("x", new double[] { 10.0, 20.0 });
+
+            var col1 = t.GetNumericColumn("x");
+            var col2 = t.GetNumericColumn("x");
+
+            // Modify col1
+            col1[0] = 999.0;
+
+            // col2 should be unaffected
+            Assert.Equal(10.0, col2.GetDouble(0));
+        }
+
+        #endregion
+
         #region Where
 
         [Fact]

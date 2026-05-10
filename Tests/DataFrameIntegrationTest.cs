@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using NUnit.Framework;
 using UnityEngine;
 using Microsoft.Data.Analysis;
 using AroAro.DataCore.Session;
@@ -8,45 +9,15 @@ namespace AroAro.DataCore.Tests
 {
     /// <summary>
     /// DataFrame集成测试
+    /// Migrated from MonoBehaviour to NUnit for CI/CD compatibility.
     /// </summary>
-    public class DataFrameIntegrationTest : MonoBehaviour
+    [TestFixture]
+    public class DataFrameIntegrationTest
     {
-        [SerializeField] private bool runOnStart = true;
-        [SerializeField] private bool logToConsole = true;
-
-        private void Start()
+        [Test]
+        public void TestDataFrameCreation()
         {
-            if (runOnStart)
-                RunTests();
-        }
-
-        public void RunTests()
-        {
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("=== DataFrame Integration Test ===");
-
-            try
-            {
-                TestDataFrameCreation(sb);
-                TestDataFrameQuery(sb);
-                TestDataFrameAdapter(sb);
-                TestDataFrameConversion(sb);
-                sb.AppendLine("✅ All DataFrame tests passed!");
-            }
-            catch (Exception ex)
-            {
-                sb.AppendLine($"❌ Test failed: {ex.Message}");
-                sb.AppendLine($"Stack trace: {ex.StackTrace}");
-            }
-
-            var result = sb.ToString();
-            if (logToConsole)
-                Debug.Log(result);
-        }
-
-        private static void TestDataFrameCreation(System.Text.StringBuilder sb)
-        {
-            sb.AppendLine("Testing DataFrame Creation...");
+            Debug.Log("Testing DataFrame Creation...");
 
             var store = new DataCoreStore();
             try
@@ -54,19 +25,16 @@ namespace AroAro.DataCore.Tests
                 var sessionManager = store.SessionManager;
                 var session = sessionManager.CreateSession("DataFrameTest");
 
-                // 创建DataFrame
                 var df = session.CreateDataFrame("TestDataFrame");
 
-                // 添加列
                 df.Columns.Add(new DoubleDataFrameColumn("x", new double[] { 1, 2, 3, 4, 5 }));
                 df.Columns.Add(new StringDataFrameColumn("s", new string[] { "a", "b", "c", "d", "e" }));
                 df.Columns.Add(new BooleanDataFrameColumn("b", new bool[] { true, false, true, false, true }));
 
-                // 验证DataFrame
-                if (df.Rows.Count != 5) throw new Exception($"Expected 5 rows, got {df.Rows.Count}");
-                if (df.Columns.Count != 3) throw new Exception($"Expected 3 columns, got {df.Columns.Count}");
+                Assert.That(df.Rows.Count, Is.EqualTo(5), "Expected 5 rows");
+                Assert.That(df.Columns.Count, Is.EqualTo(3), "Expected 3 columns");
 
-                sb.AppendLine("✅ DataFrame creation OK");
+                Debug.Log("✅ DataFrame creation OK");
             }
             finally
             {
@@ -74,9 +42,10 @@ namespace AroAro.DataCore.Tests
             }
         }
 
-        private static void TestDataFrameQuery(System.Text.StringBuilder sb)
+        [Test]
+        public void TestDataFrameQuery()
         {
-            sb.AppendLine("Testing DataFrame Query...");
+            Debug.Log("Testing DataFrame Query...");
 
             var store = new DataCoreStore();
             try
@@ -84,23 +53,20 @@ namespace AroAro.DataCore.Tests
                 var sessionManager = store.SessionManager;
                 var session = sessionManager.CreateSession("QueryTest");
 
-                // 创建测试DataFrame
                 var df = session.CreateDataFrame("QuerySource");
                 df.Columns.Add(new DoubleDataFrameColumn("value", new double[] { 10, 20, 30, 40, 50 }));
                 df.Columns.Add(new StringDataFrameColumn("category", new string[] { "A", "B", "A", "B", "A" }));
 
-                // 执行查询
                 var result = session.QueryDataFrame("QuerySource")
                     .Where("value", SessionDataFrameQueryBuilder.ComparisonOp.Gt, 25)
                     .Execute("QueryResult");
 
-                // 验证结果
-                if (result.Name != "QueryResult") throw new Exception("Query result name incorrect");
+                Assert.That(result.Name, Is.EqualTo("QueryResult"), "Query result name incorrect");
 
                 var resultDf = session.GetDataFrame("QueryResult");
-                if (resultDf.Rows.Count != 3) throw new Exception($"Expected 3 rows after filtering, got {resultDf.Rows.Count}");
+                Assert.That(resultDf.Rows.Count, Is.EqualTo(3), "Expected 3 rows after filtering");
 
-                sb.AppendLine("✅ DataFrame query OK");
+                Debug.Log("✅ DataFrame query OK");
             }
             finally
             {
@@ -108,9 +74,10 @@ namespace AroAro.DataCore.Tests
             }
         }
 
-        private static void TestDataFrameAdapter(System.Text.StringBuilder sb)
+        [Test]
+        public void TestDataFrameAdapter()
         {
-            sb.AppendLine("Testing DataFrame Adapter...");
+            Debug.Log("Testing DataFrame Adapter...");
 
             var store = new DataCoreStore();
             try
@@ -118,26 +85,23 @@ namespace AroAro.DataCore.Tests
                 var sessionManager = store.SessionManager;
                 var session = sessionManager.CreateSession("AdapterTest");
 
-                // 创建DataFrame
                 var df = session.CreateDataFrame("AdapterSource");
                 df.Columns.Add(new DoubleDataFrameColumn("numeric", new double[] { 1, 2, 3 }));
                 df.Columns.Add(new StringDataFrameColumn("text", new string[] { "x", "y", "z" }));
 
-                // 执行查询并获取适配器
                 var result = session.ExecuteDataFrameQuery("AdapterSource",
                     sourceDf => sourceDf.Filter(sourceDf["numeric"] > 1),
                     "AdapterResult");
 
-                // 验证适配器
-                if (!(result is DataFrameAdapter adapter)) throw new Exception("Result is not DataFrameAdapter");
-                if (adapter.Name != "AdapterResult") throw new Exception("Adapter name incorrect");
-                if (adapter.RowCount != 2) throw new Exception($"Expected 2 rows, got {adapter.RowCount}");
+                Assert.That(result, Is.InstanceOf<DataFrameAdapter>(), "Result is not DataFrameAdapter");
+                var adapter = (DataFrameAdapter)result;
+                Assert.That(adapter.Name, Is.EqualTo("AdapterResult"), "Adapter name incorrect");
+                Assert.That(adapter.RowCount, Is.EqualTo(2), "Expected 2 rows");
 
-                // 转换为TabularData
                 var tabular = adapter.ToTabularData();
-                if (tabular.RowCount != 2) throw new Exception($"Tabular conversion failed: expected 2 rows, got {tabular.RowCount}");
+                Assert.That(tabular.RowCount, Is.EqualTo(2), "Tabular conversion failed: expected 2 rows");
 
-                sb.AppendLine("✅ DataFrame adapter OK");
+                Debug.Log("✅ DataFrame adapter OK");
             }
             finally
             {
@@ -145,9 +109,10 @@ namespace AroAro.DataCore.Tests
             }
         }
 
-        private static void TestDataFrameConversion(System.Text.StringBuilder sb)
+        [Test]
+        public void TestDataFrameConversion()
         {
-            sb.AppendLine("Testing DataFrame Conversion...");
+            Debug.Log("Testing DataFrame Conversion...");
 
             var store = new DataCoreStore();
             try
@@ -155,34 +120,24 @@ namespace AroAro.DataCore.Tests
                 var sessionManager = store.SessionManager;
                 var session = sessionManager.CreateSession("ConversionTest");
 
-                // 创建TabularData
                 var tabular = session.CreateDataset("TabularSource", DataSetKind.Tabular) as Tabular.TabularData;
                 tabular.AddNumericColumn("x", NumSharp.np.array(new double[] { 1, 2, 3 }));
                 tabular.AddStringColumn("s", new string[] { "a", "b", "c" });
 
-                // 转换为DataFrame
                 var df = session.ConvertToDataFrame("TabularSource");
 
-                // 验证转换
-                if (df.Rows.Count != 3) throw new Exception($"Expected 3 rows, got {df.Rows.Count}");
-                if (df.Columns.Count != 2) throw new Exception($"Expected 2 columns, got {df.Columns.Count}");
+                Assert.That(df.Rows.Count, Is.EqualTo(3), "Expected 3 rows");
+                Assert.That(df.Columns.Count, Is.EqualTo(2), "Expected 2 columns");
 
-                // 转换回TabularData
                 var convertedTabular = DataFrameConverter.DataFrameToTabular(df, "ConvertedTabular");
-                if (convertedTabular.RowCount != 3) throw new Exception($"Back conversion failed: expected 3 rows, got {convertedTabular.RowCount}");
+                Assert.That(convertedTabular.RowCount, Is.EqualTo(3), "Back conversion failed: expected 3 rows");
 
-                sb.AppendLine("✅ DataFrame conversion OK");
+                Debug.Log("✅ DataFrame conversion OK");
             }
             finally
             {
                 store.Dispose();
             }
-        }
-
-        [ContextMenu("Run DataFrame Tests")]
-        private void RunTestsMenu()
-        {
-            RunTests();
         }
     }
 }

@@ -130,7 +130,7 @@ namespace AroAro.DataCore.Tabular
         {
             if (!_numericData.TryGetValue(name, out var data))
                 throw new KeyNotFoundException($"Numeric column '{name}' not found");
-            return np.array(data);
+            return np.array((double[])data.Clone());
         }
 
         /// <summary>

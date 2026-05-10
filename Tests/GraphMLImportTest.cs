@@ -1,3 +1,4 @@
+using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.Assertions;
 using System.IO;
@@ -8,18 +9,11 @@ namespace AroAro.DataCore.Tests
 {
     /// <summary>
     /// GraphML 导入测试
+    /// Migrated from MonoBehaviour to NUnit for CI/CD compatibility.
     /// </summary>
-    public class GraphMLImportTest : MonoBehaviour
+    [TestFixture]
+    public class GraphMLImportTest
     {
-        [Header("测试配置")]
-        [SerializeField] private string graphmlFilePath = "TestGraphML.graphml";
-        [SerializeField] private string datasetName = "TestGraphML";
-        
-        [Header("测试结果")]
-        [SerializeField] private int importedNodeCount;
-        [SerializeField] private int importedEdgeCount;
-        [SerializeField] private bool importSuccess;
-
         private static readonly string TestDir = Path.Combine(Path.GetTempPath(), "DataCoreGraphMLTests");
 
         private static string GetTestDbPath(string name)
@@ -28,9 +22,9 @@ namespace AroAro.DataCore.Tests
             return Path.Combine(TestDir, name);
         }
 
-        private void OnDisable()
+        [OneTimeTearDown]
+        public void Cleanup()
         {
-            // Cleanup temp files when the test component is disabled/destroyed
             try
             {
                 if (Directory.Exists(TestDir))
@@ -38,110 +32,8 @@ namespace AroAro.DataCore.Tests
             }
             catch { }
         }
-        
-        /// <summary>
-        /// 获取测试文件的绝对路径，基于 Application.dataPath 解析相对路径
-        /// </summary>
-        private string GetResolvedFilePath()
-        {
-            if (Path.IsPathRooted(graphmlFilePath))
-                return graphmlFilePath;
-            return Path.Combine(Application.dataPath, graphmlFilePath);
-        }
 
-        /// <summary>
-        /// 运行 GraphML 导入测试
-        /// </summary>
-        [ContextMenu("Run GraphML Import Test")]
-        public void RunGraphMLImportTest()
-        {
-            Debug.Log("开始 GraphML 导入测试...");
-            
-            // Ensure clean state
-            string dbPath = GetTestDbPath("graphml_test.db");
-            if (File.Exists(dbPath))
-            {
-                try 
-                { 
-                    File.Delete(dbPath); 
-                    Debug.Log("已清理旧的测试数据库");
-                }
-                catch (System.Exception ex) 
-                { 
-                    Debug.LogWarning($"无法删除测试数据库: {ex.Message}"); 
-                }
-            }
-
-            // 解析绝对路径并断言文件存在
-            string resolvedPath = GetResolvedFilePath();
-            Assert.IsTrue(File.Exists(resolvedPath),
-                $"GraphML 测试文件不存在: {resolvedPath} (原始路径: {graphmlFilePath})");
-            graphmlFilePath = resolvedPath;
-            
-            try
-            {
-                // 创建数据存储
-                using (var store = new DataCoreStore(dbPath))
-                {
-                    // 导入 GraphML
-                    var graph = GraphMLImporter.ImportFromFile(store.UnderlyingStore, graphmlFilePath, datasetName);
-                    
-                    if (graph == null)
-                    {
-                        Debug.LogError("GraphML 导入失败");
-                        importSuccess = false;
-                        return;
-                    }
-                    
-                    // 记录导入结果
-                    importedNodeCount = graph.NodeCount;
-                    importedEdgeCount = graph.EdgeCount;
-                    importSuccess = true;
-                    
-                    Debug.Log($"GraphML 导入成功!");
-                    Debug.Log($"- 数据集名称: {datasetName}");
-                    Debug.Log($"- 导入节点数: {importedNodeCount}");
-                    Debug.Log($"- 导入边数: {importedEdgeCount}");
-                    
-                    // 验证节点属性
-                    Debug.Log("节点属性验证:");
-                    var nodeIds = graph.GetNodeIds();
-                    foreach (var nodeId in nodeIds)
-                    {
-                        var properties = graph.GetNodeProperties(nodeId);
-                        Debug.Log($"  - 节点 {nodeId}: {properties.Count} 个属性");
-                        foreach (var prop in properties)
-                        {
-                            Debug.Log($"    - {prop.Key}: {prop.Value}");
-                        }
-                    }
-                    
-                    // 验证边属性
-                    Debug.Log("边属性验证:");
-                    var edges = graph.GetEdges();
-                    foreach (var edge in edges)
-                    {
-                        var properties = graph.GetEdgeProperties(edge.From, edge.To);
-                        Debug.Log($"  - 边 {edge.From} → {edge.To}: {properties.Count} 个属性");
-                        foreach (var prop in properties)
-                        {
-                            Debug.Log($"    - {prop.Key}: {prop.Value}");
-                        }
-                    }
-                }
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"GraphML 导入测试失败: {ex.Message}");
-                Debug.LogError(ex.StackTrace);
-                importSuccess = false;
-            }
-        }
-        
-        /// <summary>
-        /// 测试 GraphML 文本导入
-        /// </summary>
-        [ContextMenu("Test GraphML Text Import")]
+        [Test]
         public void TestGraphMLTextImport()
         {
             Debug.Log("开始 GraphML 文本导入测试...");
@@ -150,7 +42,7 @@ namespace AroAro.DataCore.Tests
             if (File.Exists(dbPath))
             {
                 try { File.Delete(dbPath); }
-                catch {}
+                catch { }
             }
 
             string graphmlText = @"<?xml version=""1.0"" encoding=""UTF-8""?>
