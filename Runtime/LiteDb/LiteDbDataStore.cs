@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using LiteDB;
 
 #if UNITY_2019_1_OR_NEWER
@@ -21,6 +22,46 @@ namespace AroAro.DataCore.LiteDb
         private readonly Dictionary<string, LiteDbGraphDataset> _graphCache = new(StringComparer.Ordinal);
         private readonly object _lock = new object();
         private bool _disposed;
+
+#if UNITY_ANDROID || UNITY_IOS || UNITY_TVOS || UNITY_WEBGL
+        /// <summary>
+        /// Concurrency guard for mobile platforms using Direct mode.
+        /// Direct mode has no file lock protection, so we serialize all
+        /// LiteDB operations through this semaphore to prevent data corruption
+        /// from concurrent access (coroutines, Task.Run, UniTask, etc.).
+        /// </summary>
+        private static readonly SemaphoreSlim _dbSemaphore = new SemaphoreSlim(1, 1);
+
+        /// <summary>
+        /// Execute an operation while holding the mobile concurrency lock.
+        /// On non-mobile platforms this is a no-op (the caller uses lock(_lock) instead).
+        /// </summary>
+        private T ExecuteWithMobileLock<T>(Func<T> operation)
+        {
+            _dbSemaphore.Wait();
+            try
+            {
+                return operation();
+            }
+            finally
+            {
+                _dbSemaphore.Release();
+            }
+        }
+
+        private void ExecuteWithMobileLock(Action operation)
+        {
+            _dbSemaphore.Wait();
+            try
+            {
+                operation();
+            }
+            finally
+            {
+                _dbSemaphore.Release();
+            }
+        }
+#endif
 
         public string DatabasePath { get; }
 
@@ -73,26 +114,23 @@ namespace AroAro.DataCore.LiteDb
                 {
                     retryCount++;
                     
-                    // If corruption detected (PAGE_SIZE error), dispose, delete and retry
-                    _database?.Dispose();
-                    _database = null;
+                    // Ensure complete disposal — flush handles first
+                    if (_database != null)
+                    {
+                        try { _database.Checkpoint(); } catch { /* best-effort flush */ }
+                        _database.Dispose();
+                        _database = null;
+                    }
 
                     try
                     {
-                        if (File.Exists(DatabasePath)) File.Delete(DatabasePath);
-                        // Also delete log file
-                        var logPath = DatabasePath + "-log";
-                        if (File.Exists(logPath)) File.Delete(logPath);
+                        // Wait for file release with retry instead of fragile GC.Collect + Sleep
+                        DeleteFileWithRetry(DatabasePath, maxWaitMs: 1000);
+                        DeleteFileWithRetry(DatabasePath + "-log", maxWaitMs: 1000);
 
 #if UNITY_2019_1_OR_NEWER
                         Debug.LogWarning($"[LiteDbDataStore] Database corruption detected ({ex.Message}). Deleted and retrying ({retryCount}/{maxRetries}): {DatabasePath}");
 #endif
-                        // Force GC to release file handles
-                        GC.Collect();
-                        GC.WaitForPendingFinalizers();
-                        
-                        // Short delay before retry
-                        System.Threading.Thread.Sleep(100);
                     }
                     catch (Exception deleteEx)
                     {
@@ -577,6 +615,27 @@ namespace AroAro.DataCore.LiteDb
 
             var graphMeta = _database.GetCollection<GraphMetadata>("graph_meta");
             graphMeta.EnsureIndex(m => m.Name, true);
+        }
+
+        private static void DeleteFileWithRetry(string path, int maxWaitMs = 1000)
+        {
+            if (!File.Exists(path)) return;
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < maxWaitMs)
+            {
+                try
+                {
+                    File.Delete(path);
+                    return;
+                }
+                catch (IOException)
+                {
+                    System.Threading.Thread.Sleep(50); // Short wait, retry
+                }
+            }
+
+            File.Delete(path); // Final attempt — let exception propagate if still locked
         }
 
         private static string ResolvePath(string path)

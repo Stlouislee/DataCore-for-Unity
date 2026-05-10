@@ -184,8 +184,8 @@ namespace AroAro.DataCore
             sb.AppendLine("✅ Session close OK");
 
             // 测试会话清理
-            System.Threading.Thread.Sleep(10); // 确保有一点时间间隔
-            var cleanupCount = sessionManager.CleanupIdleSessions(TimeSpan.FromMilliseconds(1));
+            System.Threading.Thread.Sleep(100); // 确保有一点时间间隔
+            var cleanupCount = sessionManager.CleanupIdleSessions(TimeSpan.FromMilliseconds(50));
             if (cleanupCount < 1) throw new Exception($"Expected at least 1 session cleaned up, got {cleanupCount}");
             sb.AppendLine("✅ Session cleanup OK");
 

@@ -89,6 +89,10 @@ namespace AroAro.DataCore.Session
         /// <summary>
         /// 将数据集持久化到全局存储
         /// </summary>
+        /// <remarks>
+        /// ⚠️ This method is not yet implemented. Calling it will throw NotImplementedException.
+        /// Planned for v2.x. See DATACORE_V2_Roadmap.md.
+        /// </remarks>
         /// <param name="name">数据集名称</param>
         /// <param name="targetName">目标名称（可选，如果不指定则使用原名称）</param>
         /// <returns>是否成功持久化</returns>
