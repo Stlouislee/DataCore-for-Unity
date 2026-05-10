@@ -28,7 +28,11 @@ namespace AroAro.DataCore.SampleDatasets
             // If loader is not assigned, try to find it
             if (loader == null)
             {
+#if UNITY_2023_1_OR_NEWER
                 loader = FindFirstObjectByType<CaliforniaHousingLoader>();
+#else
+                loader = FindObjectOfType<CaliforniaHousingLoader>();
+#endif
             }
 
             if (loader == null)

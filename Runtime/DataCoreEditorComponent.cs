@@ -15,6 +15,7 @@ namespace AroAro.DataCore
     /// 使用 LiteDB 作为底层存储，自动持久化所有数据
     /// 支持多实例模式：每个实例独立管理自己的 DataCoreStore
     /// </summary>
+    [DisallowMultipleComponent]
     public class DataCoreEditorComponent : MonoBehaviour
     {
         // ────────────────────────────────────────────────────────────

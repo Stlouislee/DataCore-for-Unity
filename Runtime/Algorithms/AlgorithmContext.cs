@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading;
 
 namespace AroAro.DataCore.Algorithms
@@ -14,7 +15,8 @@ namespace AroAro.DataCore.Algorithms
         private readonly Dictionary<string, object> _parameters;
 
         /// <summary>Read-only view of all supplied parameters.</summary>
-        public IReadOnlyDictionary<string, object> Parameters => _parameters;
+        public IReadOnlyDictionary<string, object> Parameters =>
+            new ReadOnlyDictionary<string, object>(_parameters);
 
         /// <summary>Cancellation token for cooperative cancellation.</summary>
         public CancellationToken CancellationToken { get; }
