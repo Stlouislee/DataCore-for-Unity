@@ -823,6 +823,34 @@ namespace AroAro.DataCore.LiteDb
             }
         }
 
+        private void RegisterLifecycleCallbacks()
+        {
+#if UNITY_2019_1_OR_NEWER
+            UnityEngine.Application.focusChanged += OnFocusChanged;
+            UnityEngine.Application.quitting += OnApplicationQuitting;
+#endif
+        }
+
+        private void UnregisterLifecycleCallbacks()
+        {
+#if UNITY_2019_1_OR_NEWER
+            UnityEngine.Application.focusChanged -= OnFocusChanged;
+            UnityEngine.Application.quitting -= OnApplicationQuitting;
+#endif
+        }
+
+#if UNITY_2019_1_OR_NEWER
+        private void OnFocusChanged(bool hasFocus)
+        {
+            if (!hasFocus) FlushMetadata();
+        }
+
+        private void OnApplicationQuitting()
+        {
+            FlushMetadata();
+        }
+#endif
+
 
 
         private List<string> ParseCsvLine(string line, char delimiter)
