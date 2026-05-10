@@ -47,61 +47,75 @@ namespace AroAro.DataCore.Tests
         {
             sb.AppendLine("Testing Basic Session Operations...");
             var store = new DataCoreStore();
-            var sessionManager = store.SessionManager;
+            try
+            {
+                var sessionManager = store.SessionManager;
 
-            // 测试会话创建
-            var session = sessionManager.CreateSession("BasicTestSession");
-            if (string.IsNullOrEmpty(session.Id)) throw new Exception("Session ID should not be empty");
-            if (session.Name != "BasicTestSession") throw new Exception("Session name incorrect");
-            if (session.DatasetCount != 0) throw new Exception("New session should have 0 datasets");
-            sb.AppendLine("✅ Basic session creation OK");
+                // 测试会话创建
+                var session = sessionManager.CreateSession("BasicTestSession");
+                if (string.IsNullOrEmpty(session.Id)) throw new Exception("Session ID should not be empty");
+                if (session.Name != "BasicTestSession") throw new Exception("Session name incorrect");
+                if (session.DatasetCount != 0) throw new Exception("New session should have 0 datasets");
+                sb.AppendLine("✅ Basic session creation OK");
 
-            // 测试会话活动时间
-            var initialTime = session.LastActivityAt;
-            System.Threading.Thread.Sleep(10); // 短暂延迟
-            session.Touch();
-            if (session.LastActivityAt <= initialTime) throw new Exception("Session touch should update last activity time");
-            sb.AppendLine("✅ Session activity tracking OK");
+                // 测试会话活动时间
+                var initialTime = session.LastActivityAt;
+                System.Threading.Thread.Sleep(10); // 短暂延迟
+                session.Touch();
+                if (session.LastActivityAt <= initialTime) throw new Exception("Session touch should update last activity time");
+                sb.AppendLine("✅ Session activity tracking OK");
 
-            // 测试会话清理
-            session.Clear();
-            if (session.DatasetCount != 0) throw new Exception("Session clear should remove all datasets");
-            sb.AppendLine("✅ Session clear OK");
+                // 测试会话清理
+                session.Clear();
+                if (session.DatasetCount != 0) throw new Exception("Session clear should remove all datasets");
+                sb.AppendLine("✅ Session clear OK");
+            }
+            finally
+            {
+                store.Dispose();
+            }
         }
 
         private static void TestDatasetOperations(StringBuilder sb)
         {
             sb.AppendLine("Testing Session Dataset Operations...");
             var store = new DataCoreStore();
-            var sessionManager = store.SessionManager;
-            var session = sessionManager.CreateSession("DatasetTestSession");
+            try
+            {
+                var sessionManager = store.SessionManager;
+                var session = sessionManager.CreateSession("DatasetTestSession");
 
-            // 测试在会话中创建数据集
-            var tabularDataset = session.CreateDataset("TestTabular", DataSetKind.Tabular);
-            if (tabularDataset.Kind != DataSetKind.Tabular) throw new Exception("Tabular dataset creation failed");
-            
-            var graphDataset = session.CreateDataset("TestGraph", DataSetKind.Graph);
-            if (graphDataset.Kind != DataSetKind.Graph) throw new Exception("Graph dataset creation failed");
-            sb.AppendLine("✅ Session dataset creation OK");
+                // 测试在会话中创建数据集
+                var tabularDataset = session.CreateDataset("TestTabular", DataSetKind.Tabular);
+                if (tabularDataset.Kind != DataSetKind.Tabular) throw new Exception("Tabular dataset creation failed");
 
-            // 测试数据集计数
-            if (session.DatasetCount != 2) throw new Exception($"Expected 2 datasets, got {session.DatasetCount}");
-            sb.AppendLine("✅ Session dataset count OK");
+                var graphDataset = session.CreateDataset("TestGraph", DataSetKind.Graph);
+                if (graphDataset.Kind != DataSetKind.Graph) throw new Exception("Graph dataset creation failed");
+                sb.AppendLine("✅ Session dataset creation OK");
 
-            // 测试数据集获取
-            var retrievedTabular = session.GetDataset("TestTabular");
-            if (retrievedTabular.Name != "TestTabular") throw new Exception("Dataset retrieval failed");
-            sb.AppendLine("✅ Session dataset retrieval OK");
+                // 测试数据集计数
+                if (session.DatasetCount != 2) throw new Exception($"Expected 2 datasets, got {session.DatasetCount}");
+                sb.AppendLine("✅ Session dataset count OK");
 
-            // 测试数据集存在检查
-            if (!session.HasDataset("TestTabular")) throw new Exception("Dataset existence check failed");
-            if (session.HasDataset("NonExistent")) throw new Exception("Non-existent dataset should return false");
-            sb.AppendLine("✅ Session dataset existence check OK");
+                // 测试数据集获取
+                var retrievedTabular = session.GetDataset("TestTabular");
+                if (retrievedTabular.Name != "TestTabular") throw new Exception("Dataset retrieval failed");
+                sb.AppendLine("✅ Session dataset retrieval OK");
 
-            // 测试数据集移除
-            if (!session.RemoveDataset("TestTabular")) throw new Exception("Dataset removal failed");
-            if (session.DatasetCount != 1) throw new Exception($"Expected 1 dataset after removal, got {session.DatasetCount}");
-            sb.AppendLine("✅ Session dataset removal OK");
+                // 测试数据集存在检查
+                if (!session.HasDataset("TestTabular")) throw new Exception("Dataset existence check failed");
+                if (session.HasDataset("NonExistent")) throw new Exception("Non-existent dataset should return false");
+                sb.AppendLine("✅ Session dataset existence check OK");
+
+                // 测试数据集移除
+                if (!session.RemoveDataset("TestTabular")) throw new Exception("Dataset removal failed");
+                if (session.DatasetCount != 1) throw new Exception($"Expected 1 dataset after removal, got {session.DatasetCount}");
+                sb.AppendLine("✅ Session dataset removal OK");
+            }
+            finally
+            {
+                store.Dispose();
+            }
         }
 
         private static void TestSessionManagerOperations(StringBuilder sb)

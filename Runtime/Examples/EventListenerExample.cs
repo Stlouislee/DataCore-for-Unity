@@ -102,7 +102,7 @@ namespace AroAro.DataCore.Examples
                     handler => DataCoreEventManager.UnsubscribeDatasetModified(handler),
                     OnDatasetModified);
 
-                var store = new DataCoreStore();
+                using var store = new DataCoreStore();
                 var dataset = store.CreateTabular("ScopedTest");
 
                 // scope.Dispose() 时自动取消以上所有订阅，不会影响其他模块的事件监听
