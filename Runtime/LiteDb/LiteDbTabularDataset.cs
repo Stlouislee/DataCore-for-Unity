@@ -1029,6 +1029,69 @@ namespace AroAro.DataCore.LiteDb
             }
         }
 
+        /// <summary>
+        /// 异步执行原生 LiteDB SQL-like 命令（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. Use this for complex queries on large datasets.</para>
+        /// </remarks>
+        public async Task<RawResult> ExecuteRawAsync(string sql, object[] args, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                return await Task.Run(() => ExecuteRaw(sql, args), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        /// <summary>
+        /// 异步导出为 CSV 字符串（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. Recommended for datasets with &gt;10000 rows.</para>
+        /// </remarks>
+        public async Task<string> ExportToCsvAsync(char delimiter = ',', bool includeHeader = true, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                return await Task.Run(() => ExportToCsv(delimiter, includeHeader), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
+        /// <summary>
+        /// 异步从 CSV 字符串导入数据（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: Runs on a background thread via Task.Run to avoid blocking
+        /// the Unity main thread. Recommended for large CSV imports.</para>
+        /// </remarks>
+        public async Task ImportFromCsvAsync(string csvContent, bool hasHeader = true, char delimiter = ',', CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await Task.Run(() => ImportFromCsv(csvContent, hasHeader, delimiter), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
         #endregion
     }
 }

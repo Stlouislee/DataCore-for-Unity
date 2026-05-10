@@ -24,7 +24,7 @@ namespace AroAro.DataCore
     public sealed class DataCoreStore : IDisposable
     {
         private readonly IDataStore _store;
-        private SessionManager _sessionManager;
+        private readonly Lazy<SessionManager> _sessionManager;
         private bool _disposed;
 
         /// <summary>
@@ -41,6 +41,7 @@ namespace AroAro.DataCore
         public DataCoreStore(string dbPath)
         {
             _store = DataStoreFactory.Create(dbPath);
+            _sessionManager = new Lazy<SessionManager>(() => new SessionManager(this));
         }
 
         /// <summary>
@@ -50,6 +51,7 @@ namespace AroAro.DataCore
         public DataCoreStore(IDataStore store)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
+            _sessionManager = new Lazy<SessionManager>(() => new SessionManager(this));
         }
 
         /// <summary>
@@ -90,14 +92,7 @@ namespace AroAro.DataCore
         /// <summary>
         /// 会话管理器
         /// </summary>
-        public SessionManager SessionManager
-        {
-            get
-            {
-                _sessionManager ??= new SessionManager(this);
-                return _sessionManager;
-            }
-        }
+        public SessionManager SessionManager => _sessionManager.Value;
 
         #region 创建数据集
 
@@ -312,7 +307,8 @@ namespace AroAro.DataCore
         {
             if (_disposed) return;
             
-            _sessionManager?.CloseAllSessions();
+            if (_sessionManager.IsValueCreated)
+                _sessionManager.Value.CloseAllSessions();
             _store?.Dispose();
             _disposed = true;
         }

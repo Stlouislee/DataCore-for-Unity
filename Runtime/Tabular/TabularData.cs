@@ -605,6 +605,34 @@ namespace AroAro.DataCore.Tabular
             return Task.FromResult(Clear());
         }
 
+        /// <summary>
+        /// 异步执行原生查询（内存实现，直接委托同步方法）
+        /// </summary>
+        public Task<RawResult> ExecuteRawAsync(string sql, object[] args, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(ExecuteRaw(sql, args));
+        }
+
+        /// <summary>
+        /// 异步导出为 CSV（内存实现，直接委托同步方法）
+        /// </summary>
+        public Task<string> ExportToCsvAsync(char delimiter = ',', bool includeHeader = true, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(ExportToCsv(delimiter, includeHeader));
+        }
+
+        /// <summary>
+        /// 异步从 CSV 导入（内存实现，直接委托同步方法）
+        /// </summary>
+        public Task ImportFromCsvAsync(string csvContent, bool hasHeader = true, char delimiter = ',', CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            ImportFromCsv(csvContent, hasHeader, delimiter);
+            return Task.CompletedTask;
+        }
+
         #endregion
 
         /// <summary>

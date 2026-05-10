@@ -9,6 +9,16 @@ namespace AroAro.DataCore
     /// <summary>
     /// 表格数据集接口 - 提供类似 DataFrame 的操作
     /// </summary>
+    /// <remarks>
+    /// <para>⚠️ Performance note: All synchronous operations execute on the calling thread. For large
+    /// datasets (&gt;10000 rows), prefer the async variants (e.g. <see cref="AddRowsAsync"/>,
+    /// <see cref="ExecuteRawAsync"/>, <see cref="ExportToCsvAsync"/>, <see cref="ImportFromCsvAsync"/>)
+    /// to avoid blocking the Unity main thread:</para>
+    /// <code>
+    /// var csv = await dataset.ExportToCsvAsync();
+    /// var result = await dataset.ExecuteRawAsync("SELECT * FROM data", Array.Empty&lt;object&gt;());
+    /// </code>
+    /// </remarks>
     public interface ITabularDataset : IDataSet
     {
         #region 属性
@@ -217,6 +227,48 @@ namespace AroAro.DataCore
         /// 异步清空所有行数据
         /// </summary>
         Task<int> ClearAsync(CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步执行原生 LiteDB SQL-like 命令（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: This operation runs on a background thread via Task.Run to avoid
+        /// blocking the Unity main thread. Recommended for large datasets where query execution
+        /// may take significant time.</para>
+        /// </remarks>
+        /// <param name="sql">SQL-like 查询语句</param>
+        /// <param name="args">参数值（@0, @1...）</param>
+        /// <param name="ct">取消令牌</param>
+        /// <returns>执行结果</returns>
+        Task<RawResult> ExecuteRawAsync(string sql, object[] args, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步导出为 CSV 字符串（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: This operation runs on a background thread via Task.Run to avoid
+        /// blocking the Unity main thread. Recommended for large datasets (&gt;10000 rows) where
+        /// CSV serialization may be slow.</para>
+        /// </remarks>
+        /// <param name="delimiter">分隔符</param>
+        /// <param name="includeHeader">是否包含表头</param>
+        /// <param name="ct">取消令牌</param>
+        /// <returns>CSV 字符串</returns>
+        Task<string> ExportToCsvAsync(char delimiter = ',', bool includeHeader = true, CancellationToken ct = default);
+
+        /// <summary>
+        /// 异步从 CSV 字符串导入数据（在后台线程运行）
+        /// </summary>
+        /// <remarks>
+        /// <para>⚠️ Performance note: This operation runs on a background thread via Task.Run to avoid
+        /// blocking the Unity main thread. Recommended for large CSV files where parsing
+        /// may take significant time.</para>
+        /// </remarks>
+        /// <param name="csvContent">CSV 内容</param>
+        /// <param name="hasHeader">是否包含表头</param>
+        /// <param name="delimiter">分隔符</param>
+        /// <param name="ct">取消令牌</param>
+        Task ImportFromCsvAsync(string csvContent, bool hasHeader = true, char delimiter = ',', CancellationToken ct = default);
 
         #endregion
     }
