@@ -57,6 +57,7 @@ namespace AroAro.DataCore.Session
         public Tabular.TabularData ToTabularData()
         {
             var tabular = new Tabular.TabularData(_name);
+            var failedColumns = new List<string>();
             
             foreach (var column in _dataFrame.Columns)
             {
@@ -119,8 +120,14 @@ namespace AroAro.DataCore.Session
                 }
                 catch (Exception ex)
                 {
-                    UnityEngine.Debug.LogWarning($"Failed to convert column {column.Name}: {ex.Message}");
+                    failedColumns.Add($"{column.Name}: {ex.Message}");
                 }
+            }
+            
+            if (failedColumns.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to convert {failedColumns.Count} column(s) from DataFrame '{_name}': {string.Join("; ", failedColumns)}");
             }
             
             return tabular;
