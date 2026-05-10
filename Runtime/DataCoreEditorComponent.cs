@@ -79,6 +79,17 @@ namespace AroAro.DataCore
 
         private void Awake()
         {
+            // 检测重复实例：如果已有同名实例注册，销毁整个 GameObject 而非仅销毁组件
+            var existing = _instances.FirstOrDefault(i => i != this && i.instanceName == instanceName);
+            if (existing != null)
+            {
+                Debug.LogWarning(
+                    $"Duplicate DataCoreEditorComponent '{instanceName}' detected on '{gameObject.name}'. " +
+                    $"An instance already exists on '{existing.gameObject.name}'. Destroying duplicate GameObject.");
+                Destroy(gameObject);
+                return;
+            }
+
             Debug.Log($"DataCoreEditorComponent '{instanceName}' Awake started on '{gameObject.name}'.");
 
             // 检测同路径冲突（警告，不销毁）
