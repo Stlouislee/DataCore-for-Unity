@@ -75,6 +75,8 @@ namespace AroAro.DataCore.Tests
             public void AddDataset(string name, DataFrame df)
             {
                 _dataFrames[name] = df;
+                // Also register as IDataSet so DatasetCount/DatasetNames/HasDataset work
+                _datasets[name] = new DataFrameAdapter(name, df);
             }
 
             public DataFrame GetDataFrame(string name)
@@ -94,10 +96,18 @@ namespace AroAro.DataCore.Tests
             public IDataSet CreateDataset(string name, DataSetKind kind) => throw new NotImplementedException();
             public IDataSet GetDataset(string name) => _datasets.TryGetValue(name, out var ds) ? ds : throw new KeyNotFoundException();
             public bool HasDataset(string name) => _datasets.ContainsKey(name);
-            public bool RemoveDataset(string name) => _datasets.Remove(name);
+            public bool RemoveDataset(string name)
+            {
+                _dataFrames.Remove(name);
+                return _datasets.Remove(name);
+            }
             public IDataSet SaveQueryResult(string sourceName, Func<IDataSet, IDataSet> query, string newName) => throw new NotImplementedException();
             public bool PersistDataset(string name, string targetName = null) => throw new NotImplementedException();
-            public void Clear() => _datasets.Clear();
+            public void Clear()
+            {
+                _dataFrames.Clear();
+                _datasets.Clear();
+            }
             public void Touch() { }
             public void Dispose() { }
         }
