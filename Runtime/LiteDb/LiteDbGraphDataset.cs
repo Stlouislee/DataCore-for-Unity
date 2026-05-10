@@ -195,14 +195,21 @@ namespace AroAro.DataCore.LiteDb
         public bool HasNode(string id)
         {
             ThrowIfDisposed();
-            return _nodes.Exists(n => n.NodeId == id);
+            lock (_lock)
+            {
+                return _nodes.Exists(n => n.NodeId == id);
+            }
         }
 
         public IDictionary<string, object> GetNodeProperties(string id)
         {
             ThrowIfDisposed();
             
-            var node = _nodes.FindOne(n => n.NodeId == id);
+            GraphNode node;
+            lock (_lock)
+            {
+                node = _nodes.FindOne(n => n.NodeId == id);
+            }
             if (node == null) return null;
 
             var result = new Dictionary<string, object>();
@@ -216,7 +223,12 @@ namespace AroAro.DataCore.LiteDb
         public IEnumerable<string> GetNodeIds()
         {
             ThrowIfDisposed();
-            return _nodes.FindAll().Select(n => n.NodeId);
+            List<string> ids;
+            lock (_lock)
+            {
+                ids = _nodes.FindAll().Select(n => n.NodeId).ToList();
+            }
+            return ids;
         }
 
         #endregion
@@ -308,14 +320,21 @@ namespace AroAro.DataCore.LiteDb
         public bool HasEdge(string fromId, string toId)
         {
             ThrowIfDisposed();
-            return _edges.Exists(e => e.FromNodeId == fromId && e.ToNodeId == toId);
+            lock (_lock)
+            {
+                return _edges.Exists(e => e.FromNodeId == fromId && e.ToNodeId == toId);
+            }
         }
 
         public IDictionary<string, object> GetEdgeProperties(string fromId, string toId)
         {
             ThrowIfDisposed();
             
-            var edge = _edges.FindOne(e => e.FromNodeId == fromId && e.ToNodeId == toId);
+            GraphEdge edge;
+            lock (_lock)
+            {
+                edge = _edges.FindOne(e => e.FromNodeId == fromId && e.ToNodeId == toId);
+            }
             if (edge == null) return null;
 
             var result = new Dictionary<string, object>();
@@ -350,7 +369,12 @@ namespace AroAro.DataCore.LiteDb
         public IEnumerable<(string From, string To)> GetEdges()
         {
             ThrowIfDisposed();
-            return _edges.FindAll().Select(e => (e.FromNodeId, e.ToNodeId));
+            List<(string From, string To)> edges;
+            lock (_lock)
+            {
+                edges = _edges.FindAll().Select(e => (e.FromNodeId, e.ToNodeId)).ToList();
+            }
+            return edges;
         }
 
         #endregion
@@ -360,33 +384,54 @@ namespace AroAro.DataCore.LiteDb
         public IEnumerable<string> GetOutNeighbors(string nodeId)
         {
             ThrowIfDisposed();
-            return _edges.Find(e => e.FromNodeId == nodeId).Select(e => e.ToNodeId).Distinct();
+            List<string> neighbors;
+            lock (_lock)
+            {
+                neighbors = _edges.Find(e => e.FromNodeId == nodeId).Select(e => e.ToNodeId).Distinct().ToList();
+            }
+            return neighbors;
         }
 
         public IEnumerable<string> GetInNeighbors(string nodeId)
         {
             ThrowIfDisposed();
-            return _edges.Find(e => e.ToNodeId == nodeId).Select(e => e.FromNodeId).Distinct();
+            List<string> neighbors;
+            lock (_lock)
+            {
+                neighbors = _edges.Find(e => e.ToNodeId == nodeId).Select(e => e.FromNodeId).Distinct().ToList();
+            }
+            return neighbors;
         }
 
         public IEnumerable<string> GetNeighbors(string nodeId)
         {
             ThrowIfDisposed();
-            var outNeighbors = GetOutNeighbors(nodeId);
-            var inNeighbors = GetInNeighbors(nodeId);
-            return outNeighbors.Union(inNeighbors).Distinct();
+            List<string> neighbors;
+            lock (_lock)
+            {
+                var outNeighbors = _edges.Find(e => e.FromNodeId == nodeId).Select(e => e.ToNodeId);
+                var inNeighbors = _edges.Find(e => e.ToNodeId == nodeId).Select(e => e.FromNodeId);
+                neighbors = outNeighbors.Union(inNeighbors).Distinct().ToList();
+            }
+            return neighbors;
         }
 
         public int GetOutDegree(string nodeId)
         {
             ThrowIfDisposed();
-            return _edges.Count(e => e.FromNodeId == nodeId);
+            lock (_lock)
+            {
+                return _edges.Count(e => e.FromNodeId == nodeId);
+            }
         }
 
         public int GetInDegree(string nodeId)
         {
             ThrowIfDisposed();
-            return _edges.Count(e => e.ToNodeId == nodeId);
+            lock (_lock)
+            {
+                return _edges.Count(e => e.ToNodeId == nodeId);
+            }
         }
 
         #endregion
@@ -425,13 +470,23 @@ namespace AroAro.DataCore.LiteDb
         internal IEnumerable<GraphNode> GetAllNodesInternal()
         {
             ThrowIfDisposed();
-            return _nodes.FindAll();
+            List<GraphNode> nodes;
+            lock (_lock)
+            {
+                nodes = _nodes.FindAll().ToList();
+            }
+            return nodes;
         }
         
         internal IEnumerable<GraphEdge> GetAllEdgesInternal()
         {
             ThrowIfDisposed();
-            return _edges.FindAll();
+            List<GraphEdge> edges;
+            lock (_lock)
+            {
+                edges = _edges.FindAll().ToList();
+            }
+            return edges;
         }
 
         /// <summary>
