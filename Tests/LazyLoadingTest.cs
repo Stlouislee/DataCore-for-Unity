@@ -1,30 +1,20 @@
+using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.Assertions;
 
 namespace AroAro.DataCore.Tests
 {
     /// <summary>
     /// LiteDB 后端测试 - 测试数据集的创建、访问和删除
+    /// Migrated from MonoBehaviour to NUnit for CI/CD compatibility.
+    /// Uses DataCoreStore directly instead of scene-dependent DataCoreEditorComponent.
     /// </summary>
-    public class LazyLoadingTest : MonoBehaviour
+    [TestFixture]
+    public class LazyLoadingTest
     {
-        private DataCoreEditorComponent dataCore;
-        
-        private void Start()
+        [Test]
+        public void TestLiteDbBackend()
         {
-            dataCore = FindFirstObjectByType<DataCoreEditorComponent>();
-            if (dataCore == null)
-            {
-                Debug.LogError("DataCoreEditorComponent not found in scene");
-                return;
-            }
-            
-            TestLiteDbBackend();
-        }
-        
-        private void TestLiteDbBackend()
-        {
-            var store = dataCore.GetStore();
+            using var store = new DataCoreStore();
 
             // 测试1：检查Names属性是否正常工作
             Assert.IsNotNull(store.Names, "Store.Names should not be null");
@@ -62,12 +52,6 @@ namespace AroAro.DataCore.Tests
             Assert.IsFalse(store.HasDataset(testName), "Dataset should be deleted");
 
             Debug.Log("LiteDB backend test completed");
-        }
-        
-        private void OnDestroy()
-        {
-            // LiteDB 自动持久化，无需手动保存
-            Debug.Log("LazyLoadingTest destroyed - LiteDB auto-persists data");
         }
     }
 }
