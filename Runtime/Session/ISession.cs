@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AroAro.DataCore.Events;
+using Microsoft.Data.Analysis;
 
 namespace AroAro.DataCore.Session
 {
@@ -102,5 +103,15 @@ namespace AroAro.DataCore.Session
         /// 更新最后活动时间
         /// </summary>
         void Touch();
+
+        /// <summary>
+        /// 执行DataFrame查询并保存结果
+        /// </summary>
+        IDataSet ExecuteDataFrameQuery(string sourceName, Func<DataFrame, DataFrame> query, string resultName);
+
+        /// <summary>
+        /// 获取DataFrame
+        /// </summary>
+        DataFrame GetDataFrame(string name);
     }
 }
