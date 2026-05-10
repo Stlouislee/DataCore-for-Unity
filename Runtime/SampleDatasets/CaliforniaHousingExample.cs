@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Linq;
 using NumSharp;
+using AroAro.DataCore.Events;
 
 namespace AroAro.DataCore.SampleDatasets
 {
@@ -10,6 +11,17 @@ namespace AroAro.DataCore.SampleDatasets
     public class CaliforniaHousingExample : MonoBehaviour
     {
         [SerializeField] private CaliforniaHousingLoader loader;
+
+        private void OnEnable()
+        {
+            // Listen for dataset load completion instead of fragile Invoke timing
+            DataCoreEventManager.SubscribeDatasetLoaded(OnDatasetLoaded);
+        }
+
+        private void OnDisable()
+        {
+            DataCoreEventManager.UnsubscribeDatasetLoaded(OnDatasetLoaded);
+        }
 
         private void Start()
         {
@@ -24,9 +36,14 @@ namespace AroAro.DataCore.SampleDatasets
                 Debug.LogWarning("CaliforniaHousingLoader not found. Please add it to a GameObject.");
                 return;
             }
+        }
 
-            // Wait a moment for the dataset to load, then run queries
-            Invoke(nameof(RunExampleQueries), 1f);
+        private void OnDatasetLoaded(object sender, DatasetLoadedEventArgs e)
+        {
+            if (e.Dataset.Name == "california-housing")
+            {
+                RunExampleQueries();
+            }
         }
 
         private void RunExampleQueries()
@@ -71,7 +88,7 @@ namespace AroAro.DataCore.SampleDatasets
             if (loader != null)
             {
                 loader.LoadDataset();
-                Invoke(nameof(RunExampleQueries), 0.5f);
+                // No Invoke needed — OnDatasetLoaded event will trigger RunExampleQueries
             }
         }
 
@@ -79,7 +96,7 @@ namespace AroAro.DataCore.SampleDatasets
         private void LoadUsingStaticMethod()
         {
             CaliforniaHousingDataset.LoadIntoDataCore();
-            Invoke(nameof(RunExampleQueries), 0.5f);
+            // No Invoke needed — event-driven
         }
 
         [ContextMenu("Show Statistics")]
