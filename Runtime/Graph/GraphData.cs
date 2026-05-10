@@ -462,8 +462,15 @@ namespace AroAro.DataCore.Graph
                         if (visited.Contains(neighbor))
                             continue;
 
-                        // Check edge filters
-                        bool edgePassesFilter = _edgeFilters.All(f => f(current, neighbor));
+                        // Check edge filters — always pass (from, to) in edge-storage order
+                        bool edgePassesFilter;
+                        if (_traverseOut)
+                            edgePassesFilter = _edgeFilters.All(f => f(current, neighbor));
+                        else if (_traverseIn)
+                            edgePassesFilter = _edgeFilters.All(f => f(neighbor, current));
+                        else
+                            edgePassesFilter = _edgeFilters.All(f => f(current, neighbor) || f(neighbor, current));
+
                         if (!edgePassesFilter)
                             continue;
 

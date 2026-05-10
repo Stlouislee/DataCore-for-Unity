@@ -178,6 +178,18 @@ namespace AroAro.DataCore.LiteDb
                 {
                     if (!visited.Contains(neighbor))
                     {
+                        // Check edge filters — always pass (from, to) in edge-storage order
+                        bool edgePassesFilter;
+                        if (_traverseOut && !_traverseIn)
+                            edgePassesFilter = _edgeFilters.All(f => f(current, neighbor));
+                        else if (_traverseIn && !_traverseOut)
+                            edgePassesFilter = _edgeFilters.All(f => f(neighbor, current));
+                        else
+                            edgePassesFilter = _edgeFilters.All(f => f(current, neighbor) || f(neighbor, current));
+
+                        if (!edgePassesFilter)
+                            continue;
+
                         visited.Add(neighbor);
                         queue.Enqueue((neighbor, depth + 1));
                     }
