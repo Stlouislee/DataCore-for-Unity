@@ -233,6 +233,19 @@ namespace AroAro.DataCore.Session
         {
             lock (_lock)
             {
+                // Dispose datasets that support it (fix #99)
+                foreach (var dataset in _datasets.Values)
+                {
+                    if (dataset is IDisposable disposable)
+                    {
+                        try { disposable.Dispose(); } catch { /* best-effort */ }
+                    }
+                }
+                foreach (var df in _dataFrameCache.Values)
+                {
+                    // DataFrame doesn't implement IDisposable — GC handles cleanup
+                }
+
                 _datasets.Clear();
                 _dataFrameCache.Clear();
                 _weakDataFrames.Clear();
@@ -251,6 +264,19 @@ namespace AroAro.DataCore.Session
             {
                 lock (_lock)
                 {
+                    // Dispose datasets that support it (fix #100)
+                    foreach (var dataset in _datasets.Values)
+                    {
+                        if (dataset is IDisposable disposable)
+                        {
+                            try { disposable.Dispose(); } catch { /* best-effort */ }
+                        }
+                    }
+                    foreach (var df in _dataFrameCache.Values)
+                    {
+                        // DataFrame doesn't implement IDisposable — GC handles cleanup
+                    }
+
                     _datasets.Clear();
                     _dataFrameCache.Clear();
                     _weakDataFrames.Clear();

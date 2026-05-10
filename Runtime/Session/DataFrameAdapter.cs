@@ -54,7 +54,8 @@ namespace AroAro.DataCore.Session
         /// <summary>
         /// 将DataFrame转换为现有的TabularData格式
         /// </summary>
-        public Tabular.TabularData ToTabularData()
+        /// <param name="strict">If true, throw on conversion failure; if false, log warning and skip failed columns</param>
+        public Tabular.TabularData ToTabularData(bool strict = false)
         {
             var tabular = new Tabular.TabularData(_name);
             var failedColumns = new List<string>();
@@ -120,11 +121,14 @@ namespace AroAro.DataCore.Session
                 }
                 catch (Exception ex)
                 {
-                    failedColumns.Add($"{column.Name}: {ex.Message}");
+                    if (strict)
+                        failedColumns.Add($"{column.Name}: {ex.Message}");
+                    else
+                        UnityEngine.Debug.LogWarning($"Failed to convert column {column.Name}: {ex.Message}");
                 }
             }
             
-            if (failedColumns.Count > 0)
+            if (strict && failedColumns.Count > 0)
             {
                 throw new InvalidOperationException(
                     $"Failed to convert {failedColumns.Count} column(s) from DataFrame '{_name}': {string.Join("; ", failedColumns)}");
