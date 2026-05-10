@@ -121,6 +121,11 @@ namespace AroAro.DataCore
         /// </summary>
         int Clear();
 
+        /// <summary>
+        /// Compact the dataset by removing gaps left by deleted rows and re-indexing.
+        /// </summary>
+        void Compact();
+
         #endregion
 
         #region 查询

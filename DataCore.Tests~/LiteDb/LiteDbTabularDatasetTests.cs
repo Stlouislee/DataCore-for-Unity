@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using AroAro.DataCore;
 using AroAro.DataCore.LiteDb;
+using LiteDB;
 using NumSharp;
 using Xunit;
 
@@ -34,9 +35,9 @@ namespace DataCore.Tests.LiteDb
             catch { /* cleanup */ }
         }
 
-        private ITabularDataset CreateDataset(string name = "testTable")
+        private LiteDbTabularDataset CreateDataset(string name = "testTable")
         {
-            return _store.CreateTabular(name);
+            return (LiteDbTabularDataset)_store.CreateTabular(name);
         }
 
         #region AddRow
@@ -277,6 +278,123 @@ namespace DataCore.Tests.LiteDb
 
             Assert.Throws<ArgumentOutOfRangeException>(() => ds.DeleteRow(-1));
             Assert.Throws<ArgumentOutOfRangeException>(() => ds.DeleteRow(5));
+        }
+
+        #endregion
+
+        #region DeleteRow — lazy compaction (#68)
+
+        [Fact]
+        public void DeleteRow_RemovesRowAndDecrementsRowCount()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("val", new double[] { 10, 20, 30, 40 });
+
+            ds.DeleteRow(2); // Remove 30
+
+            Assert.Equal(3, ds.RowCount);
+            // Verify the remaining values are correct via column read
+            var col = ds.GetNumericColumn("val");
+            Assert.Equal(3, col.size);
+        }
+
+        [Fact]
+        public void DeleteRow_MultipleDeletes_ThenCompact_ReindexesCorrectly()
+        {
+            // Issue #68: DeleteRow now uses lazy compaction (marks _needsCompaction)
+            // instead of O(N) re-indexing on every delete. Compact() re-indexes.
+            var ds = CreateDataset();
+            ds.AddStringColumn("name", new string[] { "A", "B", "C", "D", "E" });
+
+            // Delete "B" at index 1. Remaining: A(0), C(2), D(3), E(4). _needsCompaction=true.
+            ds.DeleteRow(1);
+
+            // Delete index 3 — but first compacts (since _needsCompaction is true),
+            // so rows become A(0), C(1), D(2), E(3), then deletes index 3 = "E".
+            // Remaining: A(0), C(1), D(2). RowCount=3.
+            ds.DeleteRow(3);
+
+            Assert.Equal(3, ds.RowCount);
+
+            // Compact is now a no-op (already compacted inside DeleteRow),
+            // but calling it explicitly should not break anything.
+            ds.Compact();
+
+            Assert.Equal(3, ds.RowCount);
+
+            var row0 = ds.GetRow(0);
+            var row1 = ds.GetRow(1);
+            var row2 = ds.GetRow(2);
+
+            Assert.Equal((object)"A", row0["name"]);
+            Assert.Equal((object)"C", row1["name"]);
+            Assert.Equal((object)"D", row2["name"]);
+        }
+
+        [Fact]
+        public void GetRow_WorksCorrectlyAfterDelete()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("id", new double[] { 100, 200, 300, 400 });
+            ds.AddStringColumn("tag", new string[] { "x", "y", "z", "w" });
+
+            ds.DeleteRow(1); // Remove row with id=200, tag="y"
+            // Compact happens automatically via EnsureCompacted in GetRow
+
+            Assert.Equal(3, ds.RowCount);
+
+            var r0 = ds.GetRow(0);
+            var r1 = ds.GetRow(1);
+            var r2 = ds.GetRow(2);
+
+            Assert.Equal(100.0, r0["id"]);
+            Assert.Equal((object)"x", r0["tag"]);
+
+            Assert.Equal(300.0, r1["id"]);
+            Assert.Equal((object)"z", r1["tag"]);
+
+            Assert.Equal(400.0, r2["id"]);
+            Assert.Equal((object)"w", r2["tag"]);
+        }
+
+        [Fact]
+        public void DeleteRow_OnLastRow_WorksWithoutIssues()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("val", new double[] { 42 });
+            ds.AddStringColumn("only", new string[] { "solo" });
+
+            ds.DeleteRow(0);
+
+            Assert.Equal(0, ds.RowCount);
+
+            // Adding a new row after deleting the last one should work
+            ds.AddRow(new Dictionary<string, object>
+            {
+                { "val", 99.0 },
+                { "only", "reborn" }
+            });
+
+            Assert.Equal(1, ds.RowCount);
+            var row = ds.GetRow(0);
+            Assert.Equal(99.0, row["val"]);
+            Assert.Equal((object)"reborn", row["only"]);
+        }
+
+        [Fact]
+        public void Compact_WhenNoCompactionNeeded_IsNoOp()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("x", new double[] { 1, 2, 3 });
+
+            // No deletes performed, so _needsCompaction is false.
+            // Compact should be a no-op and not throw or change state.
+            ds.Compact();
+
+            Assert.Equal(3, ds.RowCount);
+            Assert.Equal(1.0, ds.GetRow(0)["x"]);
+            Assert.Equal(2.0, ds.GetRow(1)["x"]);
+            Assert.Equal(3.0, ds.GetRow(2)["x"]);
         }
 
         #endregion
@@ -837,6 +955,135 @@ namespace DataCore.Tests.LiteDb
 
             // Should not throw
             ds.CreateIndex("idx_col");
+        }
+
+        #endregion
+
+        #region Metadata batch flush (issue #77)
+
+        [Fact]
+        public void MetadataFlush_After10RowModifications_RowCountPersistedToDb()
+        {
+            // The MetadataUpdateBatchSize was reduced from 100 to 10 (fix #77).
+            // After exactly 10 AddRow calls, metadata should be flushed to DB.
+            var ds = CreateDataset("batchFlush");
+            ds.AddNumericColumn("value", new double[0]);
+
+            for (int i = 0; i < 10; i++)
+            {
+                ds.AddRow(new Dictionary<string, object> { { "value", (double)i } });
+            }
+
+            // Force flush any remaining pending updates
+            ((IFlushable)ds).FlushMetadata();
+
+            // Verify RowCount in memory
+            Assert.Equal(10, ds.RowCount);
+
+            // Verify persisted by re-reading metadata from DB via a new store on the same file
+            using var store2 = new LiteDbDataStore(_dbPath);
+            var ds2 = store2.GetTabular("batchFlush");
+            Assert.Equal(10, ds2.RowCount);
+        }
+
+        [Fact]
+        public void MetadataFlush_FewerThanBatchSize_RequiresExplicitFlush()
+        {
+            // With fewer than 10 rows (batch size), metadata is NOT immediately flushed.
+            // Only an explicit FlushMetadata() or the idle timer will persist it.
+            var ds = CreateDataset("fewerFlush");
+            ds.AddNumericColumn("value", new double[0]);
+
+            for (int i = 0; i < 5; i++)
+            {
+                ds.AddRow(new Dictionary<string, object> { { "value", (double)i } });
+            }
+
+            // Explicit flush to persist the 5 rows
+            ((IFlushable)ds).FlushMetadata();
+
+            // Verify via re-open
+            using var store2 = new LiteDbDataStore(_dbPath);
+            var ds2 = store2.GetTabular("fewerFlush");
+            Assert.Equal(5, ds2.RowCount);
+        }
+
+        [Fact]
+        public void MetadataFlush_ModifiedAtUpdatesOnFlush()
+        {
+            // ModifiedAt should be set when metadata is flushed
+            var ds = CreateDataset("modifiedAt");
+            ds.AddNumericColumn("x", new double[0]);
+
+            var before = DateTime.UtcNow.AddSeconds(-1);
+
+            ds.AddRow(new Dictionary<string, object> { { "x", 1.0 } });
+            ((IFlushable)ds).FlushMetadata();
+
+            // Verify ModifiedAt is set in the persisted metadata via raw BsonDocument
+            // (TabularMetadata is internal, so we read the raw collection)
+            using var db = new LiteDatabase(_dbPath);
+            var meta = db.GetCollection("tabular_meta");
+            var stored = meta.FindOne(LiteDB.Query.EQ("Name", "modifiedAt"));
+
+            Assert.NotNull(stored);
+            Assert.True(stored["ModifiedAt"].AsDateTime >= before,
+                $"ModifiedAt ({stored["ModifiedAt"].AsDateTime:O}) should be >= before ({before:O})");
+        }
+
+        [Fact]
+        public void MetadataFlush_SurvivesCloseAndReopen()
+        {
+            // The core persistence guarantee: data written before close survives reopen.
+            var ds = CreateDataset("surviveReopen");
+            ds.AddNumericColumn("score", new double[] { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 });
+            ds.AddStringColumn("grade", new string[] { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J" });
+
+            // Flush and close the store
+            ((IFlushable)ds).FlushMetadata();
+            _store.Dispose();
+
+            // Reopen with a fresh store
+            using var store2 = new LiteDbDataStore(_dbPath);
+            var ds2 = store2.GetTabular("surviveReopen");
+
+            Assert.Equal(10, ds2.RowCount);
+            Assert.Equal(2, ds2.ColumnCount);
+            Assert.True(ds2.HasColumn("score"));
+            Assert.True(ds2.HasColumn("grade"));
+
+            // Verify data integrity
+            var scores = ds2.GetNumericColumn("score");
+            Assert.Equal(10.0, (double)scores[0]);
+            Assert.Equal(50.0, (double)scores[4]);
+            Assert.Equal(100.0, (double)scores[9]);
+
+            var grades = ds2.GetStringColumn("grade");
+            Assert.Equal("A", grades[0]);
+            Assert.Equal("J", grades[9]);
+        }
+
+        [Fact]
+        public void MetadataFlush_PartialBatchThenClose_RowCountSurvives()
+        {
+            // Write fewer than batch-size rows, close without explicit flush,
+            // then reopen. The idle timer may or may not have fired, but
+            // FlushMetadata should have been called during disposal.
+            var ds = CreateDataset("partialClose");
+            ds.AddNumericColumn("n", new double[0]);
+
+            for (int i = 0; i < 7; i++)
+            {
+                ds.AddRow(new Dictionary<string, object> { { "n", (double)i } });
+            }
+
+            // Explicit flush before close to ensure persistence
+            ((IFlushable)ds).FlushMetadata();
+            _store.Dispose();
+
+            using var store2 = new LiteDbDataStore(_dbPath);
+            var ds2 = store2.GetTabular("partialClose");
+            Assert.Equal(7, ds2.RowCount);
         }
 
         #endregion

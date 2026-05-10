@@ -1,6 +1,10 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using AroAro.DataCore;
 using AroAro.DataCore.LiteDb;
 using Xunit;
@@ -608,6 +612,290 @@ namespace DataCore.Tests.LiteDb
 
             // Data should still be accessible
             Assert.Equal(3, ds.RowCount);
+        }
+
+        #endregion
+
+        #region Concurrency (issue #87 — SemaphoreSlim guard for mobile Direct mode)
+
+        [Fact]
+        public void ConcurrentTabularCreation_DoesNotCorruptDatabase()
+        {
+            using var store = CreateStore();
+            const int threadCount = 10;
+            var barrier = new Barrier(threadCount);
+            var errors = new ConcurrentBag<Exception>();
+
+            var threads = Enumerable.Range(0, threadCount).Select(i => new Thread(() =>
+            {
+                try
+                {
+                    barrier.SignalAndWait(TimeSpan.FromSeconds(5));
+                    store.CreateTabular($"concurrent_t_{i}");
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            })).ToList();
+
+            threads.ForEach(t => t.Start());
+            threads.ForEach(t => t.Join(TimeSpan.FromSeconds(10)));
+
+            Assert.Empty(errors);
+            Assert.Equal(threadCount, store.TabularNames.Count);
+        }
+
+        [Fact]
+        public void ConcurrentGraphCreation_DoesNotCorruptDatabase()
+        {
+            using var store = CreateStore();
+            const int threadCount = 10;
+            var barrier = new Barrier(threadCount);
+            var errors = new ConcurrentBag<Exception>();
+
+            var threads = Enumerable.Range(0, threadCount).Select(i => new Thread(() =>
+            {
+                try
+                {
+                    barrier.SignalAndWait(TimeSpan.FromSeconds(5));
+                    store.CreateGraph($"concurrent_g_{i}");
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            })).ToList();
+
+            threads.ForEach(t => t.Start());
+            threads.ForEach(t => t.Join(TimeSpan.FromSeconds(10)));
+
+            Assert.Empty(errors);
+            Assert.Equal(threadCount, store.GraphNames.Count);
+        }
+
+        [Fact]
+        public void ConcurrentReadsAndWrites_DoNotCorruptData()
+        {
+            using var store = CreateStore();
+            var ds = store.CreateTabular("rw_test");
+            ds.AddNumericColumn("values", new double[] { 1, 2, 3, 4, 5 });
+
+            const int readerCount = 8;
+            const int writerCount = 4;
+            var barrier = new Barrier(readerCount + writerCount);
+            var errors = new ConcurrentBag<Exception>();
+            var readResults = new ConcurrentBag<int>();
+
+            // Readers: repeatedly read row count
+            var readers = Enumerable.Range(0, readerCount).Select(_ => new Thread(() =>
+            {
+                try
+                {
+                    barrier.SignalAndWait(TimeSpan.FromSeconds(5));
+                    for (int i = 0; i < 50; i++)
+                    {
+                        int count = ds.RowCount;
+                        readResults.Add(count);
+                        Thread.Yield();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            })).ToList();
+
+            // Writers: add columns concurrently
+            var writers = Enumerable.Range(0, writerCount).Select(i => new Thread(() =>
+            {
+                try
+                {
+                    barrier.SignalAndWait(TimeSpan.FromSeconds(5));
+                    for (int j = 0; j < 10; j++)
+                    {
+                        ds.AddNumericColumn($"col_{i}_{j}", new double[] { 10, 20, 30, 40, 50 });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            })).ToList();
+
+            var allThreads = readers.Concat(writers).ToList();
+            allThreads.ForEach(t => t.Start());
+            allThreads.ForEach(t => t.Join(TimeSpan.FromSeconds(15)));
+
+            Assert.Empty(errors);
+            // All reads should have returned a valid row count (5)
+            Assert.All(readResults, r => Assert.Equal(5, r));
+        }
+
+        [Fact]
+        public void ConcurrentMixedOperations_DoNotThrow()
+        {
+            using var store = CreateStore();
+            // Pre-create some datasets
+            for (int i = 0; i < 5; i++)
+                store.CreateTabular($"pre_t_{i}");
+            for (int i = 0; i < 5; i++)
+                store.CreateGraph($"pre_g_{i}");
+
+            const int threadCount = 12;
+            var barrier = new Barrier(threadCount);
+            var errors = new ConcurrentBag<Exception>();
+
+            var threads = Enumerable.Range(0, threadCount).Select(i => new Thread(() =>
+            {
+                try
+                {
+                    barrier.SignalAndWait(TimeSpan.FromSeconds(5));
+                    for (int j = 0; j < 20; j++)
+                    {
+                        switch ((i + j) % 5)
+                        {
+                            case 0:
+                                store.CreateTabular($"mix_t_{i}_{j}");
+                                break;
+                            case 1:
+                                store.CreateGraph($"mix_g_{i}_{j}");
+                                break;
+                            case 2:
+                                var _ = store.TabularNames;
+                                break;
+                            case 3:
+                                var __ = store.GraphNames;
+                                break;
+                            case 4:
+                                var ___ = store.DatasetNames;
+                                break;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            })).ToList();
+
+            threads.ForEach(t => t.Start());
+            threads.ForEach(t => t.Join(TimeSpan.FromSeconds(30)));
+
+            Assert.Empty(errors);
+        }
+
+        [Fact]
+        public void ConcurrentExecuteInTransaction_SerializesCorrectly()
+        {
+            using var store = CreateStore();
+            const int threadCount = 6;
+            var barrier = new Barrier(threadCount);
+            var errors = new ConcurrentBag<Exception>();
+            var completedOps = new ConcurrentBag<string>();
+
+            var threads = Enumerable.Range(0, threadCount).Select(i => new Thread(() =>
+            {
+                try
+                {
+                    barrier.SignalAndWait(TimeSpan.FromSeconds(5));
+                    store.ExecuteInTransaction(() =>
+                    {
+                        var ds = store.CreateTabular($"tx_{i}");
+                        ds.AddNumericColumn("data", new double[] { i * 1.0, i * 2.0, i * 3.0 });
+                        completedOps.Add($"tx_{i}");
+                    });
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            })).ToList();
+
+            threads.ForEach(t => t.Start());
+            threads.ForEach(t => t.Join(TimeSpan.FromSeconds(15)));
+
+            Assert.Empty(errors);
+            Assert.Equal(threadCount, completedOps.Count);
+
+            // Verify all transactional datasets persisted with correct data
+            for (int i = 0; i < threadCount; i++)
+            {
+                Assert.True(store.TabularExists($"tx_{i}"), $"Dataset tx_{i} should exist after transaction");
+                var ds = store.GetTabular($"tx_{i}");
+                Assert.Equal(3, ds.RowCount);
+            }
+        }
+
+        [Fact]
+        public void ConcurrentCheckpoint_DoesNotThrow()
+        {
+            using var store = CreateStore();
+            store.CreateTabular("cp_data").AddNumericColumn("val", new double[] { 1, 2, 3 });
+
+            const int threadCount = 5;
+            var barrier = new Barrier(threadCount);
+            var errors = new ConcurrentBag<Exception>();
+
+            var threads = Enumerable.Range(0, threadCount).Select(_ => new Thread(() =>
+            {
+                try
+                {
+                    barrier.SignalAndWait(TimeSpan.FromSeconds(5));
+                    for (int i = 0; i < 10; i++)
+                    {
+                        store.Checkpoint();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            })).ToList();
+
+            threads.ForEach(t => t.Start());
+            threads.ForEach(t => t.Join(TimeSpan.FromSeconds(15)));
+
+            Assert.Empty(errors);
+        }
+
+        [Fact]
+        public void SemaphoreSlim_CorrectlySerializesAccess()
+        {
+            // This test verifies that concurrent operations are serialized
+            // by checking that no data corruption occurs even under heavy contention.
+            // On mobile (Direct mode), this is enforced by SemaphoreSlim;
+            // on desktop (Shared mode), by lock(_lock).
+            using var store = CreateStore();
+            const int ops = 100;
+            var errors = new ConcurrentBag<Exception>();
+
+            Parallel.For(0, ops, new ParallelOptions { MaxDegreeOfParallelism = 8 }, i =>
+            {
+                try
+                {
+                    if (i % 2 == 0)
+                    {
+                        store.CreateTabular($"serial_t_{i}");
+                    }
+                    else
+                    {
+                        store.CreateGraph($"serial_g_{i}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            });
+
+            Assert.Empty(errors);
+
+            // Verify exactly the right number of each type were created
+            int tabularCount = store.TabularNames.Count(n => n.StartsWith("serial_t_"));
+            int graphCount = store.GraphNames.Count(n => n.StartsWith("serial_g_"));
+            Assert.Equal(50, tabularCount);
+            Assert.Equal(50, graphCount);
         }
 
         #endregion
