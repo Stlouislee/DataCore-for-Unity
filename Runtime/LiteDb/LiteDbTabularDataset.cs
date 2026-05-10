@@ -23,7 +23,9 @@ namespace AroAro.DataCore.LiteDb
         private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
         private bool _disposed;
         private int _pendingMetadataUpdates;
-        private const int MetadataUpdateBatchSize = 100; // Batch metadata updates
+        private const int MetadataUpdateBatchSize = 10; // Reduced from 100 to minimize crash-time data loss (fix #77)
+        private System.Threading.Timer _idleFlushTimer;
+        private const int IdleFlushDelayMs = 2000; // Auto-flush after 2 seconds of inactivity
 
         internal LiteDbTabularDataset(LiteDatabase database, TabularMetadata metadata)
         {
@@ -31,6 +33,8 @@ namespace AroAro.DataCore.LiteDb
             _metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
             _rows = _database.GetCollection<TabularRow>($"tabular_{metadata.Id}");
             _rows.EnsureIndex(r => r.RowIndex, true);
+            _idleFlushTimer = new System.Threading.Timer(_ => FlushMetadata(), null, Timeout.Infinite, Timeout.Infinite);
+            RegisterLifecycleCallbacks();
         }
 
         /// <summary>
@@ -48,6 +52,9 @@ namespace AroAro.DataCore.LiteDb
         internal void MarkDisposed()
         {
             _disposed = true;
+            _idleFlushTimer?.Dispose();
+            _idleFlushTimer = null;
+            UnregisterLifecycleCallbacks();
         }
 
         /// <summary>
@@ -783,6 +790,11 @@ namespace AroAro.DataCore.LiteDb
             {
                 ForceUpdateMetadata();
                 _pendingMetadataUpdates = 0;
+                _idleFlushTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+            }
+            else
+            {
+                _idleFlushTimer?.Change(IdleFlushDelayMs, Timeout.Infinite);
             }
         }
 
