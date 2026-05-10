@@ -14,7 +14,7 @@ namespace AroAro.DataCore.Examples
             Console.WriteLine("=== 会话生命周期管理示例 ===");
 
             // 创建数据存储
-            var store = new DataCoreStore();
+            using var store = new DataCoreStore();
 
             // 1. 创建会话
             var session1 = store.SessionManager.CreateSession("Session1");
@@ -48,8 +48,6 @@ namespace AroAro.DataCore.Examples
             // 8. 最终检查
             Console.WriteLine($"最终会话数: {store.SessionManager.GetStatistics().TotalSessions}");
 
-            // 9. 清理资源
-            store.Dispose();
             Console.WriteLine("完成会话生命周期管理示例");
         }
 

@@ -19,6 +19,25 @@ namespace AroAro.DataCore.Tests
         [SerializeField] private int importedNodeCount;
         [SerializeField] private int importedEdgeCount;
         [SerializeField] private bool importSuccess;
+
+        private static readonly string TestDir = Path.Combine(Path.GetTempPath(), "DataCoreGraphMLTests");
+
+        private static string GetTestDbPath(string name)
+        {
+            Directory.CreateDirectory(TestDir);
+            return Path.Combine(TestDir, name);
+        }
+
+        private void OnDisable()
+        {
+            // Cleanup temp files when the test component is disabled/destroyed
+            try
+            {
+                if (Directory.Exists(TestDir))
+                    Directory.Delete(TestDir, true);
+            }
+            catch { }
+        }
         
         /// <summary>
         /// 运行 GraphML 导入测试
@@ -29,7 +48,7 @@ namespace AroAro.DataCore.Tests
             Debug.Log("开始 GraphML 导入测试...");
             
             // Ensure clean state
-            string dbPath = "graphml_test.db";
+            string dbPath = GetTestDbPath("graphml_test.db");
             if (File.Exists(dbPath))
             {
                 try 
@@ -54,7 +73,7 @@ namespace AroAro.DataCore.Tests
             try
             {
                 // 创建数据存储
-                using (var store = new DataCoreStore("graphml_test.db"))
+                using (var store = new DataCoreStore(dbPath))
                 {
                     // 导入 GraphML
                     var graph = GraphMLImporter.ImportFromFile(store.UnderlyingStore, graphmlFilePath, datasetName);
@@ -119,7 +138,7 @@ namespace AroAro.DataCore.Tests
         {
             Debug.Log("开始 GraphML 文本导入测试...");
 
-            string dbPath = "graphml_text_test.db";
+            string dbPath = GetTestDbPath("graphml_text_test.db");
             if (File.Exists(dbPath))
             {
                 try { File.Delete(dbPath); }
@@ -141,7 +160,7 @@ namespace AroAro.DataCore.Tests
     </graph>
 </graphml>";
 
-            using (var store = new DataCoreStore("graphml_text_test.db"))
+            using (var store = new DataCoreStore(dbPath))
             {
                 var graph = store.CreateGraph("SimpleGraph");
                 GraphMLImporter.ImportToGraph(graphmlText, graph);

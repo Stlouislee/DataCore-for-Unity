@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using AroAro.DataCore.Events;
 using UnityEngine;
 
@@ -87,7 +88,7 @@ namespace AroAro.DataCore.Import
         /// <summary>
         /// 从 CSV 文件解析数据并创建新的表格数据集（使用 DataCoreStore，会触发事件）
         /// </summary>
-        public static ITabularDataset ImportFromFile(DataCoreStore store, string csvPath, string datasetName, bool hasHeader = true, char delimiter = ',')
+        public static ITabularDataset ImportFromFile(DataCoreStore store, string csvPath, string datasetName, bool hasHeader = true, char delimiter = ',', Encoding encoding = null)
         {
             if (!File.Exists(csvPath))
             {
@@ -95,7 +96,10 @@ namespace AroAro.DataCore.Import
                 return null;
             }
 
-            var csvText = File.ReadAllText(csvPath);
+            using var reader = encoding != null
+                ? new StreamReader(csvPath, encoding)
+                : new StreamReader(csvPath, detectEncodingFromByteOrderMarks: true);
+            var csvText = reader.ReadToEnd();
             var result = store.UnderlyingStore.ExecuteInTransaction(() =>
             {
                 var tabular = store.CreateTabular(datasetName);
@@ -109,7 +113,7 @@ namespace AroAro.DataCore.Import
         /// <summary>
         /// 从 CSV 文件解析数据并创建新的表格数据集（底层 IDataStore，不触发事件）
         /// </summary>
-        public static ITabularDataset ImportFromFile(IDataStore store, string csvPath, string datasetName, bool hasHeader = true, char delimiter = ',')
+        public static ITabularDataset ImportFromFile(IDataStore store, string csvPath, string datasetName, bool hasHeader = true, char delimiter = ',', Encoding encoding = null)
         {
             if (!File.Exists(csvPath))
             {
@@ -117,7 +121,10 @@ namespace AroAro.DataCore.Import
                 return null;
             }
 
-            var csvText = File.ReadAllText(csvPath);
+            using var reader = encoding != null
+                ? new StreamReader(csvPath, encoding)
+                : new StreamReader(csvPath, detectEncodingFromByteOrderMarks: true);
+            var csvText = reader.ReadToEnd();
             return store.ExecuteInTransaction(() =>
             {
                 var tabular = store.CreateTabular(datasetName);

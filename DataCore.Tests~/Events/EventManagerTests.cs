@@ -507,5 +507,108 @@ namespace DataCore.Tests.Events
             Assert.Equal("import-test", receivedArgs.DatasetName);
             Assert.Equal(3, ((ITabularDataset)receivedArgs.Dataset).RowCount);
         }
+
+        // ────────────────────────────────────────────────────────────────
+        // EventSubscriptionScope (#116)
+        // ────────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void Scope_DisposeUnsubscribesAllHandlers()
+        {
+            bool called1 = false;
+            bool called2 = false;
+
+            using (var scope = new EventSubscriptionScope())
+            {
+                scope.Subscribe<DatasetCreatedEventArgs>(
+                    h => DataCoreEventManager.SubscribeDatasetCreated(h),
+                    h => DataCoreEventManager.UnsubscribeDatasetCreated(h),
+                    (s, e) => called1 = true);
+
+                scope.Subscribe<DatasetDeletedEventArgs>(
+                    h => DataCoreEventManager.SubscribeDatasetDeleted(h),
+                    h => DataCoreEventManager.UnsubscribeDatasetDeleted(h),
+                    (s, e) => called2 = true);
+            }
+
+            // After scope.Dispose(), handlers should be removed
+            _store.CreateTabular("test");
+            _store.Delete("test");
+
+            Assert.False(called1, "DatasetCreated handler should have been removed by scope");
+            Assert.False(called2, "DatasetDeleted handler should have been removed by scope");
+        }
+
+        [Fact]
+        public void Scope_DisposeDoesNotAffectOtherSubscriptions()
+        {
+            bool externalCalled = false;
+            bool scopedCalled = false;
+
+            // Subscribe outside the scope (should survive)
+            DataCoreEventManager.SubscribeDatasetCreated((s, e) => externalCalled = true);
+
+            using (var scope = new EventSubscriptionScope())
+            {
+                scope.Subscribe<DatasetCreatedEventArgs>(
+                    h => DataCoreEventManager.SubscribeDatasetCreated(h),
+                    h => DataCoreEventManager.UnsubscribeDatasetCreated(h),
+                    (s, e) => scopedCalled = true);
+            }
+
+            _store.CreateTabular("test");
+
+            Assert.True(externalCalled, "External subscription should survive scope disposal");
+            Assert.False(scopedCalled, "Scoped subscription should be removed");
+        }
+
+        [Fact]
+        public void Scope_HandlersWorkWhileScopeIsActive()
+        {
+            bool called = false;
+
+            using (var scope = new EventSubscriptionScope())
+            {
+                scope.Subscribe<DatasetCreatedEventArgs>(
+                    h => DataCoreEventManager.SubscribeDatasetCreated(h),
+                    h => DataCoreEventManager.UnsubscribeDatasetCreated(h),
+                    (s, e) => called = true);
+
+                _store.CreateTabular("test");
+
+                Assert.True(called, "Handler should fire while scope is active");
+            }
+        }
+
+        [Fact]
+        public void Scope_ThrowsIfUsedAfterDispose()
+        {
+            var scope = new EventSubscriptionScope();
+            scope.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() =>
+                scope.Subscribe<DatasetCreatedEventArgs>(
+                    h => DataCoreEventManager.SubscribeDatasetCreated(h),
+                    h => DataCoreEventManager.UnsubscribeDatasetCreated(h),
+                    (s, e) => { }));
+        }
+
+        [Fact]
+        public void Scope_DoubleDispose_DoesNotThrow()
+        {
+            var scope = new EventSubscriptionScope();
+            scope.Subscribe<DatasetCreatedEventArgs>(
+                h => DataCoreEventManager.SubscribeDatasetCreated(h),
+                h => DataCoreEventManager.UnsubscribeDatasetCreated(h),
+                (s, e) => { });
+
+            var ex = Record.Exception(() =>
+            {
+                scope.Dispose();
+                scope.Dispose();
+            });
+
+            Assert.Null(ex);
+        }
     }
 }

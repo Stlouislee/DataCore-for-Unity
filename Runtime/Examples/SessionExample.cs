@@ -11,7 +11,7 @@ namespace AroAro.DataCore.Examples
         public static void RunExample()
         {
             // 创建数据核心存储
-            var store = new DataCoreStore();
+            using var store = new DataCoreStore();
 
             // 创建会话
             var session = store.SessionManager.CreateSession("MyAnalysisSession");
@@ -61,8 +61,6 @@ namespace AroAro.DataCore.Examples
             var stats = store.SessionManager.GetStatistics();
             Console.WriteLine($"Session statistics: {stats.TotalSessions} sessions, {stats.TotalDatasets} total datasets");
 
-            // 清理
-            store.Dispose();
             Console.WriteLine("Cleaned up resources");
         }
     }

@@ -9,6 +9,9 @@ namespace AroAro.DataCore.Examples
     /// </summary>
     public class EventListenerExample
     {
+        /// <summary>
+        /// 使用 ClearAllSubscriptions 的传统方式（全局清除）
+        /// </summary>
         public static void RunExample()
         {
             Console.WriteLine("=== 事件监听示例 ===");
@@ -23,7 +26,7 @@ namespace AroAro.DataCore.Examples
             try
             {
                 // 创建数据存储和会话
-                var store = new DataCoreStore();
+                using var store = new DataCoreStore();
                 var session = store.SessionManager.CreateSession("EventTestSession");
 
                 // 触发数据集创建事件
@@ -50,7 +53,7 @@ namespace AroAro.DataCore.Examples
             }
             finally
             {
-                // 清理事件订阅
+                // 清理事件订阅（保留 ClearAllSubscriptions 以保持向后兼容）
                 DataCoreEventManager.ClearAllSubscriptions();
             }
         }
@@ -78,6 +81,32 @@ namespace AroAro.DataCore.Examples
         private static void OnSessionQueryResultSaved(object sender, SessionQueryResultSavedEventArgs e)
         {
             Console.WriteLine($"[事件] 会话查询结果保存: 会话={e.Session.Name}, 源={e.Source.Name}, 结果={e.Result.Name}");
+        }
+
+        /// <summary>
+        /// 使用 EventSubscriptionScope 的作用域订阅方式（不影响全局事件系统）
+        /// </summary>
+        public static void RunScopedExample()
+        {
+            Console.WriteLine("=== 作用域事件订阅示例 ===");
+
+            using (var scope = new EventSubscriptionScope())
+            {
+                scope.Subscribe<DatasetCreatedEventArgs>(
+                    handler => DataCoreEventManager.SubscribeDatasetCreated(handler),
+                    handler => DataCoreEventManager.UnsubscribeDatasetCreated(handler),
+                    OnDatasetCreated);
+
+                scope.Subscribe<DatasetModifiedEventArgs>(
+                    handler => DataCoreEventManager.SubscribeDatasetModified(handler),
+                    handler => DataCoreEventManager.UnsubscribeDatasetModified(handler),
+                    OnDatasetModified);
+
+                var store = new DataCoreStore();
+                var dataset = store.CreateTabular("ScopedTest");
+
+                // scope.Dispose() 时自动取消以上所有订阅，不会影响其他模块的事件监听
+            }
         }
     }
 }
