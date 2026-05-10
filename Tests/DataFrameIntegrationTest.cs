@@ -47,24 +47,31 @@ namespace AroAro.DataCore.Tests
         private static void TestDataFrameCreation(System.Text.StringBuilder sb)
         {
             sb.AppendLine("Testing DataFrame Creation...");
-            
+
             var store = new DataCoreStore();
-            var sessionManager = store.SessionManager;
-            var session = sessionManager.CreateSession("DataFrameTest");
+            try
+            {
+                var sessionManager = store.SessionManager;
+                var session = sessionManager.CreateSession("DataFrameTest");
 
-            // 创建DataFrame
-            var df = session.CreateDataFrame("TestDataFrame");
-            
-            // 添加列
-            df.Columns.Add(new DoubleDataFrameColumn("x", new double[] { 1, 2, 3, 4, 5 }));
-            df.Columns.Add(new StringDataFrameColumn("s", new string[] { "a", "b", "c", "d", "e" }));
-            df.Columns.Add(new BooleanDataFrameColumn("b", new bool[] { true, false, true, false, true }));
+                // 创建DataFrame
+                var df = session.CreateDataFrame("TestDataFrame");
 
-            // 验证DataFrame
-            if (df.Rows.Count != 5) throw new Exception($"Expected 5 rows, got {df.Rows.Count}");
-            if (df.Columns.Count != 3) throw new Exception($"Expected 3 columns, got {df.Columns.Count}");
+                // 添加列
+                df.Columns.Add(new DoubleDataFrameColumn("x", new double[] { 1, 2, 3, 4, 5 }));
+                df.Columns.Add(new StringDataFrameColumn("s", new string[] { "a", "b", "c", "d", "e" }));
+                df.Columns.Add(new BooleanDataFrameColumn("b", new bool[] { true, false, true, false, true }));
 
-            sb.AppendLine("✅ DataFrame creation OK");
+                // 验证DataFrame
+                if (df.Rows.Count != 5) throw new Exception($"Expected 5 rows, got {df.Rows.Count}");
+                if (df.Columns.Count != 3) throw new Exception($"Expected 3 columns, got {df.Columns.Count}");
+
+                sb.AppendLine("✅ DataFrame creation OK");
+            }
+            finally
+            {
+                store.Dispose();
+            }
         }
 
         private static void TestDataFrameQuery(System.Text.StringBuilder sb)
