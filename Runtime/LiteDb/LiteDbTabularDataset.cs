@@ -14,7 +14,7 @@ namespace AroAro.DataCore.LiteDb
     /// <summary>
     /// LiteDB 表格数据集实现
     /// </summary>
-    public sealed class LiteDbTabularDataset : ITabularDataset
+    public sealed class LiteDbTabularDataset : ITabularDataset, IFlushable
     {
         private readonly LiteDatabase _database;
         private readonly TabularMetadata _metadata;

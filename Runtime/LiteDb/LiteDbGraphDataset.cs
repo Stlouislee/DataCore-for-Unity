@@ -11,7 +11,7 @@ namespace AroAro.DataCore.LiteDb
     /// <summary>
     /// LiteDB 图数据集实现
     /// </summary>
-    public sealed class LiteDbGraphDataset : IGraphDataset
+    public sealed class LiteDbGraphDataset : IGraphDataset, IFlushable
     {
         private readonly LiteDatabase _database;
         private readonly GraphMetadata _metadata;
