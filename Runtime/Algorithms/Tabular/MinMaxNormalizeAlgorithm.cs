@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using AroAro.DataCore.Tabular;
-using NumSharp;
 
 namespace AroAro.DataCore.Algorithms.Tabular
 {
@@ -98,8 +97,7 @@ namespace AroAro.DataCore.Algorithms.Tabular
 
                 if (colType == ColumnType.Numeric)
                 {
-                    NDArray data = input.GetNumericColumn(colName);
-                    double[] values = data.ToArray<double>();
+                    double[] values = input.GetNumericColumnRaw(colName);
 
                     if (numericColumns.Contains(colName))
                     {

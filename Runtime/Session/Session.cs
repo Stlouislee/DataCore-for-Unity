@@ -215,17 +215,18 @@ namespace AroAro.DataCore.Session
 
         private void CopyGraphData(IGraphDataset source, IGraphDataset target)
         {
-            // 复制所有节点
+            // 复制所有节点（含属性）
             foreach (var nodeId in source.GetNodeIds())
             {
                 var props = source.GetNodeProperties(nodeId);
                 target.AddNode(nodeId, props as IDictionary<string, object>);
             }
 
-            // 复制所有边
+            // 复制所有边（含属性）
             foreach (var edge in source.GetEdges())
             {
-                target.AddEdge(edge.From, edge.To);
+                var props = source.GetEdgeProperties(edge.From, edge.To);
+                target.AddEdge(edge.From, edge.To, props);
             }
         }
 

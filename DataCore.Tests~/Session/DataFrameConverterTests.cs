@@ -7,7 +7,7 @@ using AroAro.DataCore.Events;
 using AroAro.DataCore.Session;
 using AroAro.DataCore.Tabular;
 using Microsoft.Data.Analysis;
-using NumSharp;
+
 using Xunit;
 
 namespace DataCore.Tests.Session
@@ -313,7 +313,7 @@ namespace DataCore.Tests.Session
 
             Assert.Equal(3, tabular.RowCount);
             Assert.True(tabular.HasColumn("x"));
-            var data = tabular.GetNumericColumn("x").ToArray<double>();
+            var data = tabular.GetNumericColumnRaw("x");
             Assert.Equal(1.0, data[0]);
             Assert.Equal(2.0, data[1]);
             Assert.Equal(3.0, data[2]);

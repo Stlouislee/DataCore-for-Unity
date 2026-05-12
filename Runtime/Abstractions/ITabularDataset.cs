@@ -50,6 +50,7 @@ namespace AroAro.DataCore
         /// <summary>
         /// 添加数值列 (NDArray)
         /// </summary>
+        [Obsolete("Use AddNumericColumn(name, double[]) instead. Will be removed in v1.0.")]
         void AddNumericColumn(string name, NDArray data);
 
         /// <summary>
@@ -68,9 +69,15 @@ namespace AroAro.DataCore
         bool HasColumn(string name);
 
         /// <summary>
-        /// 获取数值列数据
+        /// 获取数值列数据 (NDArray)
         /// </summary>
+        [Obsolete("Use GetNumericColumnRaw(name) instead. Will be removed in v1.0.")]
         NDArray GetNumericColumn(string name);
+
+        /// <summary>
+        /// 获取原始 double[] 数组（无克隆，无包装）
+        /// </summary>
+        double[] GetNumericColumnRaw(string name);
 
         /// <summary>
         /// 获取字符串列数据

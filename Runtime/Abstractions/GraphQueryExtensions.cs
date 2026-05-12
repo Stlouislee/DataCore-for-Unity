@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -68,6 +69,8 @@ namespace AroAro.DataCore
             _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
         }
 
+        public IGraphDataset Source => _inner.Source;
+
         // ── 节点过滤：继续叠加 ──
         public IGraphQuery WhereNodeProperty(string property, QueryOp op, object value)
             => new LambdaFilteredGraphQuery(_inner.WhereNodeProperty(property, op, value), _predicate);
@@ -89,22 +92,40 @@ namespace AroAro.DataCore
 
         public IEnumerable<string> ToNodeIds()
         {
+            var source = _inner.Source;
             foreach (var nodeId in _inner.ToNodeIds())
             {
-                // 构造一个最小 QueryRow 来检查
-                // 注意：这里拿不到完整属性，只用节点 ID 做基础过滤
-                // 完整属性过滤需要 IGraphQuery 实现支持
+                // 获取节点属性，构建 QueryRow，应用 lambda 过滤
+                if (source != null)
+                {
+                    var props = source.GetNodeProperties(nodeId);
+                    var row = new QueryRow(new Dictionary<string, object>(props));
+                    if (!_predicate(row))
+                        continue;
+                }
                 yield return nodeId;
             }
         }
 
         public IEnumerable<(string From, string To)> ToEdges()
         {
-            return _inner.ToEdges();
+            var source = _inner.Source;
+            foreach (var edge in _inner.ToEdges())
+            {
+                // 获取边属性，构建 QueryRow，应用 lambda 过滤
+                if (source != null)
+                {
+                    var props = source.GetEdgeProperties(edge.From, edge.To);
+                    var row = new QueryRow(new Dictionary<string, object>(props));
+                    if (!_predicate(row))
+                        continue;
+                }
+                yield return edge;
+            }
         }
 
-        public int CountNodes() => _inner.CountNodes();
-        public int CountEdges() => _inner.CountEdges();
+        public int CountNodes() => ToNodeIds().Count();
+        public int CountEdges() => ToEdges().Count();
 
         // ── 异步执行 ──
 

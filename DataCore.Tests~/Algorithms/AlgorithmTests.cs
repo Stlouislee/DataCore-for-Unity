@@ -10,7 +10,6 @@ using AroAro.DataCore.Algorithms.Tabular;
 using AroAro.DataCore.Events;
 using AroAro.DataCore.Graph;
 using AroAro.DataCore.Tabular;
-using NumSharp;
 using Xunit;
 
 namespace DataCore.Tests.Algorithms
@@ -977,7 +976,7 @@ namespace DataCore.Tests.Algorithms
             Assert.NotNull(output);
 
             // After normalization to [0,1], min should be 0, max should be 1
-            var xData = output.GetNumericColumn("x").ToArray<double>();
+            var xData = output.GetNumericColumnRaw("x");
             Assert.Equal(0.0, xData[0], 6);
             Assert.Equal(1.0, xData[xData.Length - 1], 6);
         }
@@ -1012,7 +1011,7 @@ namespace DataCore.Tests.Algorithms
             var result = algo.Execute(tabular, context);
             var output = result.OutputDataset as TabularData;
 
-            var xData = output.GetNumericColumn("x").ToArray<double>();
+            var xData = output.GetNumericColumnRaw("x");
             Assert.Equal(-1.0, xData[0], 6);
             Assert.Equal(0.0, xData[1], 6);
             Assert.Equal(1.0, xData[2], 6);
@@ -1066,7 +1065,7 @@ namespace DataCore.Tests.Algorithms
             var result = algo.Execute(tabular, AlgorithmContext.Empty);
             var output = result.OutputDataset as TabularData;
 
-            var xData = output.GetNumericColumn("x").ToArray<double>();
+            var xData = output.GetNumericColumnRaw("x");
             // All same values → range is 0 → all map to rangeMin (0.0)
             Assert.All(xData, v => Assert.Equal(0.0, v, 6));
         }

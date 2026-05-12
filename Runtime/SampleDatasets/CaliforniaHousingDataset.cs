@@ -1,4 +1,3 @@
-using NumSharp;
 using UnityEngine;
 using System.Linq;
 
@@ -120,7 +119,7 @@ namespace AroAro.DataCore.SampleDatasets
 
             foreach (var column in data)
             {
-                dataset.AddNumericColumn(column.Key, np.array(column.Value));
+                dataset.AddNumericColumn(column.Key, column.Value);
             }
 
             return dataset;
@@ -153,7 +152,7 @@ namespace AroAro.DataCore.SampleDatasets
                 
                 foreach (var column in data)
                 {
-                    tabular.AddNumericColumn(column.Key, np.array(column.Value));
+                    tabular.AddNumericColumn(column.Key, column.Value);
                 }
                 
                 UnityEngine.Debug.Log($"✅ Loaded California housing dataset with {tabular.RowCount} rows");
@@ -191,10 +190,10 @@ namespace AroAro.DataCore.SampleDatasets
 
             foreach (var column in data)
             {
-                var values = np.array(column.Value);
-                var min = np.min(values);
-                var max = np.max(values);
-                var mean = np.mean(values);
+                var values = column.Value;
+                var min = values.Min();
+                var max = values.Max();
+                var mean = values.Average();
                 
                 stats[column.Key] = $"min={min:F2}, max={max:F2}, mean={mean:F2}";
             }

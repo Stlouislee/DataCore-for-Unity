@@ -25,6 +25,8 @@ namespace AroAro.DataCore.LiteDb
             _edgeFilters = new List<Func<GraphEdge, bool>>();
         }
 
+        public IGraphDataset Source => _dataset;
+
         #region IGraphQuery 实现 - 节点过滤
 
         public IGraphQuery WhereNodeProperty(string property, QueryOp op, object value)

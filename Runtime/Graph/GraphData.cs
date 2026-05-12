@@ -381,6 +381,8 @@ namespace AroAro.DataCore.Graph
             private List<Func<string, bool>> _nodeFilters = new();
             private List<Func<string, string, bool>> _edgeFilters = new();
 
+            public IGraphDataset Source => _source;
+
             public InMemoryGraphQuery(GraphData source)
             {
                 _source = source;

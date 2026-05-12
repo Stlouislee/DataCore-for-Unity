@@ -1,6 +1,5 @@
 using UnityEngine;
 using System.Linq;
-using NumSharp;
 using AroAro.DataCore.Events;
 
 namespace AroAro.DataCore.SampleDatasets
@@ -89,11 +88,8 @@ namespace AroAro.DataCore.SampleDatasets
         [ContextMenu("Reload Dataset")]
         private void ReloadDataset()
         {
-            if (loader != null)
-            {
-                loader.LoadDataset();
-                // No Invoke needed — OnDatasetLoaded event will trigger RunExampleQueries
-            }
+            // Loading is handled by SampleDatasetManager; use static method as fallback
+            CaliforniaHousingDataset.LoadIntoDataCore();
         }
 
         [ContextMenu("Load Using Static Method")]

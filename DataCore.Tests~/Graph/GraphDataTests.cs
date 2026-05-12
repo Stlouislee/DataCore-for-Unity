@@ -717,6 +717,22 @@ namespace DataCore.Tests.Graph
             Assert.Equal(origProps["weight"], copyProps["weight"]);
         }
 
+        [Fact]
+        public void WithName_CopyHasSameEdgeProperties()
+        {
+            var original = CreateTestGraph();
+
+            var copy = original.WithName("copy") as GraphData;
+
+            foreach (var (from, to) in original.GetEdges())
+            {
+                var origEdge = original.GetEdgeProperties(from, to);
+                var copyEdge = copy.GetEdgeProperties(from, to);
+                Assert.Equal(origEdge["type"], copyEdge["type"]);
+                Assert.Equal(origEdge["strength"], copyEdge["strength"]);
+            }
+        }
+
         // ────────────────────────────────────────────────────────────────
         // GetOutNeighbors / GetInNeighbors
         // ────────────────────────────────────────────────────────────────
@@ -1094,6 +1110,124 @@ namespace DataCore.Tests.Graph
 
             // All non-numeric → CompareNumeric returns 0 → Gt is false
             Assert.DoesNotContain("B", result);
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // LambdaFilteredGraphQuery: Where(Func<QueryRow, bool>)
+        // ────────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void Where_Lambda_FiltersNodesByProperty()
+        {
+            var graph = CreateTestGraph();
+
+            var result = graph.Query()
+                .Where(row => row.Has("color") && row.Get<string>("color") == "red")
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Single(result);
+            Assert.Contains("A", result);
+        }
+
+        [Fact]
+        public void Where_Lambda_CombinedWithNodeProperty()
+        {
+            var graph = CreateTestGraph();
+
+            // WhereNodeProperty filters by weight > 1.5, then lambda filters by color == "green"
+            var result = graph.Query()
+                .WhereNodeProperty("weight", QueryOp.Gt, 1.5)
+                .Where(row => row.Get<string>("color") == "green")
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Single(result);
+            Assert.Contains("C", result);
+        }
+
+        [Fact]
+        public void Where_Lambda_CountNodes_ReturnsFilteredCount()
+        {
+            var graph = CreateTestGraph();
+
+            var count = graph.Query()
+                .Where(row => row.Has("weight") && row.Get<double>("weight") >= 2.0)
+                .CountNodes();
+
+            Assert.Equal(2, count); // B (2.0) and C (3.0)
+        }
+
+        [Fact]
+        public void Where_Lambda_CountEdges_ReturnsFilteredCount()
+        {
+            var graph = CreateTestGraph();
+
+            var count = graph.Query()
+                .Where(row => row.Has("strength") && row.Get<double>("strength") > 0.6)
+                .CountEdges();
+
+            // Edges: A→B (0.8), B→C (0.5), A→C (1.0) → 2 edges match
+            Assert.Equal(2, count);
+        }
+
+        [Fact]
+        public void Where_Lambda_ToEdges_FiltersByEdgeProperty()
+        {
+            var graph = CreateTestGraph();
+
+            var edges = graph.Query()
+                .Where(row => row.Has("type") && row.Get<string>("type") == "friend")
+                .ToEdges()
+                .ToList();
+
+            Assert.Single(edges);
+            Assert.Equal("A", edges[0].From);
+            Assert.Equal("B", edges[0].To);
+        }
+
+        [Fact]
+        public void Where_Lambda_WithBFS_AppliesFilterDuringTraversal()
+        {
+            var graph = CreateTestGraph();
+
+            // BFS from A, depth 1, but only keep nodes with color == "blue"
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .MaxDepth(1)
+                .Where(row => row.Get<string>("color") == "blue")
+                .ToNodeIds()
+                .ToList();
+
+            // A is visited first (color=red → filtered out), then B (color=blue → kept)
+            Assert.Contains("B", result);
+            Assert.DoesNotContain("A", result);
+        }
+
+        [Fact]
+        public void Where_Lambda_EmptyResult_WhenNothingMatches()
+        {
+            var graph = CreateTestGraph();
+
+            var result = graph.Query()
+                .Where(row => row.Get<string>("color") == "nonexistent")
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Empty(result);
+        }
+
+        [Fact]
+        public void Where_Lambda_SourceProperty_ReturnsDataset()
+        {
+            var graph = CreateTestGraph();
+
+            var query = graph.Query();
+            var filtered = query.Where(row => true);
+
+            Assert.NotNull(filtered.Source);
+            Assert.Same(graph, filtered.Source);
         }
     }
 }

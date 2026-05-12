@@ -207,7 +207,7 @@ namespace AroAro.DataCore.Tests
             Assert.That(output, Is.Not.Null, "Should produce output tabular dataset");
             Assert.That(output.ColumnCount, Is.EqualTo(2), "Should preserve all columns");
 
-            var normalized = output.GetNumericColumn("values").ToArray<double>();
+            var normalized = output.GetNumericColumnRaw("values");
             Assert.That(Math.Abs(normalized[0] - 0.0), Is.LessThan(1e-10), $"Min should be 0, got {normalized[0]}");
             Assert.That(Math.Abs(normalized[4] - 1.0), Is.LessThan(1e-10), $"Max should be 1, got {normalized[4]}");
             Assert.That(Math.Abs(normalized[2] - 0.5), Is.LessThan(1e-10), $"Middle should be 0.5, got {normalized[2]}");
@@ -233,7 +233,7 @@ namespace AroAro.DataCore.Tests
             Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
 
             var output = result.OutputDataset as ITabularDataset;
-            var values = output.GetNumericColumn("x").ToArray<double>();
+            var values = output.GetNumericColumnRaw("x");
             Assert.That(Math.Abs(values[0] - (-1.0)), Is.LessThan(1e-10), $"Min should be -1, got {values[0]}");
             Assert.That(Math.Abs(values[2] - 1.0), Is.LessThan(1e-10), $"Max should be 1, got {values[2]}");
             Assert.That(Math.Abs(values[1] - 0.0), Is.LessThan(1e-10), $"Middle should be 0, got {values[1]}");
@@ -254,8 +254,8 @@ namespace AroAro.DataCore.Tests
             Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
 
             var output = result.OutputDataset as ITabularDataset;
-            var normalized = output.GetNumericColumn("normalize_me").ToArray<double>();
-            var untouched = output.GetNumericColumn("leave_me").ToArray<double>();
+            var normalized = output.GetNumericColumnRaw("normalize_me");
+            var untouched = output.GetNumericColumnRaw("leave_me");
 
             Assert.That(Math.Abs(normalized[0] - 0.0), Is.LessThan(1e-10), "Targeted column should be normalized");
             Assert.That(Math.Abs(untouched[0] - 5.0), Is.LessThan(1e-10), $"Non-targeted column should be unchanged, got {untouched[0]}");
@@ -272,7 +272,7 @@ namespace AroAro.DataCore.Tests
             Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
 
             var output = result.OutputDataset as ITabularDataset;
-            var values = output.GetNumericColumn("flat").ToArray<double>();
+            var values = output.GetNumericColumnRaw("flat");
             Assert.That(Math.Abs(values[0] - 0.0), Is.LessThan(1e-10), "Constant value should map to rangeMin");
         }
 

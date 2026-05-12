@@ -690,5 +690,31 @@ namespace DataCore.Tests.Session
             Assert.Contains("copy2", names);
             Assert.Equal(2, names.Count);
         }
+
+        // ────────────────────────────────────────────────────────────────
+        // CopyGraphData — edge properties preserved
+        // ────────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void PersistDataset_Graph_PreservesEdgeProperties()
+        {
+            var session = new AroAro.DataCore.Session.Session("Test", _store);
+            var graph = (IGraphDataset)session.CreateDataset("myGraph", DataSetKind.Graph);
+
+            graph.AddNode("A", new Dictionary<string, object> { ["label"] = "start" });
+            graph.AddNode("B", new Dictionary<string, object> { ["label"] = "end" });
+            graph.AddEdge("A", "B", new Dictionary<string, object> { ["type"] = "road", ["weight"] = 42.0 });
+
+            // Persist triggers CopyGraphData
+            session.PersistDataset("myGraph", "myGraph_copy");
+
+            // Verify edge properties were copied
+            var copied = _store.GetGraph("myGraph_copy");
+            Assert.True(copied.HasEdge("A", "B"));
+
+            var edgeProps = copied.GetEdgeProperties("A", "B");
+            Assert.Equal("road", edgeProps["type"]);
+            Assert.Equal(42.0, edgeProps["weight"]);
+        }
     }
 }

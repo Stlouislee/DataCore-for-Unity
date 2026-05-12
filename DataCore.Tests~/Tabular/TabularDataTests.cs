@@ -302,9 +302,9 @@ namespace DataCore.Tests.Tabular
             t.AddRow(new Dictionary<string, object> { ["x"] = 1.0 });
             t.AddRow(new Dictionary<string, object> { ["x"] = 2.0 });
 
-            var col = t.GetNumericColumn("x");
-            Assert.Equal(1.0, col.GetDouble(0));
-            Assert.Equal(2.0, col.GetDouble(1));
+            var col = t.GetNumericColumnRaw("x");
+            Assert.Equal(1.0, col[0]);
+            Assert.Equal(2.0, col[1]);
         }
 
         [Fact]
@@ -314,8 +314,8 @@ namespace DataCore.Tests.Tabular
             t.AddRow(new Dictionary<string, object> { ["x"] = 1.0 });
             t.UpdateRow(0, new Dictionary<string, object> { ["x"] = 99.0 });
 
-            var col = t.GetNumericColumn("x");
-            Assert.Equal(99.0, col.GetDouble(0));
+            var col = t.GetNumericColumnRaw("x");
+            Assert.Equal(99.0, col[0]);
         }
 
         [Fact]
@@ -326,8 +326,8 @@ namespace DataCore.Tests.Tabular
             t.AddRow(new Dictionary<string, object> { ["x"] = 20.0 });
             t.DeleteRow(0);
 
-            var col = t.GetNumericColumn("x");
-            Assert.Equal(20.0, col.GetDouble(0));
+            var col = t.GetNumericColumnRaw("x");
+            Assert.Equal(20.0, col[0]);
         }
 
         #endregion
@@ -340,7 +340,7 @@ namespace DataCore.Tests.Tabular
             var t = new TabularData("test");
             t.AddNumericColumn("x", new double[] { 1.0, 2.0, 3.0 });
 
-            // Get the numeric column
+            // Get the numeric column (NDArray, defensive copy)
             var col = t.GetNumericColumn("x");
 
             // Modify the returned NDArray
@@ -577,9 +577,9 @@ namespace DataCore.Tests.Tabular
             Assert.Equal(ColumnType.Numeric, t.GetColumnType("price"));
             Assert.Equal(2, t.RowCount);
             // Values should be convertible via GetNumericColumn
-            var col = t.GetNumericColumn("price");
-            Assert.Equal(9.99, col.GetDouble(0), 2);
-            Assert.Equal(19.99, col.GetDouble(1), 2);
+            var col = t.GetNumericColumnRaw("price");
+            Assert.Equal(9.99, col[0], 2);
+            Assert.Equal(19.99, col[1], 2);
         }
 
         [Fact]

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Analysis;
-using NumSharp;
 
 namespace AroAro.DataCore.Session
 {
@@ -72,7 +71,7 @@ namespace AroAro.DataCore.Session
                         {
                             values[i] = doubleColumn[i].GetValueOrDefault(0.0);
                         }
-                        tabular.AddNumericColumn(column.Name, np.array(values));
+                        tabular.AddNumericColumn(column.Name, values);
                     }
                     else if (column is PrimitiveDataFrameColumn<float> floatColumn)
                     {
@@ -81,7 +80,7 @@ namespace AroAro.DataCore.Session
                         {
                             values[i] = (double)floatColumn[i].GetValueOrDefault(0.0f);
                         }
-                        tabular.AddNumericColumn(column.Name, np.array(values));
+                        tabular.AddNumericColumn(column.Name, values);
                     }
                     else if (column is PrimitiveDataFrameColumn<int> intColumn)
                     {
@@ -90,7 +89,7 @@ namespace AroAro.DataCore.Session
                         {
                             values[i] = (double)intColumn[i].GetValueOrDefault(0);
                         }
-                        tabular.AddNumericColumn(column.Name, np.array(values));
+                        tabular.AddNumericColumn(column.Name, values);
                     }
                     else if (column is StringDataFrameColumn stringColumn)
                     {
