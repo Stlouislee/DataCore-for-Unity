@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AroAro.DataCore.Events;
+using Microsoft.Data.Analysis;
 
 namespace AroAro.DataCore.Workspace
 {
@@ -18,6 +19,7 @@ namespace AroAro.DataCore.Workspace
 
         private readonly DataCoreStore _store;
         private readonly ConcurrentDictionary<string, WorkspaceSlot> _slots = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, DataFrame> _dataFrames = new(StringComparer.Ordinal);
         private readonly object _metadataLock = new();
         private volatile bool _metadataDirty = true;
         private IReadOnlyList<WorkspaceEntry> _cachedEntries;
@@ -350,6 +352,98 @@ namespace AroAro.DataCore.Workspace
 
         #endregion
 
+        #region IWorkspace — DataFrame
+
+        /// <inheritdoc/>
+        public IReadOnlyCollection<string> DataFrameNames
+        {
+            get { ThrowIfDisposed(); return _dataFrames.Keys.ToList().AsReadOnly(); }
+        }
+
+        /// <inheritdoc/>
+        public int DataFrameCount
+        {
+            get { ThrowIfDisposed(); return _dataFrames.Count; }
+        }
+
+        /// <inheritdoc/>
+        public DataFrame CreateDataFrame(string name)
+        {
+            ThrowIfDisposed();
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("DataFrame name required", nameof(name));
+
+            var df = new DataFrame();
+            if (!_dataFrames.TryAdd(name, df))
+                throw new InvalidOperationException($"DataFrame already exists in workspace: {name}");
+
+            return df;
+        }
+
+        /// <inheritdoc/>
+        public DataFrame GetDataFrame(string name)
+        {
+            ThrowIfDisposed();
+            if (!_dataFrames.TryGetValue(name, out var df))
+                throw new KeyNotFoundException($"DataFrame not found in workspace: {name}");
+            return df;
+        }
+
+        /// <inheritdoc/>
+        public bool HasDataFrame(string name)
+        {
+            ThrowIfDisposed();
+            return _dataFrames.ContainsKey(name);
+        }
+
+        /// <inheritdoc/>
+        public bool RemoveDataFrame(string name)
+        {
+            ThrowIfDisposed();
+            return _dataFrames.TryRemove(name, out _);
+        }
+
+        /// <inheritdoc/>
+        public DataFrame ConvertToDataFrame(string datasetName)
+        {
+            ThrowIfDisposed();
+            var dataset = Get(datasetName);
+            if (dataset is not ITabularDataset tabular)
+                throw new InvalidOperationException($"Dataset '{datasetName}' is not tabular");
+
+            var df = TabularToDataFrame(tabular);
+            _dataFrames[datasetName] = df;
+            return df;
+        }
+
+        private static DataFrame TabularToDataFrame(ITabularDataset tabular)
+        {
+            var df = new DataFrame();
+            var results = tabular.Query().ToDictionaries();
+            if (!results.Any())
+                return df;
+
+            var columns = results.First().Keys.ToList();
+            foreach (var col in columns)
+            {
+                var values = results.Select(r => r.TryGetValue(col, out var v) ? v : null).ToArray();
+                var nonNull = values.Where(v => v != null).ToList();
+
+                if (nonNull.Count == 0 || nonNull.All(v => v is double or int or float or long))
+                {
+                    var doubles = values.Select(v => v != null ? Convert.ToDouble(v) : double.NaN).ToArray();
+                    df.Columns.Add(new DoubleDataFrameColumn(col, doubles));
+                }
+                else
+                {
+                    df.Columns.Add(new StringDataFrameColumn(col, values.Select(v => v?.ToString()).ToArray()));
+                }
+            }
+            return df;
+        }
+
+        #endregion
+
         #region IWorkspace — 异步 API
 
         /// <inheritdoc/>
@@ -393,6 +487,7 @@ namespace AroAro.DataCore.Workspace
             }
 
             _slots.Clear();
+            _dataFrames.Clear();
             _cachedEntries = null;
         }
 

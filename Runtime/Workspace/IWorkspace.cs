@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Analysis;
 
 namespace AroAro.DataCore.Workspace
 {
@@ -114,6 +115,31 @@ namespace AroAro.DataCore.Workspace
 
         /// <summary>清空工作区（不影响 store）</summary>
         void Clear();
+
+        #endregion
+
+        #region DataFrame
+
+        /// <summary>创建新的 DataFrame</summary>
+        DataFrame CreateDataFrame(string name);
+
+        /// <summary>获取 DataFrame</summary>
+        DataFrame GetDataFrame(string name);
+
+        /// <summary>检查是否存在 DataFrame</summary>
+        bool HasDataFrame(string name);
+
+        /// <summary>移除 DataFrame</summary>
+        bool RemoveDataFrame(string name);
+
+        /// <summary>将 workspace 中的表格数据集转换为 DataFrame</summary>
+        DataFrame ConvertToDataFrame(string datasetName);
+
+        /// <summary>列出所有 DataFrame 名称</summary>
+        IReadOnlyCollection<string> DataFrameNames { get; }
+
+        /// <summary>DataFrame 数量</summary>
+        int DataFrameCount { get; }
 
         #endregion
 

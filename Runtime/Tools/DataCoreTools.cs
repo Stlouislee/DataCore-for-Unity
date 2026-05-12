@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using AroAro.DataCore.Session;
 using AroAro.DataCore.Workspace;
+using Microsoft.Data.Analysis;
 
 namespace AroAro.DataCore.Tools
 {
@@ -85,6 +87,13 @@ namespace AroAro.DataCore.Tools
                     "workspace_remove" => WorkspaceRemove(args),
                     "workspace_search" => WorkspaceSearch(args),
                     "workspace_diff" => WorkspaceDiff(args),
+
+                    // DataFrame
+                    "workspace_dataframe_create" => WorkspaceDataFrameCreate(args),
+                    "workspace_dataframe_convert" => WorkspaceDataFrameConvert(args),
+                    "workspace_dataframe_list" => WorkspaceDataFrameList(args),
+                    "workspace_dataframe_remove" => WorkspaceDataFrameRemove(args),
+                    "workspace_dataframe_to_dataset" => WorkspaceDataFrameToDataset(args),
 
                     _ => ToolResult.Fail(toolName, $"Unknown tool: {toolName}").ToJson()
                 };
@@ -1689,6 +1698,87 @@ namespace AroAro.DataCore.Tools
                 result["sample"] = entry.Sample;
 
             return ToolResult.Ok(action, result).ToJson();
+        }
+
+        #endregion
+
+        // ────────────────────────────────────────────────────────────
+        // DataFrame Tools (Phase 2)
+        // ────────────────────────────────────────────────────────────
+
+        #region DataFrame Tools
+
+        private static string WorkspaceDataFrameCreate(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var name = GetString(args, "name");
+            ws.CreateDataFrame(name);
+            return ToolResult.Ok("workspace_dataframe_create", new
+            {
+                name,
+                message = $"DataFrame '{name}' created"
+            }).ToJson();
+        }
+
+        private static string WorkspaceDataFrameConvert(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var source = GetString(args, "source");
+            var df = ws.ConvertToDataFrame(source);
+            return ToolResult.Ok("workspace_dataframe_convert", new
+            {
+                source,
+                rows = (long)df.Rows.Count,
+                columns = df.Columns.Count,
+                columnNames = df.Columns.Select(c => c.Name).ToArray()
+            }).ToJson();
+        }
+
+        private static string WorkspaceDataFrameList(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var names = ws.DataFrameNames.ToArray();
+            return ToolResult.Ok("workspace_dataframe_list", new
+            {
+                count = ws.DataFrameCount,
+                dataFrames = names
+            }).ToJson();
+        }
+
+        private static string WorkspaceDataFrameRemove(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var name = GetString(args, "name");
+            var removed = ws.RemoveDataFrame(name);
+            if (!removed)
+                return ToolResult.Fail("workspace_dataframe_remove",
+                    $"DataFrame '{name}' not found",
+                    $"Available: {string.Join(", ", ws.DataFrameNames)}").ToJson();
+            return ToolResult.Ok("workspace_dataframe_remove", new { name, removed }).ToJson();
+        }
+
+        private static string WorkspaceDataFrameToDataset(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var source = GetString(args, "source");
+            var resultName = GetOptionalString(args, "resultName", source);
+
+            var df = ws.GetDataFrame(source);
+
+            // Convert DataFrame → ITabularDataset via DataFrameAdapter
+            var adapter = new DataFrameAdapter(resultName, df);
+            var tabularData = adapter.ToTabularData();
+
+            // Register in workspace
+            ws.Register(resultName, tabularData, DataSource.Derived);
+
+            return ToolResult.Ok("workspace_dataframe_to_dataset", new
+            {
+                source,
+                resultName,
+                rows = (long)df.Rows.Count,
+                columns = df.Columns.Count
+            }).ToJson();
         }
 
         #endregion
