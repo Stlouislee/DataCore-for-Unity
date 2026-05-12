@@ -4,6 +4,7 @@
 **当前版本** 0.5.0  
 **分支** `feature/workspace`  
 **PR** https://github.com/Stlouislee/DataCore-for-Unity/pull/165  
+**上次交接** WORKSPACE_HANDOVER.md（原始交接文档，仍可参考架构决策记录）
 
 ---
 
@@ -21,155 +22,229 @@ Workspace 是 DataCore 的统一内存工作区，替代 Session 成为 `DataCor
 | `Runtime/Workspace/ColumnInfo.cs` | 列信息 |
 | `Runtime/Workspace/WorkspaceEntry.cs` | DescribeAll 返回的元数据结构 |
 | `Runtime/Workspace/WorkspaceRetentionPolicy.cs` | `Strong / Weak / Auto` 内存策略 |
-| `Runtime/DataCoreStore.cs` | 已添加 `Workspace` 属性，`SessionManager` 标记 `[Obsolete]` |
-| `Runtime/Events/DataCoreEventManager.cs` | 已添加 `WorkspaceDatasetRegistered` 事件 |
+| `Runtime/DataCoreStore.cs` | `Workspace` 属性 + 多 workspace 支持（索引器、Create/Destroy/Get/List） |
+| `Runtime/Events/DataCoreEventManager.cs` | `WorkspaceDatasetRegistered` 事件 |
 | `DataCore.Tests~/Workspace/WorkspaceTests.cs` | 52 个测试，全部通过 |
 | `Runtime/Examples/WorkspaceExample.cs` | 使用示例 |
+| **`Runtime/Tools/DataCoreTools.cs`** | **35 个 Agent tool 的 dispatch 层（Phase 1 新增）** |
+| **`Runtime/Tools/FilterExpressionParser.cs`** | **Filter 表达式解析器（Phase 1 新增）** |
+| **`Runtime/Tools/ToolResult.cs`** | **统一 JSON 返回结构（Phase 1 新增）** |
+| **`DataCore.Tests~/Tools/DataCoreToolsTests.cs`** | **40 个 tool 测试（Phase 1 新增）** |
 
 ### 测试状态
 
 ```
-Passed:  750
-Failed:  0
+Total:  809
+Passed: 790
 Skipped: 19 (已有 Session 测试，非 Workspace 引入)
+Failed:  0
 ```
 
 ---
 
-## 二、需要你实现的 5 个问题
+## 二、已解决的设计决策
 
-### P0-1：查询结果自动落地
+以下决策在本轮实现中已确定：
 
-**问题**：查询管道和 Workspace 是断开的。用户执行 query 后拿到原始数据（`List<Dictionary>`、`int[]`），需要手动 `Register` 到 Workspace。
-
-**期望行为**：
-
-```csharp
-// 方案 A：给 ITabularQuery 加 ExecuteToWorkspace
-store.GetTabular("Users").Query()
-    .Where("age", QueryOp.Gt, 18)
-    .ExecuteToWorkspace("adult_users");  // 自动注册到 store.Workspace
-
-// 方案 B：让查询构建器持有 Workspace 引用（链式）
-store.Workspace.Query("Users")           // 从 store 加载到 workspace
-    .Where("age", QueryOp.Gt, 18)
-    .Execute();                          // 结果自动注册为 "Users_filtered"
-```
-
-**实现要点**：
-
-- 需要修改 `Runtime/Abstractions/ITabularQuery.cs` 和 `TabularQueryExtensions.cs`
-- 或者在 Workspace 上加一层查询入口（`Workspace.Query(name)` 返回一个绑定 workspace 的查询构建器）
-- 自动命名逻辑已有：`Workspace.AutoName(baseName)` 处理冲突
-- 考虑是否要让 `ToDictionaries()` / `ToRowIndices()` 等现有方法也自动注册（可能太侵入，建议用新方法）
-
-**参考文件**：
-- `Runtime/Abstractions/ITabularQuery.cs` — 查询接口
-- `Runtime/Abstractions/TabularQueryExtensions.cs` — 扩展方法
-- `Runtime/LiteDb/LiteDbTabularQuery.cs` — LiteDB 查询实现
-- `Runtime/Session/SessionDataFrameQueryBuilder.cs` — Session 的 DataFrame 查询（参考模式）
+| 决策 | 选择 | 理由 |
+|------|------|------|
+| Get() 语义 | **复制语义**（默认）+ `OpenRef()` 零拷贝 opt-in | Workspace 是"桌面"不是"沙箱"，Agent 不应意外改 store 数据 |
+| Agent API 风格 | **Workspace-centric + flat tools** | Agent 的操作台是 Workspace，Store 是实现细节 |
+| 查询结果落地 | **不需要"落地"概念** | Agent 在 Workspace 上操作，结果自然在 Workspace 上 |
+| Filter 表达式 | **自研 FilterExpressionParser** | 支持 AND/OR/NOT/contains/starts_with/between/in/is_null，独立于查询引擎 |
+| Join key | **leftKey + rightKey 分离** | 两边列名可能不同（如 Users.id = Orders.user_id） |
+| 多 Workspace | **DataCoreStore 管理集合** | 索引器 `store["analysis"]` + Create/Destroy/Get/List |
+| 返回格式 | **统一 JSON：success/action/result/error/suggestion** | Agent 可直接解析，错误带 suggestion 可自动纠正 |
 
 ---
 
-### P0-2：Workspace 数据持久化
+## 三、已实现的 35 个 Tool
 
-**问题**：Workspace 全在内存里。应用重启后 derived 数据全部丢失。
+### 管理（3）
+- `workspace_create` — 创建命名 workspace
+- `workspace_destroy` — 销毁 workspace
+- `workspace_list` — 列出所有 workspace
 
-**期望行为**：
+### 加载（3）
+- `workspace_open` — 从 store 加载（**复制语义**，CSV 导出/导入）
+- `workspace_open_ref` — 从 store 加载（**零拷贝引用**，性能优先）
+- `workspace_import_csv` — 从 CSV 导入
 
-```csharp
-store.Workspace.Register("analysis", result, DataSource.Derived);
-store.Workspace.Persist("analysis");              // 写回 store（LiteDB）
-store.Workspace.Persist("analysis", "analysis_v2"); // 写回并重命名
+### 检视（4）
+- `workspace_describe` — 单个或全部数据集描述
+- `workspace_sample` — 查看样例行（支持 offset）
+- `workspace_schema` — 列 schema 详情
+- `workspace_statistics` — 统计摘要（min/max/mean/std/distinct/top）
 
-// 下次启动
-store.Workspace.Get("analysis");  // 从 store 自动加载
-```
+### 变换（9）
+- `workspace_filter` — 过滤（支持复杂表达式）
+- `workspace_select` — 选择列
+- `workspace_rename_columns` — 重命名列
+- `workspace_sort` — 排序
+- `workspace_distinct` — 去重
+- `workspace_add_column` — 新增计算列（支持三元表达式）
+- `workspace_drop_columns` — 删除列
+- `workspace_limit` — 限制行数（支持 offset）
+- `workspace_random_sample` — 随机采样（支持 seed）
 
-**实现要点**：
+### 组合（3）
+- `workspace_join` — Join（inner/left/right/full，支持 leftKey/rightKey）
+- `workspace_union` — 上下拼接
+- `workspace_cross` — 笛卡尔积
 
-- `Session.PersistDataset()` 已有类似逻辑但标记 `NotImplementedException`
-- `Session.CopyTabularData()` 通过 CSV 导出/导入复制数据，可以复用
-- `Session.CopyGraphData()` 通过节点/边遍历复制图数据，可以复用
-- Persist 后数据集的 source 应该从 `Derived` 变为 `Store`（或者保持 `Derived` 但标记 `persisted = true`）
-- 需要决定：Persist 后 workspace 里的引用是指向 store 的对象还是保持独立副本？
+### 聚合（3）
+- `workspace_aggregate` — Group by + 聚合（count/sum/mean/min/max/std）
+- `workspace_summarize` — 全局聚合
+- `workspace_count` — 快速计数（支持 filter）
 
-**参考文件**：
-- `Runtime/Session/Session.cs` — `PersistDataset()`、`CopyTabularData()`、`CopyGraphData()`
+### 持久化（3）
+- `workspace_save` — 推回 store
+- `workspace_export_csv` — 导出 CSV
+- `workspace_export_json` — 导出 JSON（records/columns/values 格式）
 
----
+### 修改（4）
+- `workspace_update` — 更新满足条件的行
+- `workspace_delete_rows` — 删除满足条件的行
+- `workspace_append` — 追加行
+- `workspace_clear` — 清空数据集
 
-### P1：Get() 引用语义明确化
-
-**问题**：`Workspace.Get("name")` 从 store 加载时直接引用 store 的对象（零拷贝）。修改一方影响另一方，这在 API 文档里没有说明，用户可能踩坑。
-
-**当前行为**：
-
-```csharp
-var wsUsers = store.Workspace.Get("Users");
-var storeUsers = store.GetTabular("Users");
-// ReferenceEquals(wsUsers, storeUsers) == true
-// 修改 wsUsers 会影响 storeUsers
-```
-
-**需要做的事**（选一个方向）：
-
-**方向 A：保持引用，文档明确**（推荐，性能优先）
-- 在 `IWorkspace.Get()` 的 XML 注释里明确说明是引用语义
-- 在 README 和示例里说明 "Get 返回 store 数据集的直接引用，修改会影响持久层"
-- 如果用户需要隔离副本，提供 `Clone()` 方法
-
-**方向 B：改为复制，隔离安全**（Session 的做法）
-- `Get()` 从 store 加载时做一次 CSV 导出/导入复制
-- 性能开销：大数据集会慢，但语义更安全
-- 需要清理 store 里不应该存在的临时副本
-
-**建议选方向 A**，因为：
-- Workspace 的定位是"桌面"，不是"沙箱"
-- 零拷贝性能好
-- `Clone()` 已经提供了显式复制的能力
-- 只需要在文档里说清楚
+### 元操作（5）
+- `workspace_clone` — 克隆数据集
+- `workspace_rename_dataset` — 重命名
+- `workspace_remove` — 从 workspace 移除
+- `workspace_search` — 搜索数据集名
+- `workspace_diff` — 比较两个数据集
 
 ---
 
-### P2：DataFrame 支持迁移
+## 四、Tool 调用模式
 
-**问题**：Session 有完整的 DataFrame 缓存和查询能力，Workspace 没有。Session 废弃后这些能力断层。
-
-**Session 的 DataFrame API**：
+### 调用方式
 
 ```csharp
-// Session 现有的
-session.CreateDataFrame("name");
-session.GetDataFrame("name");
-session.HasDataFrame("name");
-session.RemoveDataFrame("name");
-session.ExecuteDataFrameQuery("source", df => df.Filter(...), "result");
-session.ConvertToDataFrame("datasetName");
-session.GetDataFrameStatistics("name");
+// 静态入口
+DataCoreTools.Initialize(store);
+string json = DataCoreTools.Execute("workspace_filter", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["source"] = "Users",
+    ["filter"] = "age > 18 AND city == Shanghai",
+    ["resultName"] = "adults"
+});
+// 返回：{"success":true,"action":"workspace_filter","result":{...}}
 ```
 
-**需要决定**：
+### 参数类型
 
-**选项 A：Workspace 吸收 DataFrame**
-- 在 `IWorkspace` 上加 DataFrame 相关方法
-- Workspace 内部维护 `_dataFrameCache`（类似 Session）
-- 好处：统一入口
-- 坏处：Workspace 变复杂
+所有参数通过 `Dictionary<string, object>` 传入。支持：
+- `string` — 直接传
+- `int/bool` — 通过 `Convert.ToInt32/Convert.ToBoolean`
+- `string[]` — 通过 `JsonElement` 数组或 `IEnumerable<object>`
+- `Dictionary<string, string>` — 通过 `JsonElement` object
+- `List<Dictionary<string, object>>` — 行数据，通过 `JsonElement` 数组或 `IEnumerable<Dictionary>`
 
-**选项 B：DataFrame 独立为 DataCoreStore 级能力**
-- `store.DataFrame` 或 `store.DataFrameManager`
-- 与 Workspace 平级，不耦合
-- 好处：职责清晰
-- 坏处：用户需要知道两个入口
+### Filter 表达式语法
 
-**选项 C：暂不迁移，保留 Session 的 DataFrame 支持**
-- Session 标记 Obsolete 但不删除
-- DataFrame 仍在 Session 里用
-- 好处：最小改动
-- 坏处：两个"桌面"并存，用户困惑
+```
+比较: age > 18, score >= 90, name == Alice, status != inactive
+逻辑: AND, OR, NOT
+字符串: city contains Shang, name starts with A, name ends with ng
+空值: email is null, email is not null
+范围: age between 18 35
+集合: city in Shanghai Beijing Guangzhou
+括号: (age > 18 AND city == Shanghai) OR admin == true
+```
 
-**建议选 A 或 B**，不要选 C。
+### 返回值格式
+
+```json
+{
+  "success": true,
+  "action": "workspace_filter",
+  "result": {
+    "name": "adults",
+    "rows": 420,
+    "columns": 8,
+    "columnNames": ["id", "name", "age", ...],
+    "source": "Users",
+    "filter": "age > 18",
+    "sample": [{ "id": 1, "name": "Alice", "age": 25, ... }]
+  }
+}
+```
+
+错误时：
+```json
+{
+  "success": false,
+  "action": "workspace_filter",
+  "error": "Dataset 'nonexistent' not found on workspace 'analysis'",
+  "suggestion": "Available datasets: Users, Orders. Did you mean 'Users'?"
+}
+```
+
+---
+
+## 五、多 Workspace 支持
+
+```csharp
+// Store 级：管理 workspace 集合
+store.CreateWorkspace("analysis")       // 创建
+store.DestroyWorkspace("analysis")      // 销毁（不能销毁 default）
+store.GetWorkspace("analysis")          // 获取（不存在时自动创建）
+store.ListWorkspaces()                  // 列出所有
+
+// 索引器
+store["analysis"]                       // 等价于 GetWorkspace
+
+// 默认 workspace（向后兼容）
+store.Workspace                         // 等价于 store["default"]
+```
+
+Tool 调用时通过 `workspace` 参数指定：
+```
+workspace_filter(workspace: "analysis", source: "Users", filter: "age > 18", resultName: "adults")
+```
+
+---
+
+## 六、已修复的 Bug
+
+### LiteDB CSV 导出双重引号
+
+**问题**：`LiteDbTabularDataset.ExportToCsv()` 调用 `BsonValue.ToString()` 导出字符串值，但 `BsonValue.ToString()` 对字符串返回 `"Shanghai"`（带引号），导致 CSV 中出现 `""Shanghai""`，导入后值变成 `"Shanghai"`（带引号的字符串）。
+
+**修复**：`Runtime/LiteDb/LiteDbTabularDataset.cs` 的 `ExportToCsv` 方法中，对字符串类型使用 `value.AsString` 而非 `value.ToString()`。
+
+---
+
+## 七、架构决策记录（保留自上次交接）
+
+### 已决定
+
+| 决策 | 理由 |
+|------|------|
+| Workspace 替代 Session 作为默认桌面 | Session 需要手动创建，不是自然到达的 |
+| SessionManager 标记 `[Obsolete]` 但保留 | 给老用户迁移窗口 |
+| `Has()` 只查 workspace，不查 store | 避免 Rename 后语义混乱 |
+| `DescribeAll` 懒缓存 + 脏标记 | 避免每次调用都遍历所有数据集 |
+| `WorkspaceRetentionPolicy.Auto`：≥100K 行走弱引用 | 防止大 join 结果吃光内存 |
+| Workspace 不拥有 store 数据集的生命周期 | Dispose 时只释放 derived/imported |
+
+### 待决定（留给下一个 Agent）
+
+| 决策 | 选项 | 建议 |
+|------|------|------|
+| DataFrame 放哪里 | A: Workspace 吸收 / B: 独立为 Store 级 / C: 保留在 Session | A 或 B，不要 C |
+| Persist 后 source 标记 | A: 变为 Store / B: 保持 Derived + persisted | 当前实现为 A |
+
+---
+
+## 八、需要你实现的（Phase 2-6）
+
+### Phase 2：DataFrame 支持（P2）
+
+Session 有完整的 DataFrame 缓存和查询能力，Workspace 没有。需要决定 DataFrame 放在哪里。
 
 **参考文件**：
 - `Runtime/Session/Session.cs` — `#region DataFrame Support Methods`
@@ -178,81 +253,66 @@ session.GetDataFrameStatistics("name");
 - `Runtime/Session/SessionDataFrameQueryBuilder.cs`
 - `Runtime/Session/DataFrameMemoryManager.cs`
 
----
+### Phase 3：Editor 集成（P2）
 
-### P2：Editor 集成
-
-**问题**：`DataCoreEditorComponent` 和 `DataCorePreviewWindow` 只显示 store 的数据集。Workspace 里的 derived 数据在 Inspector 里看不见。
+`DataCoreEditorComponent` 和 `DataCorePreviewWindow` 只显示 store 的数据集。Workspace 里的 derived 数据在 Inspector 里看不见。
 
 **需要做的事**：
-
-1. **DataCoreEditorComponent** — Inspector 面板显示 Workspace 内容
-   - 分区显示：Store 数据集 / Workspace 数据集
-   - 每个数据集显示 source 标记（Store / Derived / Imported）
-   - 支持 Remove / Clear 操作
-
-2. **DataCorePreviewWindow** — 预览窗口支持 Workspace 数据集
-   - 点击 Workspace 数据集可以预览
-   - 显示 schema、行数、样例数据
-
-3. **创建按钮** — 支持从 Editor 创建 Workspace 数据集
-   - "Import to Workspace" 按钮
-   - 选择 source 类型
+1. DataCoreEditorComponent — Inspector 面板显示 Workspace 内容（分区显示 Store/Workspace）
+2. DataCorePreviewWindow — 预览窗口支持 Workspace 数据集
+3. 创建按钮 — 支持从 Editor 创建 Workspace 数据集
 
 **参考文件**：
 - `Runtime/DataCoreEditorComponent.cs`
 - `Runtime/Editor/DataCorePreviewWindow.cs`（如果存在）
 
----
+### Phase 4：图数据 Tool 支持（P2）
 
-## 三、架构决策记录
+当前 35 个 tool 只覆盖了表格数据。图数据的 tool 还需要实现：
+- `workspace_open_graph`
+- `workspace_add_nodes`
+- `workspace_add_edges`
+- `workspace_graph_neighbors`
+- `workspace_describe_graph`
 
-### 已决定
+### Phase 5：Tool Schema 暴露（P1）
 
-| 决策 | 理由 |
-|------|------|
-| Workspace 替代 Session 作为默认桌面 | Session 需要手动创建，不是自然到达的 |
-| SessionManager 标记 `[Obsolete]` 但保留 | 给老用户迁移窗口 |
-| `Has()` 只查 workspace，不查 store | 避免 Rename 后语义混乱；用 `TryPeek()` / `AllNames` 查全部 |
-| `DescribeAll` 懒缓存 + 脏标记 | 避免每次调用都遍历所有数据集 |
-| `WorkspaceRetentionPolicy.Auto`：≥100K 行走弱引用 | 防止大 join 结果吃光内存 |
-| Workspace 不拥有 store 数据集的生命周期 | Dispose 时只释放 derived/imported，不释放 store 数据集 |
+当前 `DataCoreTools.GetToolSchemas()` 还未实现。需要为每个 tool 生成标准的 JSON Schema，供 Agent 框架自动注册。
 
-### 待决定（留给下一个 Agent）
+### Phase 6：性能优化（P3）
 
-| 决策 | 选项 |
-|------|------|
-| Get() 引用 vs 复制 | A: 引用+文档明确 / B: 复制+隔离 |
-| DataFrame 放哪里 | A: Workspace 吸收 / B: 独立为 Store 级 / C: 保留在 Session |
-| 查询结果自动落地的方式 | A: ITabularQuery 新方法 / B: Workspace 查询入口 |
-| Persist 后 source 标记是否变化 | A: 变为 Store / B: 保持 Derived + persisted 标记 |
+- `workspace_open` 的 CSV 复制对大数据集可能很慢，考虑用 `Clone()` 或内存共享
+- `workspace_join` 用的是嵌套循环，大数据集需要 Hash Join 优化
+- Filter 表达式解析器可以缓存编译后的谓词
 
 ---
 
-## 四、代码约定
+## 九、代码约定
 
-- **命名空间**：`AroAro.DataCore.Workspace`
+- **命名空间**：`AroAro.DataCore.Tools`（Tool 层）、`AroAro.DataCore.Workspace`（Workspace）
 - **测试框架**：xUnit（不是 NUnit）
 - **测试隔离**：每个测试用独立的 `DataCoreStore`（独立 LiteDB 文件 + 临时目录），`Dispose` 里清理
-- **Unity .meta 文件**：`Runtime/` 下每个新文件都需要 `.meta`（GUID 随机生成）
+- **Unity .meta 文件**：`Runtime/` 下每个新文件都需要 `.meta`（GUID 随机生成）— **Phase 1 新增的 3 个文件还没有 .meta**
 - **编译验证**：`dotnet build` 在 `DataCore.Tests~/` 目录下运行
-- **测试验证**：`dotnet test --filter "FullyQualifiedName~WorkspaceTests"` 运行 workspace 测试，`dotnet test` 运行全部
+- **测试验证**：`dotnet test --filter "FullyQualifiedName~DataCoreToolsTests"` 运行 tool 测试，`dotnet test` 运行全部
 
 ---
 
-## 五、风险提示
+## 十、风险提示
 
-1. **LiteDB `WithName` 不可用** — `LiteDbTabularDataset.WithName()` 会抛 `NotSupportedException`。Workspace 的 `Clone()` 和 `Rename()` 已经绕开了它（Clone 用 CSV 导出/导入，Rename 只移动字典键）。如果新功能需要复制 LiteDB 数据集，用 CSV 导出/导入或遍历复制，**不要用 `WithName`**。
+1. **Workspace `Get` 回退到 store** — 当前 `ws.Get("name")` 优先查 workspace slots，找不到时回退到 store（零拷贝引用）。这意味着 `workspace_open` 注册了复制，但后续 `Get` 可能返回 store 的原始数据（如果注册失败或被覆盖）。建议后续改为 `Get` 只查 workspace，`Open` 才从 store 加载。
 
-2. **测试共享 LiteDB 状态** — 默认 `DataCoreStore()` 用共享的 LiteDB 文件。不同测试之间的数据会互相污染。每个测试必须用独立路径：`new DataCoreStore(Path.Combine(tmpDir, "test.db"))`。
+2. **Filter 表达式解析器没有转义支持** — 如果列名或值包含特殊字符（如 `AND`、`OR`），解析器可能误判。当前通过大小写区分关键字（`and` vs `AND`），但不完美。
 
-3. **事件系统是静态的** — `DataCoreEventManager` 用静态字段存事件订阅。如果测试之间不清理，会互相影响。测试 `Dispose` 里调用 `DataCoreEventManager.ClearAllSubscriptions()`。
+3. **`workspace_add_column` 的表达式引擎** — 只支持简单的算术和三元表达式，复杂场景（函数调用、嵌套三元）不支持。
 
-4. **package.json 版本号** — 当前是 `0.5.0`。如果下一个 agent 的改动是 breaking change，考虑 bump 到 `0.6.0`。
+4. **Tool 参数没有 Schema 验证** — 当前直接从 `Dictionary<string, object>` 取值，类型不匹配时抛异常。建议后续加 JSON Schema 验证层。
+
+5. **.meta 文件缺失** — `Runtime/Tools/` 下的 3 个新文件没有 Unity .meta 文件，Unity 导入时会自动生成，但 GUID 不可控。建议手动生成。
 
 ---
 
-## 六、快速上手
+## 十一、快速上手
 
 ```bash
 # 克隆
@@ -263,13 +323,16 @@ git checkout feature/workspace
 # 编译
 cd DataCore.Tests~ && dotnet build
 
-# 跑 workspace 测试
-dotnet test --filter "FullyQualifiedName~WorkspaceTests"
+# 跑 tool 测试
+dotnet test --filter "FullyQualifiedName~DataCoreToolsTests"
 
 # 跑全部测试
 dotnet test
+
+# 跑 workspace 测试
+dotnet test --filter "FullyQualifiedName~WorkspaceTests"
 ```
 
 ---
 
-**祝你好运。代码是干净的，测试是绿的，方向是清楚的。去吧。**
+**Phase 1 完成。代码是干净的，测试是绿的，35 个 tool 已就绪。下一步是 DataFrame、Editor 集成或图数据 tool。去吧。**
