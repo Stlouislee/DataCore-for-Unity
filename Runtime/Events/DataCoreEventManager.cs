@@ -32,6 +32,8 @@ namespace AroAro.DataCore.Events
         private static EventHandler<AlgorithmCompletedEventArgs> _algorithmCompleted;
         private static EventHandler<PipelineCompletedEventArgs> _pipelineCompleted;
 
+        private static EventHandler<WorkspaceDatasetRegisteredEventArgs> _workspaceDatasetRegistered;
+
         // ── 订阅（CAS loop） ──────────────────────────────────────────
 
         public static void SubscribeDatasetCreated(EventHandler<DatasetCreatedEventArgs> handler)
@@ -118,6 +120,11 @@ namespace AroAro.DataCore.Events
             => Subscribe(ref _pipelineCompleted, handler);
         public static void UnsubscribePipelineCompleted(EventHandler<PipelineCompletedEventArgs> handler)
             => Unsubscribe(ref _pipelineCompleted, handler);
+
+        public static void SubscribeWorkspaceDatasetRegistered(EventHandler<WorkspaceDatasetRegisteredEventArgs> handler)
+            => Subscribe(ref _workspaceDatasetRegistered, handler);
+        public static void UnsubscribeWorkspaceDatasetRegistered(EventHandler<WorkspaceDatasetRegisteredEventArgs> handler)
+            => Unsubscribe(ref _workspaceDatasetRegistered, handler);
 
         // ── 触发事件（原子快照） ──────────────────────────────────────
 
@@ -232,6 +239,12 @@ namespace AroAro.DataCore.Events
                 pipelineName, stepCount, success, duration, failedStepIndex));
         }
 
+        public static void RaiseWorkspaceDatasetRegistered(Workspace.IWorkspace workspace, IDataSet dataset)
+        {
+            var handler = Volatile.Read(ref _workspaceDatasetRegistered);
+            handler?.Invoke(null, new WorkspaceDatasetRegisteredEventArgs(workspace, dataset));
+        }
+
         // ── 清除所有订阅（原子操作） ─────────────────────────────────
 
         public static void ClearAllSubscriptions()
@@ -253,6 +266,7 @@ namespace AroAro.DataCore.Events
             Interlocked.Exchange(ref _algorithmStarted, null);
             Interlocked.Exchange(ref _algorithmCompleted, null);
             Interlocked.Exchange(ref _pipelineCompleted, null);
+            Interlocked.Exchange(ref _workspaceDatasetRegistered, null);
         }
 
         // ── 辅助方法 ─────────────────────────────────────────────────

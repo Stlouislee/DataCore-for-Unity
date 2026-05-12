@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AroAro.DataCore.Events;
 using AroAro.DataCore.Session;
+using AroAro.DataCore.Workspace;
 
 namespace AroAro.DataCore
 {
@@ -44,6 +45,7 @@ namespace AroAro.DataCore
         {
             _store = DataStoreFactory.Create(dbPath);
             _sessionManager = new Lazy<SessionManager>(() => new SessionManager(this));
+            Workspace = new Workspace.Workspace(this);
         }
 
         /// <summary>
@@ -54,7 +56,13 @@ namespace AroAro.DataCore
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _sessionManager = new Lazy<SessionManager>(() => new SessionManager(this));
+            Workspace = new Workspace.Workspace(this);
         }
+
+        /// <summary>
+        /// 统一内存工作区 — 构造即存在，永远可用。
+        /// </summary>
+        public IWorkspace Workspace { get; }
 
         /// <summary>
         /// 底层数据存储
@@ -94,6 +102,7 @@ namespace AroAro.DataCore
         /// <summary>
         /// 会话管理器
         /// </summary>
+        [Obsolete("Use Workspace instead. SessionManager will be removed in a future version.")]
         public SessionManager SessionManager => _sessionManager.Value;
 
         #region 创建数据集
@@ -430,6 +439,7 @@ namespace AroAro.DataCore
         {
             if (_disposed) return;
             
+            Workspace?.Dispose();
             if (_sessionManager.IsValueCreated)
                 _sessionManager.Value.CloseAllSessions();
             _store?.Dispose();
