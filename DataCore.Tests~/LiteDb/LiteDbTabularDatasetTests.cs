@@ -5,7 +5,7 @@ using System.Linq;
 using AroAro.DataCore;
 using AroAro.DataCore.LiteDb;
 using LiteDB;
-using NumSharp;
+
 using Xunit;
 
 namespace DataCore.Tests.LiteDb
@@ -294,8 +294,8 @@ namespace DataCore.Tests.LiteDb
 
             Assert.Equal(3, ds.RowCount);
             // Verify the remaining values are correct via column read
-            var col = ds.GetNumericColumn("val");
-            Assert.Equal(3, col.size);
+            var col = ds.GetNumericColumnRaw("val");
+            Assert.Equal(3, col.Length);
         }
 
         [Fact]
@@ -476,19 +476,17 @@ namespace DataCore.Tests.LiteDb
         }
 
         [Fact]
-        public void AddNumericColumn_NDArray_Works()
+        public void AddNumericColumn_DoubleArray_Works()
         {
             var ds = CreateDataset();
-            var arr = np.array(new double[] { 1.5, 2.5, 3.5 });
 
-            ds.AddNumericColumn("nd", arr);
+            ds.AddNumericColumn("values", new double[] { 1.5, 2.5, 3.5 });
 
             Assert.Equal(3, ds.RowCount);
-            var col = ds.GetNumericColumn("nd");
-            // NDArray indexer returns NDArray, use GetDouble() to extract scalar
-            Assert.Equal(1.5, col.GetDouble(0));
-            Assert.Equal(2.5, col.GetDouble(1));
-            Assert.Equal(3.5, col.GetDouble(2));
+            var col = ds.GetNumericColumnRaw("values");
+            Assert.Equal(1.5, col[0]);
+            Assert.Equal(2.5, col[1]);
+            Assert.Equal(3.5, col[2]);
         }
 
         #endregion
@@ -537,9 +535,9 @@ namespace DataCore.Tests.LiteDb
             var ds = CreateDataset();
             ds.AddNumericColumn("temps", new double[] { 36.5, 37.2, 38.1 });
 
-            var result = ds.GetNumericColumn("temps");
+            var result = ds.GetNumericColumnRaw("temps");
 
-            Assert.Equal(3, result.size);
+            Assert.Equal(3, result.Length);
             Assert.Equal(36.5, (double)result[0]);
             Assert.Equal(37.2, (double)result[1]);
             Assert.Equal(38.1, (double)result[2]);
@@ -564,7 +562,7 @@ namespace DataCore.Tests.LiteDb
         {
             var ds = CreateDataset();
 
-            Assert.Throws<KeyNotFoundException>(() => ds.GetNumericColumn("ghost"));
+            Assert.Throws<KeyNotFoundException>(() => ds.GetNumericColumnRaw("ghost"));
         }
 
         [Fact]
@@ -604,7 +602,7 @@ namespace DataCore.Tests.LiteDb
             Assert.True(ds.HasColumn("Name"));
             Assert.True(ds.HasColumn("Age"));
             var names = ds.GetStringColumn("Name");
-            var ages = ds.GetNumericColumn("Age");
+            var ages = ds.GetNumericColumnRaw("Age");
             Assert.Equal("Alice", names[0].ToString());
             Assert.Equal(30.0, (double)ages[0]);
         }
@@ -672,7 +670,7 @@ namespace DataCore.Tests.LiteDb
 
             ds.ImportFromCsv(csv);
 
-            var col = ds.GetNumericColumn("val");
+            var col = ds.GetNumericColumnRaw("val");
             Assert.Equal((object)10.0, col[0]);
             Assert.True(double.IsNaN(col[1]), "Non-numeric value in a numeric column should be NaN");
             Assert.Equal((object)30.0, col[2]);
@@ -701,7 +699,7 @@ namespace DataCore.Tests.LiteDb
 
             Assert.Equal(3, ds2.RowCount);
             Assert.Equal((object)"Alice", ds2.GetStringColumn("Name")[0]);
-            Assert.Equal((object)95.5, ds2.GetNumericColumn("Score")[0]);
+            Assert.Equal((object)95.5, ds2.GetNumericColumnRaw("Score")[0]);
         }
 
         [Fact]
@@ -892,7 +890,7 @@ namespace DataCore.Tests.LiteDb
             Assert.False(ds.HasColumn("a"));
             Assert.True(ds.HasColumn("b"));
 
-            var colB = ds.GetNumericColumn("b");
+            var colB = ds.GetNumericColumnRaw("b");
             Assert.Equal((object)10.0, colB[0]);
             Assert.Equal((object)20.0, colB[1]);
         }
@@ -1053,7 +1051,7 @@ namespace DataCore.Tests.LiteDb
             Assert.True(ds2.HasColumn("grade"));
 
             // Verify data integrity
-            var scores = ds2.GetNumericColumn("score");
+            var scores = ds2.GetNumericColumnRaw("score");
             Assert.Equal(10.0, (double)scores[0]);
             Assert.Equal(50.0, (double)scores[4]);
             Assert.Equal(100.0, (double)scores[9]);

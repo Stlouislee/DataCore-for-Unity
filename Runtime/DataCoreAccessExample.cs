@@ -23,7 +23,7 @@ namespace AroAro.DataCore
 
             // Example: Create and populate a tabular dataset
             var myData = store.CreateTabular("player-stats");
-            myData.AddNumericColumn("score", NumSharp.np.array(new double[] { 100, 200, 300 }));
+            myData.AddNumericColumn("score", new double[] { 100, 200, 300 });
             myData.AddStringColumn("name", new[] { "Alice", "Bob", "Charlie" });
 
             Debug.Log($"Created dataset with {myData.RowCount} rows");

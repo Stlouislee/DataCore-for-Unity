@@ -121,7 +121,7 @@ namespace AroAro.DataCore.Tests
                 var session = sessionManager.CreateSession("ConversionTest");
 
                 var tabular = session.CreateDataset("TabularSource", DataSetKind.Tabular) as Tabular.TabularData;
-                tabular.AddNumericColumn("x", NumSharp.np.array(new double[] { 1, 2, 3 }));
+                tabular.AddNumericColumn("x", new double[] { 1, 2, 3 });
                 tabular.AddStringColumn("s", new string[] { "a", "b", "c" });
 
                 var df = session.ConvertToDataFrame("TabularSource");

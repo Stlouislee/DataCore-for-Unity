@@ -257,7 +257,7 @@ namespace AroAro.DataCore
                 if (!result.Success) throw new Exception($"MinMaxNormalize failed: {result.Error}");
 
                 var output = result.OutputDataset as ITabularDataset;
-                var normalized = output.GetNumericColumn("values").ToArray<double>();
+                var normalized = output.GetNumericColumnRaw("values");
                 if (Math.Abs(normalized[0]) > 1e-10) throw new Exception($"Min should be 0, got {normalized[0]}");
                 if (Math.Abs(normalized[4] - 1.0) > 1e-10) throw new Exception($"Max should be 1, got {normalized[4]}");
                 if (output.GetStringColumn("labels")[0] != "a") throw new Exception("String column not preserved");

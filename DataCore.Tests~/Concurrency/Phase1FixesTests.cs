@@ -188,8 +188,8 @@ namespace DataCore.Tests.Concurrency
                 {
                     try
                     {
-                        var col = tabular.GetNumericColumn("x");
-                        readResults.Add(col.ToArray<double>());
+                        var col = tabular.GetNumericColumnRaw("x");
+                        readResults.Add(col);
                     }
                     catch (Exception ex)
                     {

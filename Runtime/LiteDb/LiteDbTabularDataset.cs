@@ -167,6 +167,7 @@ namespace AroAro.DataCore.LiteDb
             DataCoreEventManager.RaiseDatasetModified(this, "AddNumericColumn", name);
         }
 
+        [Obsolete("Use AddNumericColumn(name, double[]) instead. Will be removed in v1.0.")]
         public void AddNumericColumn(string name, NDArray data)
         {
             if (data == null)
@@ -253,7 +254,16 @@ namespace AroAro.DataCore.LiteDb
             return _metadata.Columns.Any(c => c.Name == name);
         }
 
+        [Obsolete("Use GetNumericColumnRaw(name) instead. Will be removed in v1.0.")]
         public NDArray GetNumericColumn(string name)
+        {
+            return np.array(GetNumericColumnRaw(name));
+        }
+
+        /// <summary>
+        /// 获取原始 double[] 数组（无克隆，无包装）
+        /// </summary>
+        public double[] GetNumericColumnRaw(string name)
         {
             ThrowIfDisposed();
             if (!HasColumn(name))
@@ -268,7 +278,7 @@ namespace AroAro.DataCore.LiteDb
                     .ToArray();
             }
 
-            return np.array(data);
+            return data;
         }
 
         public string[] GetStringColumn(string name)
@@ -736,11 +746,56 @@ namespace AroAro.DataCore.LiteDb
 
         #region 统计函数
 
-        public double Sum(string column) => GetNumericColumn(column).sum().GetDouble(0);
-        public double Mean(string column) => GetNumericColumn(column).mean().GetDouble(0);
-        public double Max(string column) => GetNumericColumn(column).max().GetDouble(0);
-        public double Min(string column) => GetNumericColumn(column).min().GetDouble(0);
-        public double Std(string column) => GetNumericColumn(column).std().GetDouble(0);
+        public double Sum(string column)
+        {
+            var data = GetNumericColumnRaw(column);
+            double sum = 0;
+            for (int i = 0; i < data.Length; i++) sum += data[i];
+            return sum;
+        }
+
+        public double Mean(string column)
+        {
+            var data = GetNumericColumnRaw(column);
+            if (data.Length == 0) return 0;
+            double sum = 0;
+            for (int i = 0; i < data.Length; i++) sum += data[i];
+            return sum / data.Length;
+        }
+
+        public double Max(string column)
+        {
+            var data = GetNumericColumnRaw(column);
+            if (data.Length == 0) return 0;
+            double max = double.MinValue;
+            for (int i = 0; i < data.Length; i++) { if (data[i] > max) max = data[i]; }
+            return max;
+        }
+
+        public double Min(string column)
+        {
+            var data = GetNumericColumnRaw(column);
+            if (data.Length == 0) return 0;
+            double min = double.MaxValue;
+            for (int i = 0; i < data.Length; i++) { if (data[i] < min) min = data[i]; }
+            return min;
+        }
+
+        public double Std(string column)
+        {
+            var data = GetNumericColumnRaw(column);
+            if (data.Length < 2) return 0;
+            double sum = 0;
+            for (int i = 0; i < data.Length; i++) sum += data[i];
+            var mean = sum / data.Length;
+            double sumSquares = 0;
+            for (int i = 0; i < data.Length; i++)
+            {
+                var d = data[i] - mean;
+                sumSquares += d * d;
+            }
+            return Math.Sqrt(sumSquares / (data.Length - 1)); // Bessel correction
+        }
 
         #endregion
 

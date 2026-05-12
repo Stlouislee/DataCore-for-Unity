@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using NumSharp;
 using AroAro.DataCore.Events;
 
 namespace AroAro.DataCore.SampleDatasets

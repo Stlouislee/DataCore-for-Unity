@@ -79,6 +79,7 @@ namespace AroAro.DataCore.Tabular
             _rowCount = data.Length;
         }
 
+        [Obsolete("Use AddNumericColumn(name, double[]) instead. Will be removed in v1.0.")]
         public void AddNumericColumn(string name, NDArray data)
         {
             if (string.IsNullOrEmpty(name))
@@ -126,17 +127,16 @@ namespace AroAro.DataCore.Tabular
 
         public bool HasColumn(string name) => _columnNames.Contains(name);
 
+        [Obsolete("Use GetNumericColumnRaw(name) instead. Will be removed in v1.0.")]
         public NDArray GetNumericColumn(string name)
         {
-            if (!_numericData.TryGetValue(name, out var data))
-                throw new KeyNotFoundException($"Numeric column '{name}' not found");
-            return np.array((double[])data.Clone());
+            return np.array(GetNumericColumnRaw(name));
         }
 
         /// <summary>
-        /// 获取数值列的原始 double[] 数组（避免 NDArray 转换开销）
+        /// 获取原始 double[] 数组（无克隆，无包装）
         /// </summary>
-        internal double[] GetNumericColumnRaw(string name)
+        public double[] GetNumericColumnRaw(string name)
         {
             if (!_numericData.TryGetValue(name, out var data))
                 throw new KeyNotFoundException($"Numeric column '{name}' not found");
@@ -499,8 +499,8 @@ namespace AroAro.DataCore.Tabular
         public double Std(string columnName)
         {
             var data = GetNumericColumnRaw(columnName);
-            if (data.Length == 0) return 0;
-            
+            if (data.Length < 2) return 0;
+
             double sum = 0;
             for (int i = 0; i < data.Length; i++) sum += data[i];
             var mean = sum / data.Length;
@@ -511,7 +511,7 @@ namespace AroAro.DataCore.Tabular
                 var d = data[i] - mean;
                 sumSquares += d * d;
             }
-            return Math.Sqrt(sumSquares / data.Length);
+            return Math.Sqrt(sumSquares / (data.Length - 1)); // Bessel correction
         }
 
         public int[] Where(string column, QueryOp op, object value)

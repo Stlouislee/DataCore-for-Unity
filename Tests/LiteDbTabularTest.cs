@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
-using NumSharp;
 using UnityEngine;
 
 namespace AroAro.DataCore.Tests
@@ -39,9 +38,9 @@ namespace AroAro.DataCore.Tests
             Assert.That(table.HasColumn("score"), Is.True, "Should have 'score' column");
             Assert.That(table.HasColumn("name"), Is.True, "Should have 'name' column");
 
-            var scores = table.GetNumericColumn("score");
-            Assert.That(scores.size, Is.EqualTo(3), "Score array size should be 3");
-            Assert.That(Math.Abs(scores.GetDouble(0) - 100), Is.LessThan(0.001), "First score should be 100");
+            var scores = table.GetNumericColumnRaw("score");
+            Assert.That(scores.Length, Is.EqualTo(3), "Score array size should be 3");
+            Assert.That(Math.Abs(scores[0] - 100), Is.LessThan(0.001), "First score should be 100");
 
             var names = table.GetStringColumn("name");
             Assert.That(names.Length, Is.EqualTo(3), "Name array length should be 3");
@@ -66,8 +65,7 @@ namespace AroAro.DataCore.Tests
             using var store = DataStoreFactory.CreateLiteDb(dbPath);
             var table = store.CreateTabular("column-test");
 
-            var arr = np.array(new double[] { 1.5, 2.5, 3.5, 4.5 });
-            table.AddNumericColumn("values", arr);
+            table.AddNumericColumn("values", new double[] { 1.5, 2.5, 3.5, 4.5 });
 
             Assert.That(table.RowCount, Is.EqualTo(4), "Should have 4 rows");
             Assert.That(table.GetColumnType("values"), Is.EqualTo(ColumnType.Numeric), "Should be numeric type");
@@ -185,8 +183,8 @@ Dave,28,85.0";
             Assert.That(table.RowCount, Is.EqualTo(4), "Should have 4 rows");
             Assert.That(table.ColumnCount, Is.EqualTo(3), "Should have 3 columns");
 
-            var ages = table.GetNumericColumn("Age");
-            Assert.That(Math.Abs(ages.GetDouble(0) - 30), Is.LessThan(0.001), "First age should be 30");
+            var ages = table.GetNumericColumnRaw("Age");
+            Assert.That(Math.Abs(ages[0] - 30), Is.LessThan(0.001), "First age should be 30");
 
             var exported = table.ExportToCsv();
             Assert.That(exported.Contains("Alice"), Is.True, "Export should contain Alice");

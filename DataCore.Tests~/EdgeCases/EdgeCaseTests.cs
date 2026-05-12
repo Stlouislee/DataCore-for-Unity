@@ -50,7 +50,7 @@ namespace DataCore.Tests
             ds.AddNumericColumn("values", new double[] { 1.0, double.NaN, 3.0, double.PositiveInfinity, double.NegativeInfinity });
 
             Assert.Equal(5, ds.RowCount);
-            var col = ds.GetNumericColumn("values");
+            var col = ds.GetNumericColumnRaw("values");
             Assert.Equal(1.0, (double)col[0]);
             Assert.True(double.IsNaN((double)col[1]));
             Assert.Equal(3.0, (double)col[2]);
@@ -115,7 +115,7 @@ namespace DataCore.Tests
 
             Assert.Equal(1, ds.RowCount);
             Assert.Null(ds.GetStringColumn("name")[0]);
-            Assert.Equal(42.0, (double)ds.GetNumericColumn("val")[0]);
+            Assert.Equal(42.0, (double)ds.GetNumericColumnRaw("val")[0]);
         }
 
         [Fact]

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Analysis;
-using NumSharp;
 
 namespace AroAro.DataCore.Session
 {
@@ -26,8 +25,7 @@ namespace AroAro.DataCore.Session
                 try
                 {
                     // 优先尝试数值列
-                    var numericData = tabular.GetNumericColumn(columnName);
-                    var doubleData = numericData.ToArray<double>();
+                    var doubleData = tabular.GetNumericColumnRaw(columnName);
                     df.Columns.Add(new DoubleDataFrameColumn(columnName, doubleData));
                 }
                 catch
@@ -67,17 +65,17 @@ namespace AroAro.DataCore.Session
                     if (column is PrimitiveDataFrameColumn<double> doubleColumn)
                     {
                         var values = doubleColumn.ToArray();
-                        tabular.AddNumericColumn(column.Name, np.array(values));
+                        tabular.AddNumericColumn(column.Name, values);
                     }
                     else if (column is PrimitiveDataFrameColumn<float> floatColumn)
                     {
                         var values = floatColumn.ToArray().Select(v => (double)v).ToArray();
-                        tabular.AddNumericColumn(column.Name, np.array(values));
+                        tabular.AddNumericColumn(column.Name, values);
                     }
                     else if (column is PrimitiveDataFrameColumn<int> intColumn)
                     {
                         var values = intColumn.ToArray().Select(v => (double)v).ToArray();
-                        tabular.AddNumericColumn(column.Name, np.array(values));
+                        tabular.AddNumericColumn(column.Name, values);
                     }
                     else if (column is StringDataFrameColumn stringColumn)
                     {
