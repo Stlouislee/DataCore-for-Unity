@@ -457,6 +457,94 @@ namespace AroAro.DataCore
             return _store.SessionManager;
         }
 
+        // ────────────────────────────────────────────────────────────
+        // Workspace 集成 (Phase 3)
+        // ────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// 获取默认工作区
+        /// </summary>
+        public Workspace.IWorkspace GetWorkspace()
+        {
+            InitializeStore();
+            return _store.Workspace;
+        }
+
+        /// <summary>
+        /// 获取指定名称的工作区
+        /// </summary>
+        public Workspace.IWorkspace GetWorkspace(string name)
+        {
+            InitializeStore();
+            return _store.GetWorkspace(name);
+        }
+
+        /// <summary>
+        /// 获取工作区中的数据集名称
+        /// </summary>
+        public IEnumerable<string> GetWorkspaceDatasetNames()
+        {
+            return GetWorkspace().DatasetNames;
+        }
+
+        /// <summary>
+        /// 获取工作区中的数据集
+        /// </summary>
+        public IDataSet GetWorkspaceDataset(string name)
+        {
+            try
+            {
+                return GetWorkspace().Get(name);
+            }
+            catch (KeyNotFoundException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 获取完整的数据集视图（Store + Workspace），按来源分组
+        /// 返回 (Name, Kind, Source) 三元组列表
+        /// </summary>
+        public List<(string Name, DataSetKind Kind, string Source)> GetAllDatasetViews()
+        {
+            InitializeStore();
+            var views = new List<(string Name, DataSetKind Kind, string Source)>();
+
+            // Store 数据集
+            foreach (var name in _store.Names)
+            {
+                if (_store.TryGet(name, out var ds))
+                    views.Add((name, ds.Kind, "Store"));
+            }
+
+            // Workspace 数据集（排除已在 Store 中的）
+            var ws = _store.Workspace;
+            foreach (var entry in ws.DescribeAll())
+            {
+                if (entry.Source != Workspace.DataSource.Store)
+                    views.Add((entry.Name, entry.Kind, $"Workspace ({entry.Source})"));
+            }
+
+            return views;
+        }
+
+        /// <summary>
+        /// 将 Store 中的数据集加载到 Workspace
+        /// </summary>
+        public IDataSet LoadToWorkspace(string datasetName, string copyName = null)
+        {
+            InitializeStore();
+            var ws = _store.Workspace;
+            var ds = ws.Get(datasetName); // triggers load from store
+            if (copyName != null && copyName != datasetName)
+            {
+                ws.Register(copyName, ds, Workspace.DataSource.Imported);
+                return ws.Get(copyName);
+            }
+            return ds;
+        }
+
         #region Editor Setup
 
         private void Reset()

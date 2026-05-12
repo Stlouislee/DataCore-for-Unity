@@ -4,6 +4,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using AroAro.DataCore.Session;
+using AroAro.DataCore.Workspace;
 
 namespace AroAro.DataCore.Editor
 {
@@ -13,8 +14,10 @@ namespace AroAro.DataCore.Editor
         private DataCoreEditorComponent component;
         private Vector2 scrollPosition;
         private bool showDatasets = true;
+        private bool showWorkspaceDatasets = true;
         private Dictionary<string, bool> datasetFoldouts = new Dictionary<string, bool>();
         private Dictionary<string, bool> datasetPreviewFoldouts = new Dictionary<string, bool>();
+        private Dictionary<string, bool> wsDatasetFoldouts = new Dictionary<string, bool>();
         
         // CSV 导入相关字段
         private string csvFilePath = "";
@@ -54,6 +57,9 @@ namespace AroAro.DataCore.Editor
 
             // 数据集管理
             DrawDatasetsSection();
+
+            // Workspace 数据集
+            DrawWorkspaceDatasetsSection();
             
             // CSV 导入
             DrawCsvImportSection();
@@ -132,6 +138,92 @@ namespace AroAro.DataCore.Editor
                 
                 EditorGUI.indentLevel--;
             }
+        }
+
+        private void DrawWorkspaceDatasetsSection()
+        {
+            showWorkspaceDatasets = EditorGUILayout.Foldout(showWorkspaceDatasets, "Workspace Datasets", true);
+
+            if (!showWorkspaceDatasets) return;
+
+            EditorGUI.indentLevel++;
+
+            IWorkspace ws = null;
+            IReadOnlyList<WorkspaceEntry> entries = null;
+
+            try
+            {
+                ws = component.GetWorkspace();
+                entries = ws.DescribeAll();
+            }
+            catch (Exception ex)
+            {
+                EditorGUILayout.HelpBox($"Workspace error: {ex.Message}", MessageType.Warning);
+                EditorGUI.indentLevel--;
+                return;
+            }
+
+            // Filter to workspace-only datasets (not from store)
+            var wsEntries = entries.Where(e => e.Source != DataSource.Store).ToList();
+
+            if (wsEntries.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No workspace datasets. Use workspace_open or tools to load data.", MessageType.Info);
+            }
+            else
+            {
+                scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(200));
+
+                foreach (var entry in wsEntries)
+                {
+                    var name = entry.Name;
+                    if (!wsDatasetFoldouts.ContainsKey(name))
+                        wsDatasetFoldouts[name] = false;
+
+                    EditorGUILayout.BeginVertical(GUI.skin.box);
+
+                    EditorGUILayout.BeginHorizontal();
+                    wsDatasetFoldouts[name] = EditorGUILayout.Foldout(wsDatasetFoldouts[name],
+                        $"{name}  ({entry.Source})", true);
+
+                    if (GUILayout.Button("Preview", GUILayout.Width(60)))
+                    {
+                        DataCorePreviewWindow.ShowWorkspaceWindow(component, name);
+                    }
+
+                    if (GUILayout.Button("Remove", GUILayout.Width(60)))
+                    {
+                        ws.Remove(name);
+                        wsDatasetFoldouts.Remove(name);
+                    }
+                    EditorGUILayout.EndHorizontal();
+
+                    if (wsDatasetFoldouts[name])
+                    {
+                        EditorGUI.indentLevel++;
+                        EditorGUILayout.LabelField("Type", entry.Kind.ToString());
+                        EditorGUILayout.LabelField("Source", entry.Source.ToString());
+                        EditorGUILayout.LabelField("Rows", entry.Rows.ToString());
+                        EditorGUILayout.LabelField("Columns", entry.Columns.ToString());
+
+                        if (entry.Schema != null && entry.Schema.Count > 0)
+                        {
+                            EditorGUILayout.LabelField("Schema:", EditorStyles.miniLabel);
+                            foreach (var col in entry.Schema)
+                            {
+                                EditorGUILayout.LabelField($"  {col.Name} ({col.Type})", EditorStyles.miniLabel);
+                            }
+                        }
+                        EditorGUI.indentLevel--;
+                    }
+
+                    EditorGUILayout.EndVertical();
+                }
+
+                EditorGUILayout.EndScrollView();
+            }
+
+            EditorGUI.indentLevel--;
         }
 
         private void DrawDatasetItem(DataCoreStore store, string name)

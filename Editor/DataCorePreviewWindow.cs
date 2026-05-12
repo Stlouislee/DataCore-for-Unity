@@ -3,6 +3,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using AroAro.DataCore.Workspace;
 
 namespace AroAro.DataCore.Editor
 {
@@ -11,6 +12,7 @@ namespace AroAro.DataCore.Editor
         private DataCoreEditorComponent _component;
         private string _datasetName;
         private IDataSet _dataset;
+        private string _source;
         private Vector2 _scrollPosition;
         private int _maxRowsToShow = 100;
         private int _maxNodesToShow = 50;
@@ -21,7 +23,23 @@ namespace AroAro.DataCore.Editor
             window.titleContent = new GUIContent($"DataCore Preview - {datasetName}");
             window._component = component;
             window._datasetName = datasetName;
+            window._source = "Store";
             window._dataset = component.GetStore().Get<IDataSet>(datasetName);
+            window.minSize = new Vector2(800, 600);
+            window.ShowUtility();
+        }
+
+        /// <summary>
+        /// 从 Workspace 打开预览窗口
+        /// </summary>
+        public static void ShowWorkspaceWindow(DataCoreEditorComponent component, string datasetName)
+        {
+            var window = CreateInstance<DataCorePreviewWindow>();
+            window.titleContent = new GUIContent($"DataCore Preview - {datasetName} (Workspace)");
+            window._component = component;
+            window._datasetName = datasetName;
+            window._source = "Workspace";
+            window._dataset = component.GetWorkspaceDataset(datasetName);
             window.minSize = new Vector2(800, 600);
             window.ShowUtility();
         }
@@ -35,7 +53,7 @@ namespace AroAro.DataCore.Editor
             }
 
             EditorGUILayout.LabelField($"Dataset: {_datasetName}", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField($"Type: {_dataset.Kind}");
+            EditorGUILayout.LabelField($"Type: {_dataset.Kind}  |  Source: {_source}");
             EditorGUILayout.Space();
 
             _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
