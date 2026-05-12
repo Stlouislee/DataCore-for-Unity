@@ -38,7 +38,6 @@ Add to your `Packages/manifest.json`:
 
 This package includes precompiled DLLs:
 
-- **NumSharp.Core.dll** - Numerical computing backend
 - **Apache.Arrow.dll** - Tabular data serialization
 - **LiteDB.dll** - Embedded document database
 - **Microsoft.Data.Analysis.dll** - DataFrame support
@@ -59,7 +58,7 @@ var store = DataCoreEditorComponent.Instance.GetStore();
 
 // Create and work with datasets
 var playerData = store.CreateTabular("player-stats");
-playerData.AddNumericColumn("score", NumSharp.np.array(new double[] { 100, 200, 300 }));
+playerData.AddNumericColumn("score", new double[] { 100, 200, 300 });
 playerData.AddStringColumn("name", new[] { "Alice", "Bob", "Charlie" });
 
 // Query the data
@@ -83,7 +82,6 @@ store.Checkpoint();
 
 ```csharp
 using AroAro.DataCore;
-using NumSharp;
 
 // Initialize a store at a specific path
 var store = new DataCoreStore("Data/my_database.db");

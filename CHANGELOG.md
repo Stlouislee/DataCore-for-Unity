@@ -1,3 +1,14 @@
+## 0.4.1 (Phase 3 — Cleanup & Bug Fixes)
+
+### Bug Fixes
+- **CopyGraphData**: Fixed edge properties being silently dropped during session graph copy. Edge properties are now properly transferred via `GetEdgeProperties`/`AddEdge` with properties.
+- **LambdaFilteredGraphQuery.ToNodeIds**: Fixed lambda predicate not being applied — the query now properly fetches node/edge properties, constructs `QueryRow`, and filters by the predicate. Added `IGraphQuery.Source` property to enable property access from wrapper queries.
+- **LambdaFilteredGraphQuery.CountNodes/CountEdges**: Now returns accurate counts after applying lambda filters instead of delegating to the inner query.
+
+### Cleanup
+- **DataStoreOptions**: Marked unused properties (`AutoCreateIndexes`, `EnableCache`, `CacheSize`, `AutoSave`, `AutoSaveInterval`, `ConnectionString`) as `[Obsolete]`. Only `ReadOnly` is actively used by the LiteDB backend.
+- **README**: Removed NumSharp dependency documentation and updated code examples to use direct `double[]` arrays.
+
 ## 0.4.0
 
 ### New Features

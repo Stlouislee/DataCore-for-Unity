@@ -204,6 +204,11 @@ namespace AroAro.DataCore
     /// </summary>
     public interface IGraphQuery
     {
+        /// <summary>
+        /// 查询所关联的数据集（供 LambdaFilteredGraphQuery 等包装器获取节点/边属性）。
+        /// </summary>
+        IGraphDataset Source { get; }
+
         #region 节点过滤
 
         /// <summary>

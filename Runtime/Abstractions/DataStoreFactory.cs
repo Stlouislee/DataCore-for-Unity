@@ -53,38 +53,44 @@ namespace AroAro.DataCore
     public class DataStoreOptions
     {
         /// <summary>
+        /// 是否只读模式
+        /// </summary>
+        public bool ReadOnly { get; set; } = false;
+
+        /// <summary>
         /// 是否在启动时自动创建索引
         /// </summary>
+        [Obsolete("Not used by current backend. Will be removed in v1.0.")]
         public bool AutoCreateIndexes { get; set; } = true;
 
         /// <summary>
         /// 是否启用缓存
         /// </summary>
+        [Obsolete("Not used by current backend. Will be removed in v1.0.")]
         public bool EnableCache { get; set; } = true;
 
         /// <summary>
         /// 缓存大小（项数）
         /// </summary>
+        [Obsolete("Not used by current backend. Will be removed in v1.0.")]
         public int CacheSize { get; set; } = 1000;
 
         /// <summary>
         /// 是否自动保存
         /// </summary>
+        [Obsolete("Not used by current backend. Will be removed in v1.0.")]
         public bool AutoSave { get; set; } = true;
 
         /// <summary>
         /// 自动保存间隔（秒）
         /// </summary>
+        [Obsolete("Not used by current backend. Will be removed in v1.0.")]
         public int AutoSaveInterval { get; set; } = 60;
 
         /// <summary>
         /// 连接字符串（用于高级配置）
         /// </summary>
+        [Obsolete("Not used by current backend. Will be removed in v1.0.")]
         public string ConnectionString { get; set; }
-
-        /// <summary>
-        /// 是否只读模式
-        /// </summary>
-        public bool ReadOnly { get; set; } = false;
     }
 }
