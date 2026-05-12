@@ -101,6 +101,50 @@ g.AddEdge("a", "b");
 store.Checkpoint();
 ```
 
+### Option 3: Workspace (Recommended for Data Analysis)
+
+The Workspace is a unified in-memory working area — think of it as your "desktop" for data operations. It's always available on `DataCoreStore`, no session management needed.
+
+```csharp
+using AroAro.DataCore;
+using AroAro.DataCore.Workspace;
+
+var store = new DataCoreStore("Data/my_database.db");
+
+// Load from persistent store into workspace
+store.Workspace.Get("player-stats"); // auto-loads from store
+
+// Register computed results directly
+var filtered = new List<Dictionary<string, object>>
+{
+    new() { ["name"] = "Alice", ["score"] = 100.0 },
+    new() { ["name"] = "Bob", ["score"] = 200.0 }
+};
+store.Workspace.Register("top-players", filtered, DataSource.Derived);
+
+// "What do I have right now?" — one call answers everything
+var all = store.Workspace.DescribeAll();
+// → [{ name: "player-stats", source: Store, rows: 1000, ... },
+//    { name: "top-players", source: Derived, rows: 2, ... }]
+
+// One-line summary
+store.Workspace.Summary();
+// → "Workspace: 2 datasets (1 store, 1 derived)"
+
+// Lifecycle management
+store.Workspace.Rename("top-players", "elite-players");
+store.Workspace.Clone("elite-players", "elite-backup");
+store.Workspace.Remove("elite-backup");
+store.Workspace.Clear(); // clear workspace, store data unaffected
+```
+
+**Workspace features:**
+- **Always available**: `store.Workspace` is ready on store creation
+- **Auto-fallback**: `Get()` checks workspace first, then loads from store
+- **Source tracking**: Every dataset tagged as Store, Derived, or Imported
+- **AI-friendly**: `DescribeAll()` returns schema, row counts, and sample data
+- **Lazy caching**: Metadata is computed on-demand and cached until invalidated
+
 ## Editor Integration
 
 ### Creating Data Core
@@ -205,6 +249,7 @@ dataCore.ImportCsvToTabular("path/to/file.csv", "MyDataset", true, ',');
 - **Tabular Data**: Store and query structured data with numeric and string columns
 - **Graph Data**: Create and manipulate graph datasets with nodes and edges
 - **Persistence**: Automatic saving and loading of datasets
+- **Workspace**: Unified in-memory working area for data analysis workflows — register results, track sources, introspect state
 
 ### Algorithm Framework
 - **Built-in Algorithms**: PageRank, Connected Components, Min-Max Normalization

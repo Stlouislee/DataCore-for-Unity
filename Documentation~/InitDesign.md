@@ -1,6 +1,6 @@
 # DataCore — Unity Package 设计文档
 
-**版本** 0.2 · 草稿  
+**版本** 0.5.0 · 草稿  
 **定位** Unity BI/数据分析应用的幕后数据基础设施
 
 ---
@@ -345,6 +345,8 @@ DataCore 支持四种连接类型：
 ---
 
 ### 3.5 Agent 工作区模块（Agent Workspace）
+
+> **实现状态（v0.5.0）**：工作区的核心功能已实现为 `IWorkspace` 接口和 `Workspace` 类，作为 `DataCoreStore.Workspace` 属性提供。当前覆盖：Register（IDataSet / 字典数据 / 自动命名）、Get（自动 fallback 到 store）、Describe / DescribeAll（元数据自省）、Summary、Rename / Clone / Remove / Clear 生命周期管理、来源追踪（Store / Derived / Imported）、内存保留策略（Strong / Weak / Auto）、懒缓存、异步 API。操作日志、检查点、回滚、混合查询等高级功能尚未实现，见下方完整设计。
 
 工作区是 DataCore 为 AI Agent 提供的独立可读写数据环境。每个工作区有自己的持久化存储，与所有数据源完全隔离，支持完整的增删改查操作，并记录所有操作的完整历史。
 

@@ -1,3 +1,27 @@
+## 0.5.0
+
+### New Features
+- **Workspace**: Unified in-memory working area replacing the Session pattern as the default "desktop" for data operations
+  - `store.Workspace` — always available on `DataCoreStore`, no manual creation needed
+  - `Register(name, dataset, source)` — register datasets from `IDataSet`, dictionary data, or auto-naming
+  - `Get(name)` — auto-falls back to store (lazy load into workspace)
+  - `Describe(name)` / `DescribeAll()` — full metadata with schema, row counts, and sample data (AI agent friendly)
+  - `Summary()` — one-line workspace status
+  - `Rename` / `Clone` / `Remove` / `Clear` — complete lifecycle management
+  - Source tracking: `DataSource.Store` / `DataSource.Derived` / `DataSource.Imported`
+  - `WorkspaceRetentionPolicy`: `Strong` / `Weak` / `Auto` (auto uses weak for datasets ≥100K rows)
+  - `DescribeAll` lazy-caches with dirty flag invalidation
+  - `TryPeek(name)` — metadata-only lookup without triggering data load
+  - `AllNames` — unified view of store ∪ workspace
+  - Async API: `DescribeAllAsync`, `RegisterAsync`
+  - Event: `WorkspaceDatasetRegistered` added to `DataCoreEventManager`
+
+### Deprecations
+- **SessionManager** and **Session** marked `[Obsolete]` — use `Workspace` instead. Will be removed in a future version.
+
+### Tests
+- 52 new tests in `WorkspaceTests.cs` covering all Workspace functionality
+
 ## 0.4.1 (Phase 3 — Cleanup & Bug Fixes)
 
 ### Bug Fixes
