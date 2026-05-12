@@ -95,6 +95,13 @@ namespace AroAro.DataCore.Tools
                     "workspace_dataframe_remove" => WorkspaceDataFrameRemove(args),
                     "workspace_dataframe_to_dataset" => WorkspaceDataFrameToDataset(args),
 
+                    // 图数据
+                    "workspace_open_graph" => WorkspaceOpenGraph(args),
+                    "workspace_add_nodes" => WorkspaceAddNodes(args),
+                    "workspace_add_edges" => WorkspaceAddEdges(args),
+                    "workspace_graph_neighbors" => WorkspaceGraphNeighbors(args),
+                    "workspace_describe_graph" => WorkspaceDescribeGraph(args),
+
                     _ => ToolResult.Fail(toolName, $"Unknown tool: {toolName}").ToJson()
                 };
             }
@@ -1778,6 +1785,181 @@ namespace AroAro.DataCore.Tools
                 resultName,
                 rows = (long)df.Rows.Count,
                 columns = df.Columns.Count
+            }).ToJson();
+        }
+
+        #endregion
+
+        // ────────────────────────────────────────────────────────────
+        // Graph Tools (Phase 4)
+        // ────────────────────────────────────────────────────────────
+
+        #region Graph Tools
+
+        private static string WorkspaceOpenGraph(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var dataset = GetString(args, "dataset");
+            var resultName = GetOptionalString(args, "resultName", dataset);
+
+            if (!_store.TryGet(dataset, out var ds) || ds is not IGraphDataset graph)
+                return ToolResult.Fail("workspace_open_graph",
+                    $"Graph dataset '{dataset}' not found in store",
+                    $"Available graphs: {string.Join(", ", _store.GraphNames)}").ToJson();
+
+            // Clone graph data into workspace
+            var newGraph = _store.CreateGraph("__ws_" + resultName);
+            foreach (var nodeId in graph.GetNodeIds())
+            {
+                var props = graph.GetNodeProperties(nodeId);
+                newGraph.AddNode(nodeId, props as IDictionary<string, object>);
+            }
+            foreach (var edge in graph.GetEdges())
+            {
+                var props = graph.GetEdgeProperties(edge.From, edge.To);
+                newGraph.AddEdge(edge.From, edge.To, props);
+            }
+
+            ws.Register(resultName, newGraph, DataSource.Store);
+            return ToolResult.Ok("workspace_open_graph", new
+            {
+                name = resultName,
+                nodes = newGraph.NodeCount,
+                edges = newGraph.EdgeCount,
+                source = "Store"
+            }).ToJson();
+        }
+
+        private static string WorkspaceAddNodes(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var graphName = GetString(args, "graph");
+            var nodes = GetRowArray(args, "nodes");
+
+            var ds = ws.Get(graphName);
+            if (ds is not IGraphDataset graph)
+                return ToolResult.Fail("workspace_add_nodes",
+                    $"'{graphName}' is not a graph dataset").ToJson();
+
+            var toAdd = nodes.Select(n =>
+            {
+                var id = n.TryGetValue("id", out var v) ? v.ToString() : Guid.NewGuid().ToString("N");
+                var props = n.ContainsKey("id") ? n.Where(kv => kv.Key != "id")
+                    .ToDictionary(kv => kv.Key, kv => kv.Value) as IDictionary<string, object> : null;
+                return (id, props);
+            }).ToList();
+
+            var added = graph.AddNodes(toAdd);
+            return ToolResult.Ok("workspace_add_nodes", new
+            {
+                graph = graphName,
+                added,
+                totalNodes = graph.NodeCount
+            }).ToJson();
+        }
+
+        private static string WorkspaceAddEdges(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var graphName = GetString(args, "graph");
+            var edges = GetRowArray(args, "edges");
+
+            var ds = ws.Get(graphName);
+            if (ds is not IGraphDataset graph)
+                return ToolResult.Fail("workspace_add_edges",
+                    $"'{graphName}' is not a graph dataset").ToJson();
+
+            var toAdd = new List<(string, string, IDictionary<string, object>)>();
+            foreach (var e in edges)
+            {
+                if (!e.TryGetValue("from", out var from) || !e.TryGetValue("to", out var to))
+                    continue;
+                var props = e.Where(kv => kv.Key != "from" && kv.Key != "to")
+                    .ToDictionary(kv => kv.Key, kv => kv.Value) as IDictionary<string, object>;
+                toAdd.Add((from.ToString(), to.ToString(), props));
+            }
+
+            var added = graph.AddEdges(toAdd);
+            return ToolResult.Ok("workspace_add_edges", new
+            {
+                graph = graphName,
+                added,
+                totalEdges = graph.EdgeCount
+            }).ToJson();
+        }
+
+        private static string WorkspaceGraphNeighbors(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var graphName = GetString(args, "graph");
+            var nodeId = GetString(args, "nodeId");
+            var direction = GetOptionalString(args, "direction", "out");
+
+            var ds = ws.Get(graphName);
+            if (ds is not IGraphDataset graph)
+                return ToolResult.Fail("workspace_graph_neighbors",
+                    $"'{graphName}' is not a graph dataset").ToJson();
+
+            if (!graph.HasNode(nodeId))
+                return ToolResult.Fail("workspace_graph_neighbors",
+                    $"Node '{nodeId}' not found in graph '{graphName}'").ToJson();
+
+            IEnumerable<string> neighbors = direction?.ToLower() switch
+            {
+                "in" => graph.GetInNeighbors(nodeId),
+                "all" => graph.GetNeighbors(nodeId),
+                _ => graph.GetOutNeighbors(nodeId)
+            };
+
+            var neighborList = neighbors.ToList();
+            var neighborDetails = neighborList.Select(n => new
+            {
+                id = n,
+                properties = graph.GetNodeProperties(n)
+            }).ToList();
+
+            return ToolResult.Ok("workspace_graph_neighbors", new
+            {
+                graph = graphName,
+                nodeId,
+                direction,
+                count = neighborList.Count,
+                neighbors = neighborDetails
+            }).ToJson();
+        }
+
+        private static string WorkspaceDescribeGraph(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var graphName = GetString(args, "graph");
+
+            var ds = ws.Get(graphName);
+            if (ds is not IGraphDataset graph)
+                return ToolResult.Fail("workspace_describe_graph",
+                    $"'{graphName}' is not a graph dataset").ToJson();
+
+            // Sample nodes
+            var nodeSample = graph.GetNodeIds().Take(5).Select(id => new
+            {
+                id,
+                properties = graph.GetNodeProperties(id)
+            }).ToList();
+
+            // Sample edges
+            var edgeSample = graph.GetEdges().Take(5).Select(e => new
+            {
+                from = e.From,
+                to = e.To,
+                properties = graph.GetEdgeProperties(e.From, e.To)
+            }).ToList();
+
+            return ToolResult.Ok("workspace_describe_graph", new
+            {
+                name = graphName,
+                nodes = graph.NodeCount,
+                edges = graph.EdgeCount,
+                nodeSample,
+                edgeSample
             }).ToJson();
         }
 
