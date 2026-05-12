@@ -734,7 +734,11 @@ namespace AroAro.DataCore.LiteDb
                 var values = columns.Select(col =>
                 {
                     row.Data.TryGetValue(col, out var value);
-                    return EscapeCsvField(value?.ToString() ?? "");
+                    // Use AsString for strings to avoid BsonValue.ToString() adding quotes
+                    var str = value == null || value.IsNull ? "" :
+                              value.IsString ? value.AsString :
+                              value.ToString();
+                    return EscapeCsvField(str);
                 });
                 sb.AppendLine(string.Join(delimiter.ToString(), values));
             }
