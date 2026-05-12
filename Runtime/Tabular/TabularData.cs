@@ -286,10 +286,8 @@ namespace AroAro.DataCore.Tabular
 
         public IEnumerable<Dictionary<string, object>> GetRows(int startIndex, int count)
         {
-            for (int i = startIndex; i < Math.Min(startIndex + count, _rowCount); i++)
-            {
-                yield return GetRow(i);
-            }
+            return Enumerable.Range(startIndex, Math.Min(count, _rowCount - startIndex))
+                .Select(GetRow);
         }
 
         public int Clear()
@@ -318,37 +316,25 @@ namespace AroAro.DataCore.Tabular
 
         public double Sum(string columnName)
         {
-            var data = GetNumericColumnRaw(columnName);
-            double sum = 0;
-            for (int i = 0; i < data.Length; i++) sum += data[i];
-            return sum;
+            return GetNumericColumnRaw(columnName).Sum();
         }
 
         public double Average(string columnName)
         {
             var data = GetNumericColumnRaw(columnName);
-            if (data.Length == 0) return 0;
-            double sum = 0;
-            for (int i = 0; i < data.Length; i++) sum += data[i];
-            return sum / data.Length;
+            return data.Length == 0 ? 0 : data.Average();
         }
 
         public double Min(string columnName)
         {
             var data = GetNumericColumnRaw(columnName);
-            if (data.Length == 0) return 0;
-            double min = double.MaxValue;
-            for (int i = 0; i < data.Length; i++) { if (data[i] < min) min = data[i]; }
-            return min;
+            return data.Length == 0 ? 0 : data.Min();
         }
 
         public double Max(string columnName)
         {
             var data = GetNumericColumnRaw(columnName);
-            if (data.Length == 0) return 0;
-            double max = double.MinValue;
-            for (int i = 0; i < data.Length; i++) { if (data[i] > max) max = data[i]; }
-            return max;
+            return data.Length == 0 ? 0 : data.Max();
         }
 
         public void ImportFromCsv(string csvContent, bool hasHeader = true, char delimiter = ',')
@@ -432,55 +418,29 @@ namespace AroAro.DataCore.Tabular
 
         public string ExportToCsv(char delimiter = ',')
         {
-            var sb = new StringBuilder();
-            
-            // Header
-            sb.AppendLine(string.Join(delimiter.ToString(), _columnNames.Select(n => EscapeCsvField(n, delimiter))));
-
-            // Data
-            for (int i = 0; i < _rowCount; i++)
-            {
-                var values = new List<string>();
-                foreach (var colName in _columnNames)
-                {
-                    var type = _columnTypes[colName];
-                    if (type == ColumnType.Numeric)
-                        values.Add(_numericData[colName][i].ToString());
-                    else
-                        values.Add(EscapeCsvField(_stringData[colName][i], delimiter));
-                }
-                sb.AppendLine(string.Join(delimiter.ToString(), values));
-            }
-
-            return sb.ToString();
+            var header = string.Join(delimiter.ToString(), _columnNames.Select(n => EscapeCsvField(n, delimiter)));
+            var rows = Enumerable.Range(0, _rowCount).Select(i =>
+                string.Join(delimiter.ToString(), _columnNames.Select(colName =>
+                    _columnTypes[colName] == ColumnType.Numeric
+                        ? _numericData[colName][i].ToString()
+                        : EscapeCsvField(_stringData[colName][i], delimiter))));
+            return header + Environment.NewLine + string.Join(Environment.NewLine, rows) + Environment.NewLine;
         }
 
         public string ExportToCsv(char delimiter, bool includeHeader)
         {
-            var sb = new StringBuilder();
-            
-            // Header
+            var lines = new List<string>();
+
             if (includeHeader)
-            {
-                sb.AppendLine(string.Join(delimiter.ToString(), _columnNames.Select(n => EscapeCsvField(n, delimiter))));
-            }
+                lines.Add(string.Join(delimiter.ToString(), _columnNames.Select(n => EscapeCsvField(n, delimiter))));
 
-            // Data
-            for (int i = 0; i < _rowCount; i++)
-            {
-                var values = new List<string>();
-                foreach (var colName in _columnNames)
-                {
-                    var type = _columnTypes[colName];
-                    if (type == ColumnType.Numeric)
-                        values.Add(_numericData[colName][i].ToString());
-                    else
-                        values.Add(EscapeCsvField(_stringData[colName][i], delimiter));
-                }
-                sb.AppendLine(string.Join(delimiter.ToString(), values));
-            }
+            lines.AddRange(Enumerable.Range(0, _rowCount).Select(i =>
+                string.Join(delimiter.ToString(), _columnNames.Select(colName =>
+                    _columnTypes[colName] == ColumnType.Numeric
+                        ? _numericData[colName][i].ToString()
+                        : EscapeCsvField(_stringData[colName][i], delimiter)))));
 
-            return sb.ToString();
+            return string.Join(Environment.NewLine, lines) + Environment.NewLine;
         }
 
         private static string EscapeCsvField(string field, char delimiter)
@@ -500,17 +460,8 @@ namespace AroAro.DataCore.Tabular
         {
             var data = GetNumericColumnRaw(columnName);
             if (data.Length < 2) return 0;
-
-            double sum = 0;
-            for (int i = 0; i < data.Length; i++) sum += data[i];
-            var mean = sum / data.Length;
-
-            double sumSquares = 0;
-            for (int i = 0; i < data.Length; i++)
-            {
-                var d = data[i] - mean;
-                sumSquares += d * d;
-            }
+            var mean = data.Average();
+            var sumSquares = data.Sum(v => (v - mean) * (v - mean));
             return Math.Sqrt(sumSquares / (data.Length - 1)); // Bessel correction
         }
 
@@ -519,48 +470,46 @@ namespace AroAro.DataCore.Tabular
             if (!_columnNames.Contains(column))
                 return Array.Empty<int>();
 
-            var indices = new List<int>();
             var type = _columnTypes[column];
 
             if (type == ColumnType.Numeric)
             {
                 var data = _numericData[column];
                 var cmpVal = Convert.ToDouble(value);
-                for (int i = 0; i < _rowCount; i++)
-                {
-                    bool match = op switch
-                    {
-                        QueryOp.Eq => data[i] == cmpVal,
-                        QueryOp.Ne => data[i] != cmpVal,
-                        QueryOp.Gt => data[i] > cmpVal,
-                        QueryOp.Ge => data[i] >= cmpVal,
-                        QueryOp.Lt => data[i] < cmpVal,
-                        QueryOp.Le => data[i] <= cmpVal,
-                        _ => false
-                    };
-                    if (match) indices.Add(i);
-                }
+                return Enumerable.Range(0, _rowCount)
+                    .Where(i => MatchesNumericOp(data[i], op, cmpVal))
+                    .ToArray();
             }
             else
             {
                 var data = _stringData[column];
                 var cmpStr = value?.ToString() ?? "";
-                for (int i = 0; i < _rowCount; i++)
-                {
-                    bool match = op switch
-                    {
-                        QueryOp.Eq => data[i] == cmpStr,
-                        QueryOp.Ne => data[i] != cmpStr,
-                        QueryOp.Contains => data[i].Contains(cmpStr),
-                        QueryOp.StartsWith => data[i].StartsWith(cmpStr),
-                        QueryOp.EndsWith => data[i].EndsWith(cmpStr),
-                        _ => false
-                    };
-                    if (match) indices.Add(i);
-                }
+                return Enumerable.Range(0, _rowCount)
+                    .Where(i => MatchesStringOp(data[i], op, cmpStr))
+                    .ToArray();
             }
-            return indices.ToArray();
         }
+
+        private static bool MatchesNumericOp(double val, QueryOp op, double target) => op switch
+        {
+            QueryOp.Eq => val == target,
+            QueryOp.Ne => val != target,
+            QueryOp.Gt => val > target,
+            QueryOp.Ge => val >= target,
+            QueryOp.Lt => val < target,
+            QueryOp.Le => val <= target,
+            _ => false
+        };
+
+        private static bool MatchesStringOp(string val, QueryOp op, string target) => op switch
+        {
+            QueryOp.Eq => val == target,
+            QueryOp.Ne => val != target,
+            QueryOp.Contains => val.Contains(target),
+            QueryOp.StartsWith => val.StartsWith(target),
+            QueryOp.EndsWith => val.EndsWith(target),
+            _ => false
+        };
 
         public void CreateIndex(string columnName)
         {
@@ -794,14 +743,9 @@ namespace AroAro.DataCore.Tabular
 
             public int[] ToRowIndices()
             {
-                var indices = new List<int>();
-                for (int i = 0; i < _source.RowCount; i++)
-                {
-                    var row = _source.GetRow(i);
-                    if (_filters.All(f => f(row)))
-                        indices.Add(i);
-                }
-                return indices.ToArray();
+                return Enumerable.Range(0, _source.RowCount)
+                    .Where(i => _filters.All(f => f(_source.GetRow(i))))
+                    .ToArray();
             }
 
             public List<Dictionary<string, object>> ToDictionaries()
@@ -859,101 +803,58 @@ namespace AroAro.DataCore.Tabular
 
             public bool Any()
             {
-                for (int i = 0; i < _source.RowCount; i++)
-                {
-                    var row = _source.GetRow(i);
-                    if (_filters.All(f => f(row)))
-                        return true;
-                }
-                return false;
+                return Enumerable.Range(0, _source.RowCount)
+                    .Any(i => _filters.All(f => f(_source.GetRow(i))));
             }
 
             public Dictionary<string, object> FirstOrDefault()
             {
-                for (int i = 0; i < _source.RowCount; i++)
+                var match = Enumerable.Range(0, _source.RowCount)
+                    .Select(i => _source.GetRow(i))
+                    .FirstOrDefault(row => _filters.All(f => f(row)));
+
+                if (match == null) return null;
+                if (_selectedColumns != null && _selectedColumns.Count > 0)
                 {
-                    var row = _source.GetRow(i);
-                    if (_filters.All(f => f(row)))
-                    {
-                        if (_selectedColumns != null && _selectedColumns.Count > 0)
-                        {
-                            return row.Where(kvp => _selectedColumns.Contains(kvp.Key))
-                                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                        }
-                        return row;
-                    }
+                    return match.Where(kvp => _selectedColumns.Contains(kvp.Key))
+                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
                 }
-                return null;
+                return match;
             }
 
             public double Sum(string column)
             {
-                double sum = 0;
-                for (int i = 0; i < _source.RowCount; i++)
-                {
-                    var row = _source.GetRow(i);
-                    if (_filters.All(f => f(row)) && row.TryGetValue(column, out var value))
-                    {
-                        sum += Convert.ToDouble(value);
-                    }
-                }
-                return sum;
+                return Enumerable.Range(0, _source.RowCount)
+                    .Select(i => _source.GetRow(i))
+                    .Where(row => _filters.All(f => f(row)) && row.ContainsKey(column))
+                    .Sum(row => Convert.ToDouble(row[column]));
             }
 
             public double Average(string column)
             {
-                double sum = 0;
-                int count = 0;
-                for (int i = 0; i < _source.RowCount; i++)
-                {
-                    var row = _source.GetRow(i);
-                    if (_filters.All(f => f(row)) && row.TryGetValue(column, out var value))
-                    {
-                        sum += Convert.ToDouble(value);
-                        count++;
-                    }
-                }
-                return count > 0 ? sum / count : 0;
+                var values = Enumerable.Range(0, _source.RowCount)
+                    .Select(i => _source.GetRow(i))
+                    .Where(row => _filters.All(f => f(row)) && row.ContainsKey(column))
+                    .Select(row => Convert.ToDouble(row[column]));
+                return values.Any() ? values.Average() : 0;
             }
 
             public double Max(string column)
             {
-                double max = double.MinValue;
-                bool found = false;
-                for (int i = 0; i < _source.RowCount; i++)
-                {
-                    var row = _source.GetRow(i);
-                    if (_filters.All(f => f(row)) && row.TryGetValue(column, out var value))
-                    {
-                        var val = Convert.ToDouble(value);
-                        if (!found || val > max)
-                        {
-                            max = val;
-                            found = true;
-                        }
-                    }
-                }
-                return found ? max : 0;
+                var values = Enumerable.Range(0, _source.RowCount)
+                    .Select(i => _source.GetRow(i))
+                    .Where(row => _filters.All(f => f(row)) && row.ContainsKey(column))
+                    .Select(row => Convert.ToDouble(row[column]));
+                return values.Any() ? values.Max() : 0;
             }
 
             public double Min(string column)
             {
-                double min = double.MaxValue;
-                bool found = false;
-                for (int i = 0; i < _source.RowCount; i++)
-                {
-                    var row = _source.GetRow(i);
-                    if (_filters.All(f => f(row)) && row.TryGetValue(column, out var value))
-                    {
-                        var val = Convert.ToDouble(value);
-                        if (!found || val < min)
-                        {
-                            min = val;
-                            found = true;
-                        }
-                    }
-                }
-                return found ? min : 0;
+                var values = Enumerable.Range(0, _source.RowCount)
+                    .Select(i => _source.GetRow(i))
+                    .Where(row => _filters.All(f => f(row)) && row.ContainsKey(column))
+                    .Select(row => Convert.ToDouble(row[column]));
+                return values.Any() ? values.Min() : 0;
             }
         }
     }

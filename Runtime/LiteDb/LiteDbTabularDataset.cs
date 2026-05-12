@@ -746,54 +746,32 @@ namespace AroAro.DataCore.LiteDb
 
         #region 统计函数
 
-        public double Sum(string column)
-        {
-            var data = GetNumericColumnRaw(column);
-            double sum = 0;
-            for (int i = 0; i < data.Length; i++) sum += data[i];
-            return sum;
-        }
+        public double Sum(string column) => GetNumericColumnRaw(column).Sum();
 
         public double Mean(string column)
         {
             var data = GetNumericColumnRaw(column);
-            if (data.Length == 0) return 0;
-            double sum = 0;
-            for (int i = 0; i < data.Length; i++) sum += data[i];
-            return sum / data.Length;
+            return data.Length == 0 ? 0 : data.Average();
         }
 
         public double Max(string column)
         {
             var data = GetNumericColumnRaw(column);
-            if (data.Length == 0) return 0;
-            double max = double.MinValue;
-            for (int i = 0; i < data.Length; i++) { if (data[i] > max) max = data[i]; }
-            return max;
+            return data.Length == 0 ? 0 : data.Max();
         }
 
         public double Min(string column)
         {
             var data = GetNumericColumnRaw(column);
-            if (data.Length == 0) return 0;
-            double min = double.MaxValue;
-            for (int i = 0; i < data.Length; i++) { if (data[i] < min) min = data[i]; }
-            return min;
+            return data.Length == 0 ? 0 : data.Min();
         }
 
         public double Std(string column)
         {
             var data = GetNumericColumnRaw(column);
             if (data.Length < 2) return 0;
-            double sum = 0;
-            for (int i = 0; i < data.Length; i++) sum += data[i];
-            var mean = sum / data.Length;
-            double sumSquares = 0;
-            for (int i = 0; i < data.Length; i++)
-            {
-                var d = data[i] - mean;
-                sumSquares += d * d;
-            }
+            var mean = data.Average();
+            var sumSquares = data.Sum(v => (v - mean) * (v - mean));
             return Math.Sqrt(sumSquares / (data.Length - 1)); // Bessel correction
         }
 
