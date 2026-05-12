@@ -26,8 +26,8 @@ namespace AroAro.DataCore.Session
                 _dataFrameInfo[name] = new DataFrameInfo
                 {
                     Name = name,
-                    CreatedAt = DateTime.Now,
-                    LastAccessed = DateTime.Now,
+                    CreatedAt = DateTime.UtcNow,
+                    LastAccessed = DateTime.UtcNow,
                     EstimatedMemory = EstimateMemoryUsage(df),
                     RowCount = df.Rows.Count,
                     ColumnCount = df.Columns.Count
@@ -46,8 +46,8 @@ namespace AroAro.DataCore.Session
                 _dataFrameInfo[name] = new DataFrameInfo
                 {
                     Name = name,
-                    CreatedAt = DateTime.Now,
-                    LastAccessed = DateTime.Now,
+                    CreatedAt = DateTime.UtcNow,
+                    LastAccessed = DateTime.UtcNow,
                     IsLazy = true,
                     EstimatedMemory = 0 // 初始内存使用为0
                 };
@@ -70,7 +70,7 @@ namespace AroAro.DataCore.Session
                         info.EstimatedMemory = EstimateMemoryUsage(dataFrame);
                         info.RowCount = dataFrame.Rows.Count;
                         info.ColumnCount = dataFrame.Columns.Count;
-                        info.LastAccessed = DateTime.Now;
+                        info.LastAccessed = DateTime.UtcNow;
                     }
                     return dataFrame;
                 }
@@ -80,7 +80,7 @@ namespace AroAro.DataCore.Session
                     // 更新访问时间
                     if (_dataFrameInfo.TryGetValue(name, out var info))
                     {
-                        info.LastAccessed = DateTime.Now;
+                        info.LastAccessed = DateTime.UtcNow;
                     }
                     return weakDataFrame;
                 }
@@ -151,7 +151,7 @@ namespace AroAro.DataCore.Session
         {
             lock (_lock)
             {
-                var cutoffTime = DateTime.Now - idleThreshold;
+                var cutoffTime = DateTime.UtcNow - idleThreshold;
                 var toRemove = _dataFrameInfo
                     .Where(kv => kv.Value.LastAccessed < cutoffTime)
                     .Select(kv => kv.Key)

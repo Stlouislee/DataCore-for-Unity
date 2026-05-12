@@ -42,7 +42,7 @@ namespace AroAro.DataCore.Session
             Id = Guid.NewGuid().ToString("N");
             Name = name ?? throw new ArgumentNullException(nameof(name));
             _store = store ?? throw new ArgumentNullException(nameof(store));
-            CreatedAt = DateTime.Now;
+            CreatedAt = DateTime.UtcNow;
             LastActivityAt = CreatedAt;
         }
 
@@ -255,7 +255,7 @@ namespace AroAro.DataCore.Session
 
         public void Touch()
         {
-            LastActivityAt = DateTime.Now;
+            LastActivityAt = DateTime.UtcNow;
         }
 
         public void Dispose()

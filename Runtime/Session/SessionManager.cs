@@ -112,7 +112,7 @@ namespace AroAro.DataCore.Session
         {
             lock (_lock)
             {
-                var now = DateTime.Now;
+                var now = DateTime.UtcNow;
                 var toRemove = _sessions.Values
                     .Where(s => (now - s.LastActivityAt) > idleTimeout)
                     .ToList();

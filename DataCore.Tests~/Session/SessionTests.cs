@@ -69,9 +69,9 @@ namespace DataCore.Tests.Session
         [Fact]
         public void CreatedAt_IsSetOnCreation()
         {
-            var before = DateTime.Now.AddSeconds(-1);
+            var before = DateTime.UtcNow.AddSeconds(-1);
             var session = new AroAro.DataCore.Session.Session("TestSession", _store);
-            var after = DateTime.Now.AddSeconds(1);
+            var after = DateTime.UtcNow.AddSeconds(1);
 
             Assert.InRange(session.CreatedAt, before, after);
         }
