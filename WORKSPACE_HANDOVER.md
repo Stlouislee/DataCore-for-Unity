@@ -124,7 +124,82 @@ Phase 11: profile + bin + coalesce
 
 ---
 
-## 六、Algorithm 迁移方案
+## 六、Phase 8：命名空间重构 + Analysis API
+
+### 6.1 命名空间体系
+
+将 53 个 `workspace_*` tool 重构为分层命名空间，`.` 分隔：
+
+| 命名空间 | 职责 | 当前 tool 迁移 |
+|----------|------|---------------|
+| `workspace.*` | 工作区管理 | create / destroy / list / open / open_ref / import_csv / save |
+| `data.*` | 表格数据操作 | filter / select / rename / sort / distinct / add_column / drop / limit / random / cast / fill_null / update / delete_rows / append / clear / clone / remove / search / diff / describe / sample / schema / statistics / value_counts / count / aggregate / summarize / join / union / cross / export_csv / export_json |
+| `graph.*` | 图数据操作 | open_graph / add_nodes / add_edges / neighbors / describe_graph / path / stats |
+| `df.*` | DataFrame | create / convert / list / remove / to_dataset |
+| `analysis.*` | 统计分析 | **新增**（见 6.2） |
+| `algorithm.*` | 算法执行 | **新增**（见 6.3） |
+
+**向后兼容**：路由层保留旧 `workspace_*` 名称为别名，自动映射到新名称。
+
+```csharp
+// 路由别名映射
+private static string NormalizeToolName(string name) => name switch
+{
+    "workspace_filter" => "data.filter",
+    "workspace_sort" => "data.sort",
+    "workspace_join" => "data.join",
+    "workspace_graph_path" => "graph.path",
+    // ... 全部 53 个
+    _ => name  // 新名称直接透传
+};
+```
+
+### 6.2 Analysis API（新增）
+
+#### 统计分析
+
+| Tool | 说明 | 复杂度 |
+|------|------|--------|
+| `analysis.describe` | 增强版数据概况（中位数/分位数/空值率/偏度/峰度） | 低 |
+| `analysis.correlation` | 相关系数矩阵（Pearson/Spearman） | 低 |
+| `analysis.outliers` | 异常值检测（IQR / Z-score） | 低 |
+| `analysis.regression` | 线性回归（最小二乘，返回系数/R²/残差） | 中 |
+| `analysis.clustering` | K-Means 聚类 | 中 |
+| `analysis.hypothesis_test` | 假设检验（t-test / chi-square） | 中 |
+| `analysis.distribution` | 分布拟合 + 正态性检验 | 中 |
+
+#### 网络分析
+
+| Tool | 说明 | 来源 |
+|------|------|------|
+| `analysis.centrality` | 度/接近/介数中心性 | 新实现 |
+| `analysis.communities` | 社区检测 | 桥接 ConnectedComponents |
+| `analysis.influence` | 影响力排名 | 桥接 PageRank |
+| `analysis.ego_network` | 自我中心子图 | BFS 实现 |
+| `analysis.shortest_path` | 最短路径 | 桥接 graph.path |
+
+### 6.3 Algorithm 桥接（新增）
+
+| Tool | 说明 |
+|------|------|
+| `algorithm.list` | 列出所有已注册算法 |
+| `algorithm.run` | 执行单个算法（输入从 workspace 取，输出注册回 workspace） |
+| `algorithm.pipeline` | 多步流水线 |
+| `algorithm.register` | 注册自定义算法 |
+
+### 6.4 实现顺序
+
+```
+Phase 8a: 命名空间重构（路由别映射，不改实现）
+Phase 8b: analysis.describe + analysis.correlation + analysis.outliers
+Phase 8c: algorithm.list + algorithm.run（桥接已有算法）
+Phase 8d: analysis.regression + analysis.clustering + analysis.hypothesis_test
+Phase 8e: analysis.centrality + analysis.communities + analysis.ego_network
+```
+
+---
+
+## 七、Algorithm 迁移方案
 
 ### 现状
 
@@ -229,7 +304,7 @@ workspace_algorithm_pipeline → 执行多步流水线
 
 ---
 
-## 七、代码约定
+## 八、代码约定
 
 - 命名空间：`AroAro.DataCore.Tools` / `AroAro.DataCore.Workspace`
 - 测试：xUnit，每测试独立 `DataCoreStore`，`Dispose` 清理
@@ -239,7 +314,7 @@ workspace_algorithm_pipeline → 执行多步流水线
 
 ---
 
-## 八、快速上手
+## 九、快速上手
 
 ```bash
 git clone https://github.com/Stlouislee/DataCore-for-Unity.git
@@ -249,4 +324,4 @@ cd DataCore.Tests~ && dotnet build && dotnet test
 
 ---
 
-**53 个 tool 已就绪，832 测试全绿。下一步见 Phase 8-11 roadmap。**
+**53 个 tool 已就绪，832 测试全绿。下一步见 Phase 8（命名空间重构 + Analysis API + Algorithm 桥接）。**
