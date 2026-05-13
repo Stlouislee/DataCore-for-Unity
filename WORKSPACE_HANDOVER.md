@@ -124,187 +124,114 @@ Phase 11: profile + bin + coalesce
 
 ---
 
-## 六、Phase 8：命名空间重构 + Analysis API
+## 六、Phase 8：Analysis API + Algorithm 桥接
 
-### 6.1 命名空间体系
+### 设计：2 个通用 Tool
 
-将 53 个 `workspace_*` tool 重构为分层命名空间，`.` 分隔：
-
-| 命名空间 | 职责 | 当前 tool 迁移 |
-|----------|------|---------------|
-| `workspace.*` | 工作区管理 | create / destroy / list / open / open_ref / import_csv / save |
-| `data.*` | 表格数据操作 | filter / select / rename / sort / distinct / add_column / drop / limit / random / cast / fill_null / update / delete_rows / append / clear / clone / remove / search / diff / describe / sample / schema / statistics / value_counts / count / aggregate / summarize / join / union / cross / export_csv / export_json |
-| `graph.*` | 图数据操作 | open_graph / add_nodes / add_edges / neighbors / describe_graph / path / stats |
-| `df.*` | DataFrame | create / convert / list / remove / to_dataset |
-| `analysis.*` | 统计分析 | **新增**（见 6.2） |
-| `algorithm.*` | 算法执行 | **新增**（见 6.3） |
-
-**向后兼容**：路由层保留旧 `workspace_*` 名称为别名，自动映射到新名称。
-
-```csharp
-// 路由别名映射
-private static string NormalizeToolName(string name) => name switch
-{
-    "workspace_filter" => "data.filter",
-    "workspace_sort" => "data.sort",
-    "workspace_join" => "data.join",
-    "workspace_graph_path" => "graph.path",
-    // ... 全部 53 个
-    _ => name  // 新名称直接透传
-};
-```
-
-### 6.2 Analysis API（新增）
-
-#### 统计分析
-
-| Tool | 说明 | 复杂度 |
-|------|------|--------|
-| `analysis.describe` | 增强版数据概况（中位数/分位数/空值率/偏度/峰度） | 低 |
-| `analysis.correlation` | 相关系数矩阵（Pearson/Spearman） | 低 |
-| `analysis.outliers` | 异常值检测（IQR / Z-score） | 低 |
-| `analysis.regression` | 线性回归（最小二乘，返回系数/R²/残差） | 中 |
-| `analysis.clustering` | K-Means 聚类 | 中 |
-| `analysis.hypothesis_test` | 假设检验（t-test / chi-square） | 中 |
-| `analysis.distribution` | 分布拟合 + 正态性检验 | 中 |
-
-#### 网络分析
-
-| Tool | 说明 | 来源 |
-|------|------|------|
-| `analysis.centrality` | 度/接近/介数中心性 | 新实现 |
-| `analysis.communities` | 社区检测 | 桥接 ConnectedComponents |
-| `analysis.influence` | 影响力排名 | 桥接 PageRank |
-| `analysis.ego_network` | 自我中心子图 | BFS 实现 |
-| `analysis.shortest_path` | 最短路径 | 桥接 graph.path |
-
-### 6.3 Algorithm 桥接（新增）
-
-| Tool | 说明 |
-|------|------|
-| `algorithm.list` | 列出所有已注册算法 |
-| `algorithm.run` | 执行单个算法（输入从 workspace 取，输出注册回 workspace） |
-| `algorithm.pipeline` | 多步流水线 |
-| `algorithm.register` | 注册自定义算法 |
-
-### 6.4 实现顺序
+不膨胀 tool 数量，用 2 个通用 tool 内部 dispatch：
 
 ```
-Phase 8a: 命名空间重构（路由别映射，不改实现）
-Phase 8b: analysis.describe + analysis.correlation + analysis.outliers
-Phase 8c: algorithm.list + algorithm.run（桥接已有算法）
-Phase 8d: analysis.regression + analysis.clustering + analysis.hypothesis_test
-Phase 8e: analysis.centrality + analysis.communities + analysis.ego_network
+workspace_analysis(workspace, analysis, params)
+workspace_algorithm(workspace, algorithm, params)
 ```
 
----
+现有 53 个 `workspace_*` tool 保持不变，不改名不重构。
 
-## 七、Algorithm 迁移方案
+### workspace_analysis — 统计分析
 
-### 现状
+`analysis` 参数决定执行哪种分析：
 
-Algorithm 框架已实现但与 Workspace/Agent Tools **完全隔离**：
+#### 表格分析
 
-| 组件 | 文件 | 状态 |
-|------|------|------|
-| `IAlgorithm` / `ITabularAlgorithm` / `IGraphAlgorithm` | `Runtime/Algorithms/IAlgorithm.cs` | ✅ 接口完整 |
-| `AlgorithmBase` / `GraphAlgorithmBase` / `TabularAlgorithmBase` | `Runtime/Algorithms/AlgorithmBase.cs` | ✅ 模板方法 |
-| `AlgorithmContext` | `Runtime/Algorithms/AlgorithmContext.cs` | ✅ 参数+CancellationToken+进度 |
-| `AlgorithmResult` | `Runtime/Algorithms/AlgorithmResult.cs` | ✅ 输出数据集+指标+元数据 |
-| `AlgorithmRegistry` | `Runtime/Algorithms/AlgorithmRegistry.cs` | ✅ 单例注册表 |
-| `AlgorithmPipeline` | `Runtime/Algorithms/AlgorithmPipeline.cs` | ✅ 多步流水线 |
-| `PageRankAlgorithm` | `Runtime/Algorithms/Graph/PageRankAlgorithm.cs` | ✅ |
-| `ConnectedComponentsAlgorithm` | `Runtime/Algorithms/Graph/ConnectedComponentsAlgorithm.cs` | ✅ |
-| `MinMaxNormalizeAlgorithm` | `Runtime/Algorithms/Tabular/MinMaxNormalizeAlgorithm.cs` | ✅ |
+| analysis 值 | 说明 | 输入 | 输出 |
+|-------------|------|------|------|
+| `describe` | 增强版数据概况 | dataset | 每列: 类型/非空数/唯一数/min/max/mean/median/std/25%/75%/偏度/峰度/空值率 |
+| `correlation` | 相关系数矩阵 | dataset + columns | 列名 × 列名矩阵 (Pearson/Spearman) |
+| `outliers` | 异常值检测 | dataset + column + method | 异常行列表 + 上下界 + 异常数量 |
+| `regression` | 线性回归 | dataset + target + features | 系数/R²/调整R²/残差/F统计量/p值 |
+| `clustering` | K-Means 聚类 | dataset + k + features | 聚类标签列 + 簇中心 + 惯性值 |
+| `hypothesis_test` | 假设检验 | dataset + test + params | 统计量/p值/置信区间/结论 |
+| `distribution` | 分布分析 | dataset + column | 直方图分桶 + 正态性检验(Shapiro-Wilk) + 分位数表 |
 
-### 问题
+#### 图分析
 
-1. **无 Agent Tool 入口** — Agent 无法通过 `DataCoreTools.Execute()` 调用算法
-2. **无 Workspace 集成** — 算法输出是 `IDataSet`，需要手动注册到 Workspace
-3. **无 Schema 暴露** — `GetToolSchemas()` 不包含算法参数信息
-4. **Pipeline 未暴露** — 多步算法组合对 Agent 不可用
+| analysis 值 | 说明 | 输入 | 输出 |
+|-------------|------|------|------|
+| `centrality` | 中心性计算 | graph + method(degrees/betweenness/closeness) | 每节点中心性得分 |
+| `communities` | 社区检测 | graph + method | 节点→社区映射 + 模块度 |
+| `influence` | 影响力排名 | graph + method(pagerank) | 节点排名 + 得分 |
+| `ego_network` | 自我中心子图 | graph + nodeId + depth | 子图节点/边列表 |
+| `shortest_path` | 最短路径 | graph + from + to | 路径 + 长度 + 沿途边属性 |
 
-### 迁移方案
+#### 调用示例
 
-#### 方案 A：桥接层（推荐）
-
-在 `DataCoreTools` 中新增 3 个 tool，桥接 Algorithm → Workspace：
-
-```
-workspace_algorithm_list     → 列出所有已注册算法（名称+描述+参数+kind）
-workspace_algorithm_run      → 执行单个算法（输入从 workspace 取，输出注册回 workspace）
-workspace_algorithm_pipeline → 执行多步流水线
-```
-
-**实现要点**：
-- `AlgorithmRegistry.Default` 已有全部算法，无需重新注册
-- `AlgorithmContext.Builder` 已支持参数字典，直接从 tool args 构建
-- 输出 `IDataSet` 自动注册到 Workspace（`DataSource.Derived`）
-- `AlgorithmResult.Metrics` 返回到 tool result JSON
-- 参数 Schema 从 `IAlgorithm.Parameters`（`AlgorithmParameterDescriptor`）自动生成
-
-**调用示例**：
 ```json
-{
-  "tool": "workspace_algorithm_run",
-  "args": {
-    "algorithm": "PageRank",
-    "dataset": "SocialGraph",
-    "resultName": "RankedGraph",
-    "params": {
-      "dampingFactor": 0.85,
-      "maxIterations": 200
-    }
-  }
-}
+// 统计分析
+{"tool": "workspace_analysis", "args": {
+  "workspace": "default",
+  "analysis": "correlation",
+  "dataset": "student_performance",
+  "columns": ["attendance", "submission_quality", "oral_score"]
+}}
+
+// 图分析
+{"tool": "workspace_analysis", "args": {
+  "workspace": "default",
+  "analysis": "centrality",
+  "graph": "social_network",
+  "method": "pagerank"
+}}
 ```
 
-**代码位置**：新增 `Runtime/Tools/AlgorithmTools.cs` 或直接加到 `DataCoreTools.cs`。
+### workspace_algorithm — 算法执行
 
-#### 方案 B：独立 Tool 文件（更干净）
+`algorithm` 参数决定执行哪个算法，桥接 `AlgorithmRegistry.Default`：
 
-将算法 tool 抽到 `Runtime/Tools/AlgorithmTools.cs`：
-- 避免 `DataCoreTools.cs` 继续膨胀（当前 ~2200 行）
-- 独立命名空间 `AroAro.DataCore.Tools.Algorithms`
-- `DataCoreTools.Execute()` 路由到 `AlgorithmTools.Execute()`
+| algorithm 值 | 来源 | 参数 |
+|--------------|------|------|
+| `PageRank` | 已有 PageRankAlgorithm | dampingFactor, maxIterations, tolerance |
+| `ConnectedComponents` | 已有 ConnectedComponentsAlgorithm | method(weak/strong) |
+| `MinMaxNormalize` | 已有 MinMaxNormalizeAlgorithm | columns, min, max |
+| `list` | — | 无，返回所有可用算法 |
 
-### 迁移步骤
+#### 调用示例
 
-```
-1. 新增 workspace_algorithm_list（30 行）
-   - 遍历 AlgorithmRegistry.Default.GetAll()
-   - 返回 name/description/kind/parameters
+```json
+// 执行算法
+{"tool": "workspace_algorithm", "args": {
+  "workspace": "default",
+  "algorithm": "PageRank",
+  "dataset": "social_graph",
+  "resultName": "ranked_graph",
+  "params": {"dampingFactor": 0.85, "maxIterations": 200}
+}}
 
-2. 新增 workspace_algorithm_run（60 行）
-   - Registry.Get(name) → IAlgorithm
-   - ws.Get(dataset) → IDataSet
-   - AlgorithmContext.Builder.WithParameters(params).Build()
-   - algo.Execute(input, context) → AlgorithmResult
-   - ws.Register(resultName, result.OutputDataset)
-   - 返回 {success, outputDataset, metrics, duration}
-
-3. 新增 workspace_algorithm_pipeline（80 行）
-   - 解析 steps 数组
-   - 逐步执行，前一步输出作为后一步输入
-   - 每步结果注册到 Workspace
-
-4. GetToolSchemas() 追加 3 个 schema
-
-5. GetToolNames() 追加 3 个名称
-
-6. 测试（~10 个）
+// 列出可用算法
+{"tool": "workspace_algorithm", "args": {"algorithm": "list"}}
 ```
 
-### 后续扩展
+### 实现要点
 
-迁移完成后可自然扩展：
-- 自定义算法注册（`workspace_algorithm_register`）
-- 算法可视化（执行历史、指标趋势）
-- 更多内置算法（社区检测、最短路径全源、特征工程）
+```
+1. workspace_analysis 实现（~300 行）
+   - 内部 switch(analysis) 分发
+   - 统计分析: 纯数值计算，无外部依赖
+   - 图分析: 复用 IGraphDataset 接口
+   - 结果注册回 Workspace (DataSource.Derived)
+
+2. workspace_algorithm 实现（~80 行）
+   - AlgorithmRegistry.Default.Get(name) 获取算法
+   - AlgorithmContext.Builder 构建上下文
+   - algo.Execute(input, context) 执行
+   - 输出 IDataSet 注册回 Workspace
+   - "list" 返回所有已注册算法
+
+3. 测试（~15 个）
+```
 
 ---
 
-## 八、代码约定
+## 七、代码约定
 
 - 命名空间：`AroAro.DataCore.Tools` / `AroAro.DataCore.Workspace`
 - 测试：xUnit，每测试独立 `DataCoreStore`，`Dispose` 清理
@@ -314,7 +241,7 @@ workspace_algorithm_pipeline → 执行多步流水线
 
 ---
 
-## 九、快速上手
+## 八、快速上手
 
 ```bash
 git clone https://github.com/Stlouislee/DataCore-for-Unity.git
@@ -324,4 +251,4 @@ cd DataCore.Tests~ && dotnet build && dotnet test
 
 ---
 
-**53 个 tool 已就绪，832 测试全绿。下一步见 Phase 8（命名空间重构 + Analysis API + Algorithm 桥接）。**
+**53 个 tool 已就绪，832 测试全绿。下一步见 Phase 8（Analysis API + Algorithm 桥接）。**
