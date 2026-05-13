@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -7,31 +8,38 @@ namespace AroAro.DataCore.Tools
 {
     /// <summary>
     /// 解析 filter 表达式字符串为 ITabularQuery 操作序列
-    ///
-    /// 支持的语法:
-    ///   比较: age > 18, score >= 90, name == Alice, status != inactive
-    ///   逻辑: AND, OR, NOT
-    ///   字符串: city contains Shang, name starts with A
-    ///   空值: email is null, email is not null
-    ///   范围: age between 18 35
-    ///   集合: city in Shanghai Beijing Guangzhou
-    ///   括号: (age > 18 AND city == Shanghai) OR admin == true
     /// </summary>
     public static class FilterExpressionParser
     {
+        // Predicate cache — avoids re-parsing the same expression
+        private static readonly ConcurrentDictionary<string, Func<Dictionary<string, object>, bool>> _predicateCache = new(StringComparer.Ordinal);
+
         /// <summary>
-        /// 解析表达式并返回一个过滤函数，可用于内存数据集
+        /// 解析表达式并返回一个过滤函数，可用于内存数据集（带缓存）
         /// </summary>
         public static Func<Dictionary<string, object>, bool> Parse(string expression)
         {
             if (string.IsNullOrWhiteSpace(expression))
                 return _ => true;
 
-            var tokens = Tokenize(expression);
-            var parser = new Parser(tokens);
-            var ast = parser.ParseExpression();
-            return ast.ToPredicate();
+            return _predicateCache.GetOrAdd(expression, expr =>
+            {
+                var tokens = Tokenize(expr);
+                var parser = new Parser(tokens);
+                var ast = parser.ParseExpression();
+                return ast.ToPredicate();
+            });
         }
+
+        /// <summary>
+        /// 清空谓词缓存（用于测试或内存回收）
+        /// </summary>
+        public static void ClearCache() => _predicateCache.Clear();
+
+        /// <summary>
+        /// 缓存命中统计
+        /// </summary>
+        public static int CacheSize => _predicateCache.Count;
 
         /// <summary>
         /// 解析表达式并应用到 ITabularQuery（用于 LiteDB 查询）

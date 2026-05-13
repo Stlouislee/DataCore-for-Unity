@@ -378,8 +378,23 @@ namespace AroAro.DataCore.Tools
         {
             var tmpName = TempName(source.Name);
             var copy = store.CreateTabular(tmpName);
-            var csv = source.ExportToCsv();
-            copy.ImportFromCsv(csv);
+
+            // Direct data copy — avoids CSV serialization/deserialization overhead
+            var rows = source.Query().ToDictionaries();
+            if (rows.Any())
+            {
+                var first = rows.First();
+                foreach (var col in source.ColumnNames)
+                {
+                    var colType = source.GetColumnType(col);
+                    if (colType == ColumnType.Numeric)
+                        copy.AddNumericColumn(col, new double[0]);
+                    else
+                        copy.AddStringColumn(col, new string[0]);
+                }
+                copy.AddRows(rows);
+            }
+
             return copy;
         }
 
