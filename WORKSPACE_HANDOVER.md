@@ -124,7 +124,112 @@ Phase 11: profile + bin + coalesce
 
 ---
 
-## 六、代码约定
+## 六、Algorithm 迁移方案
+
+### 现状
+
+Algorithm 框架已实现但与 Workspace/Agent Tools **完全隔离**：
+
+| 组件 | 文件 | 状态 |
+|------|------|------|
+| `IAlgorithm` / `ITabularAlgorithm` / `IGraphAlgorithm` | `Runtime/Algorithms/IAlgorithm.cs` | ✅ 接口完整 |
+| `AlgorithmBase` / `GraphAlgorithmBase` / `TabularAlgorithmBase` | `Runtime/Algorithms/AlgorithmBase.cs` | ✅ 模板方法 |
+| `AlgorithmContext` | `Runtime/Algorithms/AlgorithmContext.cs` | ✅ 参数+CancellationToken+进度 |
+| `AlgorithmResult` | `Runtime/Algorithms/AlgorithmResult.cs` | ✅ 输出数据集+指标+元数据 |
+| `AlgorithmRegistry` | `Runtime/Algorithms/AlgorithmRegistry.cs` | ✅ 单例注册表 |
+| `AlgorithmPipeline` | `Runtime/Algorithms/AlgorithmPipeline.cs` | ✅ 多步流水线 |
+| `PageRankAlgorithm` | `Runtime/Algorithms/Graph/PageRankAlgorithm.cs` | ✅ |
+| `ConnectedComponentsAlgorithm` | `Runtime/Algorithms/Graph/ConnectedComponentsAlgorithm.cs` | ✅ |
+| `MinMaxNormalizeAlgorithm` | `Runtime/Algorithms/Tabular/MinMaxNormalizeAlgorithm.cs` | ✅ |
+
+### 问题
+
+1. **无 Agent Tool 入口** — Agent 无法通过 `DataCoreTools.Execute()` 调用算法
+2. **无 Workspace 集成** — 算法输出是 `IDataSet`，需要手动注册到 Workspace
+3. **无 Schema 暴露** — `GetToolSchemas()` 不包含算法参数信息
+4. **Pipeline 未暴露** — 多步算法组合对 Agent 不可用
+
+### 迁移方案
+
+#### 方案 A：桥接层（推荐）
+
+在 `DataCoreTools` 中新增 3 个 tool，桥接 Algorithm → Workspace：
+
+```
+workspace_algorithm_list     → 列出所有已注册算法（名称+描述+参数+kind）
+workspace_algorithm_run      → 执行单个算法（输入从 workspace 取，输出注册回 workspace）
+workspace_algorithm_pipeline → 执行多步流水线
+```
+
+**实现要点**：
+- `AlgorithmRegistry.Default` 已有全部算法，无需重新注册
+- `AlgorithmContext.Builder` 已支持参数字典，直接从 tool args 构建
+- 输出 `IDataSet` 自动注册到 Workspace（`DataSource.Derived`）
+- `AlgorithmResult.Metrics` 返回到 tool result JSON
+- 参数 Schema 从 `IAlgorithm.Parameters`（`AlgorithmParameterDescriptor`）自动生成
+
+**调用示例**：
+```json
+{
+  "tool": "workspace_algorithm_run",
+  "args": {
+    "algorithm": "PageRank",
+    "dataset": "SocialGraph",
+    "resultName": "RankedGraph",
+    "params": {
+      "dampingFactor": 0.85,
+      "maxIterations": 200
+    }
+  }
+}
+```
+
+**代码位置**：新增 `Runtime/Tools/AlgorithmTools.cs` 或直接加到 `DataCoreTools.cs`。
+
+#### 方案 B：独立 Tool 文件（更干净）
+
+将算法 tool 抽到 `Runtime/Tools/AlgorithmTools.cs`：
+- 避免 `DataCoreTools.cs` 继续膨胀（当前 ~2200 行）
+- 独立命名空间 `AroAro.DataCore.Tools.Algorithms`
+- `DataCoreTools.Execute()` 路由到 `AlgorithmTools.Execute()`
+
+### 迁移步骤
+
+```
+1. 新增 workspace_algorithm_list（30 行）
+   - 遍历 AlgorithmRegistry.Default.GetAll()
+   - 返回 name/description/kind/parameters
+
+2. 新增 workspace_algorithm_run（60 行）
+   - Registry.Get(name) → IAlgorithm
+   - ws.Get(dataset) → IDataSet
+   - AlgorithmContext.Builder.WithParameters(params).Build()
+   - algo.Execute(input, context) → AlgorithmResult
+   - ws.Register(resultName, result.OutputDataset)
+   - 返回 {success, outputDataset, metrics, duration}
+
+3. 新增 workspace_algorithm_pipeline（80 行）
+   - 解析 steps 数组
+   - 逐步执行，前一步输出作为后一步输入
+   - 每步结果注册到 Workspace
+
+4. GetToolSchemas() 追加 3 个 schema
+
+5. GetToolNames() 追加 3 个名称
+
+6. 测试（~10 个）
+```
+
+### 后续扩展
+
+迁移完成后可自然扩展：
+- 自定义算法注册（`workspace_algorithm_register`）
+- 算法可视化（执行历史、指标趋势）
+- 更多内置算法（社区检测、最短路径全源、特征工程）
+
+---
+
+## 七、代码约定
 
 - 命名空间：`AroAro.DataCore.Tools` / `AroAro.DataCore.Workspace`
 - 测试：xUnit，每测试独立 `DataCoreStore`，`Dispose` 清理
@@ -134,7 +239,7 @@ Phase 11: profile + bin + coalesce
 
 ---
 
-## 七、快速上手
+## 八、快速上手
 
 ```bash
 git clone https://github.com/Stlouislee/DataCore-for-Unity.git
