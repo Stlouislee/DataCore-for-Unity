@@ -149,7 +149,7 @@ store.Workspace.Clear(); // clear workspace, store data unaffected
 
 ### Option 4: Agent Tools (For AI Integration)
 
-46 static tools for AI agent integration via `DataCoreTools.Execute()`:
+55 static tools for AI agent integration via `DataCoreTools.Execute()`:
 
 ```csharp
 using AroAro.DataCore.Tools;
@@ -288,7 +288,7 @@ dataCore.ImportCsvToTabular("path/to/file.csv", "MyDataset", true, ',');
 - **Graph Data**: Create and manipulate graph datasets with nodes and edges
 - **Persistence**: Automatic saving and loading of datasets
 - **Workspace**: Unified in-memory working area for data analysis workflows — register results, track sources, introspect state
-- **Agent Tools**: 46 tools via `DataCoreTools.Execute()` with JSON Schema exposure for AI frameworks
+- **Agent Tools**: 55 tools via `DataCoreTools.Execute()` with JSON Schema exposure for AI frameworks
 - **Filter Expressions**: Human-readable syntax (`age > 18 AND city == Shanghai`) with predicate cache
 - **DataFrame**: First-class DataFrame support within workspace
 
@@ -297,6 +297,11 @@ dataCore.ImportCsvToTabular("path/to/file.csv", "MyDataset", true, ',');
 - **Composable Pipelines**: Chain algorithms sequentially with automatic data flow
 - **Algorithm Registry**: Discover, register, and look up algorithms at runtime
 - **Extensible**: Create custom algorithms by extending base classes
+
+### Analysis API
+- **Statistical Analysis**: `describe`, `correlation`, `outliers`, `clustering`, `distribution` via `workspace_analysis`
+- **Graph Analysis**: `centrality`, `communities`, `shortest_path` via `workspace_analysis`
+- **Algorithm Bridge**: Execute registered algorithms and list available ones via `workspace_algorithm`
 
 ### Editor Integration
 - **Inspector Preview**: View dataset contents directly in Unity Inspector
@@ -437,4 +442,87 @@ DataCoreEventManager.AlgorithmCompleted += (sender, args) =>
 
 DataCoreEventManager.PipelineCompleted += (sender, args) =>
     Debug.Log($"Pipeline '{args.PipelineName}': {args.StepCount} steps in {args.Duration.TotalMilliseconds}ms");
+```
+
+### Using the Analysis API
+
+```csharp
+using AroAro.DataCore.Tools;
+
+DataCoreTools.Initialize(store);
+
+// Statistical analysis — describe all columns
+var describeResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "describe",
+    ["dataset"] = "player-stats"
+});
+// → per-column profile: type, non-null count, unique count, min, max, mean, median, std, skewness, kurtosis, null rate
+
+// Correlation matrix
+var corrResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "correlation",
+    ["dataset"] = "player-stats",
+    ["columns"] = new[] { "score", "playtime", "level" }
+});
+
+// Outlier detection
+var outlierResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "outliers",
+    ["dataset"] = "player-stats",
+    ["column"] = "score"
+});
+
+// K-Means clustering
+var clusterResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "clustering",
+    ["dataset"] = "player-stats",
+    ["k"] = 3,
+    ["features"] = new[] { "score", "playtime" }
+});
+
+// Graph analysis — centrality
+var centralityResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "centrality",
+    ["graph"] = "social-network",
+    ["method"] = "betweenness"
+});
+
+// Community detection
+var communityResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "communities",
+    ["graph"] = "social-network"
+});
+
+// Execute a registered algorithm via Agent tool
+var algoResult = DataCoreTools.Execute("workspace_algorithm", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["algorithm"] = "PageRank",
+    ["dataset"] = "social-graph",
+    ["resultName"] = "ranked_graph",
+    ["params"] = new Dictionary<string, object>
+    {
+        ["dampingFactor"] = 0.85,
+        ["maxIterations"] = 200
+    }
+});
+
+// List all available algorithms
+var listResult = DataCoreTools.Execute("workspace_algorithm", new Dictionary<string, object>
+{
+    ["algorithm"] = "list"
+});
+// → [{ name: "PageRank", ... }, { name: "ConnectedComponents", ... }, { name: "MinMaxNormalize", ... }]
 ```

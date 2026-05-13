@@ -12,7 +12,7 @@ DataCore uses a layered architecture to provide a flexible and robust data manag
                 │
 ┌─────────────────────────────────────┐
 │        Agent Tools Layer            │
-│  (46 tools via DataCoreTools)       │
+│  (55 tools via DataCoreTools)       │
 └─────────────────────────────────────┘
                 │
 ┌─────────────────────────────────────┐
@@ -82,7 +82,7 @@ ws.Summary();      // "Workspace: 3 datasets (1 store, 2 derived)"
 ```
 
 ### 3. Agent Tools (v0.5+)
-46 static tools exposed via `DataCoreTools.Execute(toolName, args)` for AI agent integration.
+55 static tools exposed via `DataCoreTools.Execute(toolName, args)` for AI agent integration.
 
 **Tool Categories**:
 - **Management** (3): create/destroy/list workspaces
@@ -96,6 +96,8 @@ ws.Summary();      // "Workspace: 3 datasets (1 store, 2 derived)"
 - **Meta** (5): clone, rename, remove, search, diff
 - **DataFrame** (5): create, convert, list, remove, to dataset
 - **Graph** (5): open graph, add nodes/edges, neighbors, describe
+- **Analysis** (1): statistical and graph analyses via `workspace_analysis`
+- **Algorithm** (1): algorithm execution and discovery via `workspace_algorithm`
 
 ```csharp
 DataCoreTools.Initialize(store);
@@ -112,7 +114,78 @@ string json = DataCoreTools.Execute("workspace_filter", new Dictionary<string, o
 string schemas = DataCoreTools.GetToolSchemas();
 ```
 
-### 3. Dataset Types (formerly #2)
+### 4. Analysis API (v0.7+)
+Statistical and graph analysis capabilities exposed through two dispatch tools.
+
+#### Statistical Analysis (`workspace_analysis`)
+Run column-level statistics, correlation, outlier detection, clustering, and distribution analysis on tabular datasets:
+
+```csharp
+// Describe — per-column profile with skewness, kurtosis, null rate
+DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["analysis"] = "describe", ["dataset"] = "player-stats"
+});
+
+// Correlation — Pearson matrix for numeric columns
+DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["analysis"] = "correlation", ["dataset"] = "player-stats",
+    ["columns"] = new[] { "score", "playtime" }
+});
+
+// Clustering — K-Means with cluster labels registered as new dataset
+DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["analysis"] = "clustering", ["dataset"] = "player-stats",
+    ["k"] = 3, ["features"] = new[] { "score", "playtime" }
+});
+```
+
+#### Graph Analysis (`workspace_analysis`)
+Analyze graph structure with centrality measures, community detection, and pathfinding:
+
+```csharp
+// Centrality — degree, betweenness, or closeness
+DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["analysis"] = "centrality", ["graph"] = "social-network",
+    ["method"] = "betweenness"
+});
+
+// Community detection — Label Propagation Algorithm
+DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["analysis"] = "communities", ["graph"] = "social-network"
+});
+
+// Shortest path — BFS between two nodes
+DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["analysis"] = "shortest_path", ["graph"] = "social-network",
+    ["from"] = "nodeA", ["to"] = "nodeB"
+});
+```
+
+#### Algorithm Bridge (`workspace_algorithm`)
+Execute registered algorithms or discover available ones:
+
+```csharp
+// Execute PageRank via Agent tool
+DataCoreTools.Execute("workspace_algorithm", new Dictionary<string, object>
+{
+    ["algorithm"] = "PageRank", ["dataset"] = "social-graph",
+    ["params"] = new Dictionary<string, object> { ["dampingFactor"] = 0.85 }
+});
+
+// List all registered algorithms
+DataCoreTools.Execute("workspace_algorithm", new Dictionary<string, object>
+{
+    ["algorithm"] = "list"
+});
+```
+
+### 5. Dataset Types (formerly #3)
 
 #### Tabular Data
 Structured, row-oriented data similar to a database table or Excel spreadsheet.

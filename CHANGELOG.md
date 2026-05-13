@@ -1,3 +1,24 @@
+## 0.7.0
+
+### New Features
+- **Analysis API (Phase 8)**: Statistical and graph analysis via unified dispatch tools
+  - `workspace_analysis` — dispatches based on `analysis` parameter for tabular and graph analyses
+  - **Tabular analyses**: `describe` (per-column profile with skewness/kurtosis/null rate), `correlation` (Pearson matrix), `outliers` (IQR-based detection), `clustering` (K-Means with centroid output and inertia), `distribution` (histogram bins + frequency counts)
+  - **Graph analyses**: `centrality` (degree/betweenness/closeness with normalized scores), `communities` (Label Propagation Algorithm), `shortest_path` (BFS between two nodes)
+  - All analysis results register as new datasets in Workspace (DataSource.Derived)
+
+- **Algorithm Bridge (Phase 8)**: Agent tool interface to the Algorithm Framework
+  - `workspace_algorithm` — bridges to `AlgorithmRegistry.Default`
+  - `algorithm = "list"` → returns all registered algorithms (PageRank, ConnectedComponents, MinMaxNormalize) with metadata
+  - Execute mode → looks up algorithm, builds AlgorithmContext, executes, registers output dataset, returns metrics/metadata
+
+### Tools
+- 2 new tools: `workspace_analysis`, `workspace_algorithm` (55 total)
+
+### Tests
+- 37 new tests across analysis and algorithm tool test files
+- Full suite: 869 passed (850 pass, 19 skip, 0 failed)
+
 ## 0.6.0
 
 ### New Features

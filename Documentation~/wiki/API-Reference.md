@@ -229,15 +229,15 @@ Concrete implementation of `IWorkspace`. Created automatically by `DataCoreStore
 ## AroAro.DataCore.Tools
 
 ### DataCoreTools
-Static dispatch layer for 46 Agent tools.
+Static dispatch layer for 55 Agent tools.
 
 #### Static Methods
 - `void Initialize(DataCoreStore store)`: Bind to store instance.
 - `string Execute(string toolName, Dictionary<string, object> args)`: Route and execute a tool, returns JSON.
-- `string GetToolSchemas()`: Returns JSON Schema array for all 46 tools.
+- `string GetToolSchemas()`: Returns JSON Schema array for all 55 tools.
 - `IReadOnlyCollection<string> GetToolNames()`: Returns all tool names.
 
-#### Tool Categories (46 total)
+#### Tool Categories (55 total)
 | Category | Count | Tools |
 |----------|-------|-------|
 | Management | 3 | `workspace_create`, `workspace_destroy`, `workspace_list` |
@@ -251,6 +251,8 @@ Static dispatch layer for 46 Agent tools.
 | Meta | 5 | `workspace_clone`, `workspace_rename_dataset`, `workspace_remove`, `workspace_search`, `workspace_diff` |
 | DataFrame | 5 | `workspace_dataframe_create`, `workspace_dataframe_convert`, `workspace_dataframe_list`, `workspace_dataframe_remove`, `workspace_dataframe_to_dataset` |
 | Graph | 5 | `workspace_open_graph`, `workspace_add_nodes`, `workspace_add_edges`, `workspace_graph_neighbors`, `workspace_describe_graph` |
+| Analysis | 1 | `workspace_analysis` |
+| Algorithm | 1 | `workspace_algorithm` |
 
 ---
 
@@ -285,6 +287,90 @@ Unified JSON return structure for all tools.
 - `object Result`: Result data (on success).
 - `string Error`: Error message (on failure).
 - `string Suggestion`: Correction suggestion (on failure).
+
+---
+
+### workspace_analysis
+Dispatches statistical and graph analyses based on the `analysis` parameter.
+
+#### Parameters
+- `string workspace` (optional): Workspace name (default: "default").
+- `string analysis` (required): Analysis type to execute.
+- `string dataset` / `string graph`: Target dataset or graph name.
+- Additional parameters vary by analysis type.
+
+#### Tabular Analyses
+
+| `analysis` | Description | Extra Parameters | Output |
+|------------|-------------|-----------------|--------|
+| `describe` | Per-column profile | — | type, non-null count, unique count, min, max, mean, median, std, 25th/75th percentile, skewness, kurtosis, null rate |
+| `correlation` | Pearson correlation matrix | `columns` (optional) | Column × column correlation matrix |
+| `outliers` | IQR-based outlier detection | `column` | Bounds, outlier rows, outlier count |
+| `clustering` | K-Means clustering | `k`, `features` | Centroid output, inertia, cluster label column registered as new dataset |
+| `distribution` | Distribution analysis | `column` | Histogram bins with stats (numeric); frequency counts (string) |
+
+#### Graph Analyses
+
+| `analysis` | Description | Extra Parameters | Output |
+|------------|-------------|-----------------|--------|
+| `centrality` | Centrality scores | `method` (degree/betweenness/closeness) | Normalized scores, top-N nodes |
+| `communities` | Community detection | — | Label Propagation Algorithm results, community labels |
+| `shortest_path` | BFS shortest path | `from`, `to` | Path, length, edge properties |
+
+#### Usage
+```csharp
+var result = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "correlation",
+    ["dataset"] = "player-stats",
+    ["columns"] = new[] { "score", "playtime" }
+});
+```
+
+---
+
+### workspace_algorithm
+Bridges to `AlgorithmRegistry.Default` for algorithm execution and discovery.
+
+#### Parameters
+- `string workspace` (optional): Workspace name (default: "default").
+- `string algorithm` (required): Algorithm name, or `"list"` to discover available algorithms.
+- `string dataset` (for execution): Target dataset name.
+- `string resultName` (optional): Name for the output dataset in workspace.
+- `Dictionary<string, object> params` (optional): Algorithm-specific parameters.
+
+#### List Mode
+When `algorithm = "list"`, returns all registered algorithms with metadata:
+- PageRank — Graph centrality (dampingFactor, maxIterations, tolerance)
+- ConnectedComponents — Weakly/strongly connected components (method)
+- MinMaxNormalize — Numeric column normalization (columns, min, max)
+
+#### Execute Mode
+Looks up the algorithm, builds an `AlgorithmContext` from params, executes on the target dataset, registers the output dataset in workspace, and returns metrics/metadata.
+
+#### Usage
+```csharp
+// Execute PageRank
+var result = DataCoreTools.Execute("workspace_algorithm", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["algorithm"] = "PageRank",
+    ["dataset"] = "social-graph",
+    ["resultName"] = "ranked_graph",
+    ["params"] = new Dictionary<string, object>
+    {
+        ["dampingFactor"] = 0.85,
+        ["maxIterations"] = 200
+    }
+});
+
+// List available algorithms
+var list = DataCoreTools.Execute("workspace_algorithm", new Dictionary<string, object>
+{
+    ["algorithm"] = "list"
+});
+```
 
 ---
 

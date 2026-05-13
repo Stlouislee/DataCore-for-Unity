@@ -1,12 +1,12 @@
 # Workspace Handover — 给下一个 Agent
 
-**版本** 0.7.0 | **分支** `feature/workspace` | **PR** #165 | **更新** 2026-05-13
+**版本** 0.8.0 | **分支** `feature/workspace` | **PR** #165 | **更新** 2026-05-13
 
 ---
 
 ## 一、你拿到的是什么
 
-Workspace 是 DataCore 的统一内存工作区，替代 Session 成为 `DataCoreStore` 的默认"桌面"。Phase 1-7 全部完成，53 个 Agent Tool 已就绪，832 测试全绿。
+Workspace 是 DataCore 的统一内存工作区，替代 Session 成为 `DataCoreStore` 的默认"桌面"。Phase 1-8 全部完成，55 个 Agent Tool 已就绪，869 测试全绿。
 
 ### 核心文件
 
@@ -15,18 +15,18 @@ Workspace 是 DataCore 的统一内存工作区，替代 Session 成为 `DataCor
 | Workspace | `Runtime/Workspace/IWorkspace.cs` | 接口 |
 | | `Runtime/Workspace/Workspace.cs` | 实现（~600 行） |
 | | `Runtime/DataCoreStore.cs` | Workspace 属性 + 多 workspace |
-| Tools | `Runtime/Tools/DataCoreTools.cs` | 53 个 tool dispatch（~2200 行） |
+| Tools | `Runtime/Tools/DataCoreTools.cs` | 55 个 tool dispatch（~2200 行） |
 | | `Runtime/Tools/FilterExpressionParser.cs` | 表达式解析 + 谓词缓存 |
 | | `Runtime/Tools/ToolResult.cs` | 统一 JSON 返回 |
 | Editor | `Runtime/DataCoreEditorComponent.cs` | Workspace API |
 | | `Editor/DataCoreEditor.cs` | Inspector Workspace 分区 |
 | | `Editor/DataCorePreviewWindow.cs` | Workspace 预览 |
 
-### 测试：832 pass / 0 fail / 19 skip
+### 测试：869 pass / 0 fail / 19 skip
 
 ---
 
-## 二、已实现的 53 个 Tool
+## 二、已实现的 55 个 Tool
 
 | 类别 | 数量 | Tool |
 |------|------|------|
@@ -41,6 +41,8 @@ Workspace 是 DataCore 的统一内存工作区，替代 Session 成为 `DataCor
 | 元操作 | 5 | clone / rename / remove / search / diff |
 | DataFrame | 5 | create / convert / list / remove / to_dataset |
 | 图数据 | 7 | open_graph / add_nodes / add_edges / neighbors / describe / path(BFS) / stats |
+| 分析 | 1 | analysis(describe/correlation/outliers/clustering/distribution/centrality/communities/shortest_path) |
+| 算法 | 1 | algorithm(list/PageRank/ConnectedComponents/MinMaxNormalize) |
 | 批量 | 1 | batch(多步骤) |
 
 **调用方式**：`DataCoreTools.Execute("tool_name", args)` → JSON
@@ -124,9 +126,9 @@ Phase 11: profile + bin + coalesce
 
 ---
 
-## 六、Phase 8：Analysis API + Algorithm 桥接
+## 六、Phase 8：Analysis API + Algorithm 桥接 ✅
 
-### 设计：2 个通用 Tool
+### 设计：2 个通用 Tool（已实现）
 
 不膨胀 tool 数量，用 2 个通用 tool 内部 dispatch：
 
@@ -210,23 +212,23 @@ workspace_algorithm(workspace, algorithm, params)
 {"tool": "workspace_algorithm", "args": {"algorithm": "list"}}
 ```
 
-### 实现要点
+### 实现要点（已完成）
 
 ```
-1. workspace_analysis 实现（~300 行）
+1. workspace_analysis 实现（~300 行） ✅
    - 内部 switch(analysis) 分发
    - 统计分析: 纯数值计算，无外部依赖
    - 图分析: 复用 IGraphDataset 接口
    - 结果注册回 Workspace (DataSource.Derived)
 
-2. workspace_algorithm 实现（~80 行）
+2. workspace_algorithm 实现（~80 行） ✅
    - AlgorithmRegistry.Default.Get(name) 获取算法
    - AlgorithmContext.Builder 构建上下文
    - algo.Execute(input, context) 执行
    - 输出 IDataSet 注册回 Workspace
    - "list" 返回所有已注册算法
 
-3. 测试（~15 个）
+3. 测试（37 个） ✅
 ```
 
 ---
@@ -251,4 +253,4 @@ cd DataCore.Tests~ && dotnet build && dotnet test
 
 ---
 
-**53 个 tool 已就绪，832 测试全绿。下一步见 Phase 8（Analysis API + Algorithm 桥接）。**
+**55 个 tool 已就绪，869 测试全绿。Phase 8（Analysis API + Algorithm 桥接）已完成。下一步见 Tool Coverage Gap Analysis。**
