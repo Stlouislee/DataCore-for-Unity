@@ -38,46 +38,54 @@ namespace AroAro.DataCore.Tools
                 ToolSchema("workspace_open_ref", "从 store 加载（零拷贝）", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true) }),
                 ToolSchema("workspace_import_csv", "从 CSV 导入", new[] { Param("workspace","string","工作区",false,"default"), Param("csv","string","CSV 内容",true), Param("name","string","数据集名称",true), Param("hasHeader","boolean","含表头",false,true) }),
                 ToolSchema("workspace_describe", "数据集描述", new[] { Param("workspace","string","工作区",false,"default"), Param("name","string","数据集名称",false) }),
-                ToolSchema("workspace_sample", "查看样例行", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true), Param("count","integer","行数",false,10), Param("offset","integer","偏移",false,0) }),
-                ToolSchema("workspace_schema", "列 schema", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
-                ToolSchema("workspace_statistics", "统计摘要", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
-                ToolSchema("workspace_filter", "过滤行", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("filter","string","过滤表达式",true), Param("resultName","string","结果名称",false) }),
-                ToolSchema("workspace_select", "选择列", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("columns","array","列名列表",true), Param("resultName","string","结果名称",false) }),
-                ToolSchema("workspace_rename_columns", "重命名列", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("columns","object","映射 {old:new}",true), Param("resultName","string","结果名称",false) }),
-                ToolSchema("workspace_sort", "排序", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("column","string","排序列",true), Param("ascending","boolean","升序",false,true), Param("resultName","string","结果名称",false) }),
-                ToolSchema("workspace_distinct", "去重", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("columns","array","去重列",false), Param("resultName","string","结果名称",false) }),
-                ToolSchema("workspace_add_column", "新增计算列", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("column","string","新列名",true), Param("expression","string","表达式",true), Param("resultName","string","结果名称",false) }),
-                ToolSchema("workspace_drop_columns", "删除列", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("columns","array","要删除的列",true), Param("resultName","string","结果名称",false) }),
-                ToolSchema("workspace_limit", "限制行数", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("count","integer","行数",true), Param("offset","integer","偏移",false,0), Param("resultName","string","结果名称",false) }),
-                ToolSchema("workspace_random_sample", "随机采样", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("count","integer","采样数",true), Param("seed","integer","种子",false), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_sample", "查看样例行", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("count","integer","行数",false,10), Param("offset","integer","偏移",false,0) }),
+                ToolSchema("workspace_schema", "列 schema", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true) }),
+                ToolSchema("workspace_statistics", "统计摘要", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true) }),
+                ToolSchema("workspace_filter", "过滤行", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("filter","string","过滤表达式",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_select", "选择列", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("columns","array","列名列表",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_rename_columns", "重命名列", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("columns","object","映射 {old:new}",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_sort", "排序", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("column","string","排序列",true), Param("ascending","boolean","升序",false,true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_distinct", "去重", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("columns","array","去重列",false), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_add_column", "新增计算列", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("column","string","新列名",true), Param("expression","string","表达式",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_drop_columns", "删除列", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("columns","array","要删除的列",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_limit", "限制行数", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("count","integer","行数",true), Param("offset","integer","偏移",false,0), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_random_sample", "随机采样", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("count","integer","采样数",true), Param("seed","integer","种子",false), Param("resultName","string","结果名称",false) }),
                 ToolSchema("workspace_join", "Join", new[] { Param("workspace","string","工作区",false,"default"), Param("left","string","左表",true), Param("right","string","右表",true), Param("leftKey","string","左键",true), Param("rightKey","string","右键",false), Param("how","string","inner/left/right/full",false,"inner"), Param("resultName","string","结果名称",false) }),
                 ToolSchema("workspace_union", "上下拼接", new[] { Param("workspace","string","工作区",false,"default"), Param("left","string","上表",true), Param("right","string","下表",true), Param("resultName","string","结果名称",false) }),
                 ToolSchema("workspace_cross", "笛卡尔积", new[] { Param("workspace","string","工作区",false,"default"), Param("left","string","左表",true), Param("right","string","右表",true), Param("resultName","string","结果名称",false) }),
-                ToolSchema("workspace_aggregate", "Group by 聚合", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("groupBy","array","分组列",true), Param("aggregations","array","聚合配置",true), Param("resultName","string","结果名称",false) }),
-                ToolSchema("workspace_summarize", "全局聚合", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("aggregations","array","聚合配置",true) }),
-                ToolSchema("workspace_count", "计数", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("filter","string","过滤条件",false) }),
-                ToolSchema("workspace_save", "推回 store", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
-                ToolSchema("workspace_export_csv", "导出 CSV", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
-                ToolSchema("workspace_export_json", "导出 JSON", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true), Param("format","string","records/columns/values",false,"records") }),
-                ToolSchema("workspace_update", "更新行", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true), Param("filter","string","过滤条件",true), Param("set","object","更新值",true) }),
-                ToolSchema("workspace_delete_rows", "删除行", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true), Param("filter","string","过滤条件",true) }),
-                ToolSchema("workspace_append", "追加行", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true), Param("rows","array","行数据",true) }),
-                ToolSchema("workspace_clear", "清空数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
-                ToolSchema("workspace_clone", "克隆数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("resultName","string","结果名称",true) }),
+                ToolSchema("workspace_aggregate", "Group by 聚合", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("groupBy","array","分组列",true), Param("aggregations","array","聚合配置",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_summarize", "全局聚合", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("aggregations","array","聚合配置",true) }),
+                ToolSchema("workspace_count", "计数", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("filter","string","过滤条件",false) }),
+                ToolSchema("workspace_save", "推回 store", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true) }),
+                ToolSchema("workspace_export_csv", "导出 CSV", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true) }),
+                ToolSchema("workspace_export_json", "导出 JSON", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("format","string","records/columns/values",false,"records") }),
+                ToolSchema("workspace_update", "更新行", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("filter","string","过滤条件",true), Param("set","object","更新值",true) }),
+                ToolSchema("workspace_delete_rows", "删除行", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("filter","string","过滤条件",true) }),
+                ToolSchema("workspace_append", "追加行", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("rows","array","行数据",true) }),
+                ToolSchema("workspace_clear", "清空数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true) }),
+                ToolSchema("workspace_clone", "克隆数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("resultName","string","结果名称",true) }),
                 ToolSchema("workspace_rename_dataset", "重命名", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","原名称",true), Param("newName","string","新名称",true) }),
-                ToolSchema("workspace_remove", "移除数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
+                ToolSchema("workspace_remove", "移除数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true) }),
                 ToolSchema("workspace_search", "搜索数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("query","string","关键词",true) }),
                 ToolSchema("workspace_diff", "比较数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("left","string","左表",true), Param("right","string","右表",true) }),
                 ToolSchema("workspace_dataframe_create", "创建 DataFrame", new[] { Param("workspace","string","工作区",false,"default"), Param("name","string","名称",true) }),
-                ToolSchema("workspace_dataframe_convert", "表格转 DataFrame", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true) }),
+                ToolSchema("workspace_dataframe_convert", "表格转 DataFrame", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true) }),
                 ToolSchema("workspace_dataframe_list", "列出 DataFrame", new[] { Param("workspace","string","工作区",false,"default") }),
                 ToolSchema("workspace_dataframe_remove", "移除 DataFrame", new[] { Param("workspace","string","工作区",false,"default"), Param("name","string","名称",true) }),
-                ToolSchema("workspace_dataframe_to_dataset", "DataFrame 转表格", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","DataFrame 名称",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_dataframe_to_dataset", "DataFrame 转表格", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","DataFrame 名称",true), Param("resultName","string","结果名称",false) }),
                 ToolSchema("workspace_open_graph", "加载图到 Workspace", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","图数据集",true), Param("resultName","string","结果名称",false) }),
                 ToolSchema("workspace_add_nodes", "添加节点", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true), Param("nodes","array","节点列表",true) }),
                 ToolSchema("workspace_add_edges", "添加边", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true), Param("edges","array","边列表",true) }),
                 ToolSchema("workspace_graph_neighbors", "邻居查询", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true), Param("nodeId","string","节点 ID",true), Param("direction","string","in/out/all",false,"out") }),
-                ToolSchema("workspace_describe_graph", "描述图", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true) })
+                ToolSchema("workspace_describe_graph", "描述图", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true) }),
+
+                // ── Phase 7: 扩展 ──
+                ToolSchema("workspace_value_counts", "某列值计数（频次分布）", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("column","string","列名",true), Param("top","integer","返回前 N 个",false,20), Param("ascending","boolean","升序",false,false) }),
+                ToolSchema("workspace_cast_column", "列类型转换 (string↔numeric)", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("column","string","列名",true), Param("type","string","目标类型: numeric/string",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_fill_null", "空值填充", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("column","string","列名（省略则全部列）",false), Param("value","string","填充值",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_graph_path", "图最短路径查找 (BFS)", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true), Param("from","string","起始节点",true), Param("to","string","目标节点",true), Param("maxDepth","integer","最大深度",false,10) }),
+                ToolSchema("workspace_graph_stats", "图统计信息（度分布、连通分量）", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true) }),
+                ToolSchema("workspace_batch", "批量执行多个 tool（减少 Agent 调用次数）", new[] { Param("workspace","string","工作区",false,"default"), Param("steps","array","步骤列表 [{tool, args}]",true) })
             };
 
             return JsonSerializer.Serialize(schemas, new JsonSerializerOptions { WriteIndented = true });
@@ -105,7 +113,9 @@ namespace AroAro.DataCore.Tools
                 "workspace_dataframe_create", "workspace_dataframe_convert",
                 "workspace_dataframe_list", "workspace_dataframe_remove", "workspace_dataframe_to_dataset",
                 "workspace_open_graph", "workspace_add_nodes", "workspace_add_edges",
-                "workspace_graph_neighbors", "workspace_describe_graph"
+                "workspace_graph_neighbors", "workspace_describe_graph",
+                "workspace_value_counts", "workspace_cast_column", "workspace_fill_null",
+                "workspace_graph_path", "workspace_graph_stats", "workspace_batch"
             };
         }
 
@@ -217,8 +227,29 @@ namespace AroAro.DataCore.Tools
                     "workspace_graph_neighbors" => WorkspaceGraphNeighbors(args),
                     "workspace_describe_graph" => WorkspaceDescribeGraph(args),
 
-                    _ => ToolResult.Fail(toolName, $"Unknown tool: {toolName}").ToJson()
+                    // Phase 7: 扩展
+                    "workspace_value_counts" => WorkspaceValueCounts(args),
+                    "workspace_cast_column" => WorkspaceCastColumn(args),
+                    "workspace_fill_null" => WorkspaceFillNull(args),
+                    "workspace_graph_path" => WorkspaceGraphPath(args),
+                    "workspace_graph_stats" => WorkspaceGraphStats(args),
+                    "workspace_batch" => WorkspaceBatch(args),
+
+                    _ => ToolResult.Fail(toolName, $"Unknown tool: {toolName}",
+                        "Use workspace_list to see available tools.").ToJson()
                 };
+            }
+            catch (KeyNotFoundException ex)
+            {
+                // Dataset not found — try to add available names as suggestion
+                string suggestion = null;
+                try
+                {
+                    var ws = GetWorkspace(args);
+                    suggestion = Suggest(ws, ex.Message);
+                }
+                catch { }
+                return ToolResult.Fail(toolName, ex.Message, suggestion).ToJson();
             }
             catch (Exception ex)
             {
@@ -234,6 +265,81 @@ namespace AroAro.DataCore.Tools
             if (wsName == "default")
                 return _store.Workspace;
             return _store.GetWorkspace(wsName);
+        }
+
+        /// <summary>
+        /// 统一获取数据集名称。优先 "dataset"，fallback "source"（向后兼容）。
+        /// </summary>
+        private static string GetDatasetName(Dictionary<string, object> args, bool required = true)
+        {
+            if (args.TryGetValue("dataset", out var d) && d != null)
+                return d.ToString();
+            if (args.TryGetValue("source", out var s) && s != null)
+                return s.ToString();
+            if (required)
+                throw new ArgumentException("Missing required parameter: 'dataset' (or legacy 'source')");
+            return null;
+        }
+
+        /// <summary>
+        /// 统一获取图数据集名称。优先 "graph"，fallback "dataset"。
+        /// </summary>
+        private static string GetGraphName(Dictionary<string, object> args)
+        {
+            if (args.TryGetValue("graph", out var g) && g != null)
+                return g.ToString();
+            if (args.TryGetValue("dataset", out var d) && d != null)
+                return d.ToString();
+            throw new ArgumentException("Missing required parameter: 'graph' (or 'dataset')");
+        }
+
+        /// <summary>
+        /// 生成 "Did you mean X?" suggestion
+        /// </summary>
+        private static string Suggest(IWorkspace ws, string name, string extra = null)
+        {
+            var all = ws.AllNames.ToList();
+            if (all.Count == 0) return extra;
+
+            // Simple edit-distance match
+            string best = null;
+            int bestDist = int.MaxValue;
+            foreach (var n in all)
+            {
+                var dist = Levenshtein(name.ToLower(), n.ToLower());
+                if (dist < bestDist) { bestDist = dist; best = n; }
+            }
+
+            if (best != null && bestDist <= 3 && bestDist > 0)
+                return $"Did you mean '{best}'?";
+
+            return $"Available: {string.Join(", ", all.Take(10))}";
+        }
+
+        private static int Levenshtein(string a, string b)
+        {
+            var d = new int[a.Length + 1, b.Length + 1];
+            for (int i = 0; i <= a.Length; i++) d[i, 0] = i;
+            for (int j = 0; j <= b.Length; j++) d[0, j] = j;
+            for (int i = 1; i <= a.Length; i++)
+                for (int j = 1; j <= b.Length; j++)
+                    d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1),
+                        d[i - 1, j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+            return d[a.Length, b.Length];
+        }
+
+        /// <summary>
+        /// 获取 tabular 数据集，失败时返回带 suggestion 的错误 JSON
+        /// </summary>
+        private static (ITabularDataset tabular, string errorJson) GetTabularOrError(
+            IWorkspace ws, string name, string action)
+        {
+            var ds = ws.Get(name);
+            if (ds is ITabularDataset tabular)
+                return (tabular, null);
+            return (null, ToolResult.Fail(action,
+                $"'{name}' is not a tabular dataset (it's {ds.Kind})",
+                $"This tool only works with tabular data. Use workspace_describe_graph for graphs.").ToJson());
         }
 
         private static string GetString(Dictionary<string, object> args, string key, string defaultValue = null)
@@ -571,7 +677,7 @@ namespace AroAro.DataCore.Tools
 
             var ds = ws.Get(dsName);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_sample", $"Dataset '{dsName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_sample", $"\'{dsName}\' is not a tabular dataset (kind: {ws.Get(dsName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var sample = GetSample(tabular, rows, offset);
             return ToolResult.Ok("workspace_sample", new
@@ -592,7 +698,7 @@ namespace AroAro.DataCore.Tools
 
             var ds = ws.Get(dsName);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_schema", $"Dataset '{dsName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_schema", $"\'{dsName}\' is not a tabular dataset (kind: {ws.Get(dsName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var columns = tabular.ColumnNames.Select(colName =>
             {
@@ -638,7 +744,7 @@ namespace AroAro.DataCore.Tools
 
             var ds = ws.Get(dsName);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_statistics", $"Dataset '{dsName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_statistics", $"\'{dsName}\' is not a tabular dataset (kind: {ws.Get(dsName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             if (columns.Length == 0)
                 columns = tabular.ColumnNames.ToArray();
@@ -701,13 +807,13 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceFilter(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var filter = GetString(args, "filter");
             var resultName = GetString(args, "resultName");
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_filter", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_filter", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             // Parse and apply filter
             var predicate = FilterExpressionParser.Parse(filter);
@@ -755,13 +861,13 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceSelect(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var columns = GetStringArray(args, "columns");
             var resultName = GetString(args, "resultName");
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_select", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_select", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var selectedRows = tabular.Query().Select(columns).ToDictionaries();
             var result = _store.CreateTabular(resultName);
@@ -794,13 +900,13 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceRenameColumns(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var mapping = GetStringMap(args, "mapping");
             var resultName = GetString(args, "resultName");
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_rename_columns", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_rename_columns", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             // Export to CSV, rename headers, re-import
             var csv = tabular.ExportToCsv();
@@ -836,14 +942,14 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceSort(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var by = GetString(args, "by");
             var order = GetString(args, "order", "asc");
             var resultName = GetString(args, "resultName");
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_sort", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_sort", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var query = tabular.Query();
             query = order == "desc" ? query.OrderByDescending(by) : query.OrderBy(by);
@@ -879,13 +985,13 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceDistinct(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var columns = GetStringArray(args, "columns");
             var resultName = GetString(args, "resultName");
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_distinct", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_distinct", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var allRows = tabular.Query().ToDictionaries();
             var distinctCols = columns.Length > 0 ? columns : tabular.ColumnNames.ToArray();
@@ -925,14 +1031,14 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceAddColumn(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var columnName = GetString(args, "columnName");
             var expression = GetString(args, "expression");
             var resultName = GetString(args, "resultName");
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_add_column", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_add_column", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             // Simple expression evaluation: supports column references and basic arithmetic
             var allRows = tabular.Query().ToDictionaries();
@@ -986,13 +1092,13 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceDropColumns(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var columns = GetStringArray(args, "columns");
             var resultName = GetString(args, "resultName");
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_drop_columns", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_drop_columns", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var remaining = tabular.ColumnNames.Where(c => !columns.Contains(c)).ToList();
             var allRows = tabular.Query().Select(remaining.ToArray()).ToDictionaries();
@@ -1026,14 +1132,14 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceLimit(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var count = GetInt(args, "count");
             var offset = GetInt(args, "offset", 0);
             var resultName = GetString(args, "resultName");
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_limit", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_limit", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var limited = tabular.Query().Skip(offset).Limit(count).ToDictionaries();
 
@@ -1066,14 +1172,14 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceRandomSample(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var count = GetInt(args, "count");
             var seed = GetInt(args, "seed", -1);
             var resultName = GetString(args, "resultName");
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_random_sample", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_random_sample", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var allRows = tabular.Query().ToDictionaries();
             var rng = seed >= 0 ? new Random(seed) : new Random();
@@ -1125,9 +1231,9 @@ namespace AroAro.DataCore.Tools
             var rightDs = ws.Get(rightName);
 
             if (leftDs is not ITabularDataset leftTab)
-                return ToolResult.Fail("workspace_join", $"Dataset '{leftName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_join", $"\'{leftName}\' is not a tabular dataset (kind: {ws.Get(leftName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
             if (rightDs is not ITabularDataset rightTab)
-                return ToolResult.Fail("workspace_join", $"Dataset '{rightName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_join", $"\'{rightName}\' is not a tabular dataset (kind: {ws.Get(rightName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var leftRows = leftTab.Query().ToDictionaries();
             var rightRows = rightTab.Query().ToDictionaries();
@@ -1246,7 +1352,7 @@ namespace AroAro.DataCore.Tools
             {
                 var ds = ws.Get(src);
                 if (ds is not ITabularDataset tab)
-                    return ToolResult.Fail("workspace_union", $"Dataset '{src}' is not tabular").ToJson();
+                    return ToolResult.Fail("workspace_union", $"\'{src}\' is not a tabular dataset (kind: {ws.Get(src).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
                 if (firstTab == null) firstTab = tab;
                 allRows.AddRange(tab.Query().ToDictionaries());
             }
@@ -1287,9 +1393,9 @@ namespace AroAro.DataCore.Tools
             var rightDs = ws.Get(rightName);
 
             if (leftDs is not ITabularDataset leftTab)
-                return ToolResult.Fail("workspace_cross", $"Dataset '{leftName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_cross", $"\'{leftName}\' is not a tabular dataset (kind: {ws.Get(leftName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
             if (rightDs is not ITabularDataset rightTab)
-                return ToolResult.Fail("workspace_cross", $"Dataset '{rightName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_cross", $"\'{rightName}\' is not a tabular dataset (kind: {ws.Get(rightName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var leftRows = leftTab.Query().ToDictionaries();
             var rightRows = rightTab.Query().ToDictionaries();
@@ -1341,14 +1447,14 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceAggregate(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var groupBy = GetString(args, "groupBy");
             var aggregations = GetAggregations(args, "aggregations");
             var resultName = GetString(args, "resultName");
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_aggregate", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_aggregate", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var allRows = tabular.Query().ToDictionaries();
             var groups = allRows.GroupBy(r => r.TryGetValue(groupBy, out var v) ? v?.ToString() ?? "" : "");
@@ -1417,13 +1523,13 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceSummarize(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var aggregations = GetAggregations(args, "aggregations");
             var resultName = GetString(args, "resultName");
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_summarize", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_summarize", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var allRows = tabular.Query().ToDictionaries();
             var resultRow = new Dictionary<string, object>();
@@ -1469,12 +1575,12 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceCount(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var filter = GetString(args, "filter", null);
 
             var ds = ws.Get(source);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_count", $"Dataset '{source}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_count", $"\'{source}\' is not a tabular dataset (kind: {ws.Get(source).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             int count;
             if (!string.IsNullOrWhiteSpace(filter))
@@ -1507,7 +1613,7 @@ namespace AroAro.DataCore.Tools
 
             var ds = ws.Get(datasetName);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_save", $"Dataset '{datasetName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_save", $"\'{datasetName}\' is not a tabular dataset (kind: {ws.Get(datasetName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var saveName = newName ?? datasetName;
 
@@ -1540,7 +1646,7 @@ namespace AroAro.DataCore.Tools
 
             var ds = ws.Get(datasetName);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_export_csv", $"Dataset '{datasetName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_export_csv", $"\'{datasetName}\' is not a tabular dataset (kind: {ws.Get(datasetName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var csv = tabular.ExportToCsv(delimiter[0], includeHeader);
             return ToolResult.Ok("workspace_export_csv", new
@@ -1560,7 +1666,7 @@ namespace AroAro.DataCore.Tools
 
             var ds = ws.Get(datasetName);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_export_json", $"Dataset '{datasetName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_export_json", $"\'{datasetName}\' is not a tabular dataset (kind: {ws.Get(datasetName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var rows = tabular.Query().ToDictionaries();
             string json = format switch
@@ -1594,7 +1700,7 @@ namespace AroAro.DataCore.Tools
 
             var ds = ws.Get(datasetName);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_update", $"Dataset '{datasetName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_update", $"\'{datasetName}\' is not a tabular dataset (kind: {ws.Get(datasetName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var predicate = FilterExpressionParser.Parse(filter);
             int updated = 0;
@@ -1630,7 +1736,7 @@ namespace AroAro.DataCore.Tools
 
             var ds = ws.Get(datasetName);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_delete_rows", $"Dataset '{datasetName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_delete_rows", $"\'{datasetName}\' is not a tabular dataset (kind: {ws.Get(datasetName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var predicate = FilterExpressionParser.Parse(filter);
             int deleted = 0;
@@ -1663,7 +1769,7 @@ namespace AroAro.DataCore.Tools
 
             var ds = ws.Get(datasetName);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_append", $"Dataset '{datasetName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_append", $"\'{datasetName}\' is not a tabular dataset (kind: {ws.Get(datasetName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             // Convert JsonElement values to proper types
             var rows = rawRows.Select(r => r.ToDictionary(kv => kv.Key, kv => ConvertJsonValue(kv.Value))).ToList();
@@ -1701,7 +1807,7 @@ namespace AroAro.DataCore.Tools
 
             var ds = ws.Get(datasetName);
             if (ds is not ITabularDataset tabular)
-                return ToolResult.Fail("workspace_clear", $"Dataset '{datasetName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_clear", $"\'{datasetName}\' is not a tabular dataset (kind: {ws.Get(datasetName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             int cleared = tabular.Clear();
             return ToolResult.Ok("workspace_clear", new
@@ -1719,7 +1825,7 @@ namespace AroAro.DataCore.Tools
         public static string WorkspaceClone(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var newName = GetOptionalString(args, "newName");
 
             var cloned = ws.Clone(source, newName);
@@ -1787,9 +1893,9 @@ namespace AroAro.DataCore.Tools
             var rightDs = ws.Get(rightName);
 
             if (leftDs is not ITabularDataset leftTab)
-                return ToolResult.Fail("workspace_diff", $"Dataset '{leftName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_diff", $"\'{leftName}\' is not a tabular dataset (kind: {ws.Get(leftName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
             if (rightDs is not ITabularDataset rightTab)
-                return ToolResult.Fail("workspace_diff", $"Dataset '{rightName}' is not tabular").ToJson();
+                return ToolResult.Fail("workspace_diff", $"\'{rightName}\' is not a tabular dataset (kind: {ws.Get(rightName).Kind})", "This tool requires tabular data. Use graph tools for graph datasets.").ToJson();
 
             var leftCols = new HashSet<string>(leftTab.ColumnNames);
             var rightCols = new HashSet<string>(rightTab.ColumnNames);
@@ -1860,7 +1966,7 @@ namespace AroAro.DataCore.Tools
         private static string WorkspaceDataFrameConvert(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var df = ws.ConvertToDataFrame(source);
             return ToolResult.Ok("workspace_dataframe_convert", new
             {
@@ -1897,7 +2003,7 @@ namespace AroAro.DataCore.Tools
         private static string WorkspaceDataFrameToDataset(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var source = GetString(args, "source");
+            var source = GetDatasetName(args);
             var resultName = GetOptionalString(args, "resultName", source);
 
             var df = ws.GetDataFrame(source);
@@ -1935,7 +2041,7 @@ namespace AroAro.DataCore.Tools
             if (!_store.TryGet(dataset, out var ds) || ds is not IGraphDataset graph)
                 return ToolResult.Fail("workspace_open_graph",
                     $"Graph dataset '{dataset}' not found in store",
-                    $"Available graphs: {string.Join(", ", _store.GraphNames)}").ToJson();
+                    $"Available graphs: {string.Join(", ", _store.GraphNames.Take(10))}").ToJson();
 
             // Clone graph data into workspace
             var newGraph = _store.CreateGraph("__ws_" + resultName);
@@ -1963,7 +2069,7 @@ namespace AroAro.DataCore.Tools
         private static string WorkspaceAddNodes(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var graphName = GetString(args, "graph");
+            var graphName = GetGraphName(args);
             var nodes = GetRowArray(args, "nodes");
 
             var ds = ws.Get(graphName);
@@ -1991,7 +2097,7 @@ namespace AroAro.DataCore.Tools
         private static string WorkspaceAddEdges(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var graphName = GetString(args, "graph");
+            var graphName = GetGraphName(args);
             var edges = GetRowArray(args, "edges");
 
             var ds = ws.Get(graphName);
@@ -2021,7 +2127,7 @@ namespace AroAro.DataCore.Tools
         private static string WorkspaceGraphNeighbors(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var graphName = GetString(args, "graph");
+            var graphName = GetGraphName(args);
             var nodeId = GetString(args, "nodeId");
             var direction = GetOptionalString(args, "direction", "out");
 
@@ -2061,7 +2167,7 @@ namespace AroAro.DataCore.Tools
         private static string WorkspaceDescribeGraph(Dictionary<string, object> args)
         {
             var ws = GetWorkspace(args);
-            var graphName = GetString(args, "graph");
+            var graphName = GetGraphName(args);
 
             var ds = ws.Get(graphName);
             if (ds is not IGraphDataset graph)
@@ -2090,6 +2196,416 @@ namespace AroAro.DataCore.Tools
                 edges = graph.EdgeCount,
                 nodeSample,
                 edgeSample
+            }).ToJson();
+        }
+
+        #endregion
+
+        // ────────────────────────────────────────────────────────────
+        // Phase 7: 扩展 Tools
+        // ────────────────────────────────────────────────────────────
+
+        #region Phase 7 Tools
+
+        private static string WorkspaceValueCounts(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var name = GetDatasetName(args);
+            var column = GetString(args, "column");
+            var top = GetInt(args, "top", 20);
+            var ascending = GetBool(args, "ascending", false);
+
+            var (tabular, err) = GetTabularOrError(ws, name, "workspace_value_counts");
+            if (err != null) return err;
+
+            if (!tabular.HasColumn(column))
+                return ToolResult.Fail("workspace_value_counts",
+                    $"Column '{column}' not found in '{name}'",
+                    $"Available columns: {string.Join(", ", tabular.ColumnNames)}").ToJson();
+
+            // Count values
+            var counts = new Dictionary<string, int>();
+            for (int i = 0; i < tabular.RowCount; i++)
+            {
+                var row = tabular.GetRow(i);
+                var val = row.TryGetValue(column, out var v) ? v?.ToString() ?? "(null)" : "(null)";
+                counts[val] = counts.GetValueOrDefault(val, 0) + 1;
+            }
+
+            var sorted = ascending
+                ? counts.OrderBy(kv => kv.Value).Take(top)
+                : counts.OrderByDescending(kv => kv.Value).Take(top);
+
+            var result = sorted.Select(kv => new { value = kv.Key, count = kv.Value }).ToList();
+
+            return ToolResult.Ok("workspace_value_counts", new
+            {
+                dataset = name,
+                column,
+                totalValues = tabular.RowCount,
+                uniqueValues = counts.Count,
+                top = result.Count,
+                ascending,
+                data = result
+            }).ToJson();
+        }
+
+        private static string WorkspaceCastColumn(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var name = GetDatasetName(args);
+            var column = GetString(args, "column");
+            var targetType = GetString(args, "type").ToLower();
+            var resultName = GetOptionalString(args, "resultName", name);
+
+            var (tabular, err) = GetTabularOrError(ws, name, "workspace_cast_column");
+            if (err != null) return err;
+
+            if (!tabular.HasColumn(column))
+                return ToolResult.Fail("workspace_cast_column",
+                    $"Column '{column}' not found",
+                    $"Available: {string.Join(", ", tabular.ColumnNames)}").ToJson();
+
+            if (targetType != "numeric" && targetType != "string")
+                return ToolResult.Fail("workspace_cast_column",
+                    $"Invalid type '{targetType}'. Must be 'numeric' or 'string'").ToJson();
+
+            // Copy all data
+            var rows = tabular.Query().ToDictionaries();
+            var newTabular = _store.CreateTabular("__cast_" + resultName);
+
+            foreach (var col in tabular.ColumnNames)
+            {
+                if (col == column) continue;
+                var ct = tabular.GetColumnType(col);
+                if (ct == ColumnType.Numeric)
+                    newTabular.AddNumericColumn(col, new double[0]);
+                else
+                    newTabular.AddStringColumn(col, new string[0]);
+            }
+
+            // Add converted column
+            if (targetType == "numeric")
+            {
+                newTabular.AddNumericColumn(column, new double[0]);
+                var convertedRows = rows.Select(r =>
+                {
+                    var newRow = new Dictionary<string, object>(r);
+                    if (newRow.TryGetValue(column, out var v) && v != null)
+                    {
+                        if (double.TryParse(v.ToString(), System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture, out var d))
+                            newRow[column] = d;
+                        else
+                            newRow[column] = 0.0;
+                    }
+                    else newRow[column] = 0.0;
+                    return (IDictionary<string, object>)newRow;
+                });
+                newTabular.AddRows(convertedRows);
+            }
+            else
+            {
+                newTabular.AddStringColumn(column, new string[0]);
+                var convertedRows = rows.Select(r =>
+                {
+                    var newRow = new Dictionary<string, object>(r);
+                    if (newRow.TryGetValue(column, out var v))
+                        newRow[column] = v?.ToString() ?? "";
+                    else
+                        newRow[column] = "";
+                    return (IDictionary<string, object>)newRow;
+                });
+                newTabular.AddRows(convertedRows);
+            }
+
+            ws.Register(resultName, newTabular, DataSource.Derived);
+            return ToolResult.Ok("workspace_cast_column", new
+            {
+                dataset = resultName,
+                column,
+                fromType = tabular.GetColumnType(column).ToString(),
+                toType = targetType,
+                rows = newTabular.RowCount
+            }).ToJson();
+        }
+
+        private static string WorkspaceFillNull(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var name = GetDatasetName(args);
+            var column = GetOptionalString(args, "column");
+            var fillValue = GetString(args, "value");
+            var resultName = GetOptionalString(args, "resultName", name);
+
+            var (tabular, err) = GetTabularOrError(ws, name, "workspace_fill_null");
+            if (err != null) return err;
+
+            var rows = tabular.Query().ToDictionaries();
+            var columns = column != null ? new[] { column } : tabular.ColumnNames.ToArray();
+
+            foreach (var col in columns)
+            {
+                if (!tabular.HasColumn(col))
+                    return ToolResult.Fail("workspace_fill_null",
+                        $"Column '{col}' not found",
+                        $"Available: {string.Join(", ", tabular.ColumnNames)}").ToJson();
+            }
+
+            int filled = 0;
+            foreach (var row in rows)
+            {
+                foreach (var col in columns)
+                {
+                    if (!row.ContainsKey(col) || row[col] == null)
+                    {
+                        var colType = tabular.GetColumnType(col);
+                        row[col] = colType == ColumnType.Numeric
+                            ? (object)(double.TryParse(fillValue, out var d) ? d : 0.0)
+                            : fillValue;
+                        filled++;
+                    }
+                }
+            }
+
+            var newTabular = _store.CreateTabular("__fill_" + resultName);
+            foreach (var col in tabular.ColumnNames)
+            {
+                var ct = tabular.GetColumnType(col);
+                if (ct == ColumnType.Numeric)
+                    newTabular.AddNumericColumn(col, rows.Select(r => r.TryGetValue(col, out var v) && v != null ? Convert.ToDouble(v) : 0.0).ToArray());
+                else
+                    newTabular.AddStringColumn(col, rows.Select(r => r.TryGetValue(col, out var v) ? v?.ToString() ?? "" : "").ToArray());
+            }
+
+            ws.Register(resultName, newTabular, DataSource.Derived);
+            return ToolResult.Ok("workspace_fill_null", new
+            {
+                dataset = resultName,
+                columns = columns.Length == 1 ? columns[0] : "all",
+                fillValue,
+                cellsFilled = filled,
+                rows = newTabular.RowCount
+            }).ToJson();
+        }
+
+        private static string WorkspaceGraphPath(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var graphName = GetGraphName(args);
+            var from = GetString(args, "from");
+            var to = GetString(args, "to");
+            var maxDepth = GetInt(args, "maxDepth", 10);
+
+            var ds = ws.Get(graphName);
+            if (ds is not IGraphDataset graph)
+                return ToolResult.Fail("workspace_graph_path",
+                    $"'{graphName}' is not a graph dataset").ToJson();
+
+            if (!graph.HasNode(from))
+                return ToolResult.Fail("workspace_graph_path",
+                    $"Node '{from}' not found", $"Available nodes: {string.Join(", ", graph.GetNodeIds().Take(10))}").ToJson();
+            if (!graph.HasNode(to))
+                return ToolResult.Fail("workspace_graph_path",
+                    $"Node '{to}' not found", $"Available nodes: {string.Join(", ", graph.GetNodeIds().Take(10))}").ToJson();
+
+            // BFS shortest path
+            var visited = new HashSet<string> { from };
+            var queue = new Queue<List<string>>();
+            queue.Enqueue(new List<string> { from });
+            List<string> foundPath = null;
+
+            while (queue.Count > 0 && foundPath == null)
+            {
+                var path = queue.Dequeue();
+                if (path.Count > maxDepth) continue;
+
+                var current = path[^1];
+                foreach (var neighbor in graph.GetOutNeighbors(current))
+                {
+                    if (neighbor == to)
+                    {
+                        foundPath = new List<string>(path) { neighbor };
+                        break;
+                    }
+                    if (!visited.Contains(neighbor))
+                    {
+                        visited.Add(neighbor);
+                        var newPath = new List<string>(path) { neighbor };
+                        queue.Enqueue(newPath);
+                    }
+                }
+            }
+
+            if (foundPath == null)
+                return ToolResult.Ok("workspace_graph_path", new
+                {
+                    graph = graphName,
+                    from,
+                    to,
+                    found = false,
+                    message = $"No path found from '{from}' to '{to}' within depth {maxDepth}"
+                }).ToJson();
+
+            // Get edge properties along path
+            var edges = new List<object>();
+            for (int i = 0; i < foundPath.Count - 1; i++)
+            {
+                edges.Add(new
+                {
+                    from = foundPath[i],
+                    to = foundPath[i + 1],
+                    properties = graph.GetEdgeProperties(foundPath[i], foundPath[i + 1])
+                });
+            }
+
+            return ToolResult.Ok("workspace_graph_path", new
+            {
+                graph = graphName,
+                from,
+                to,
+                found = true,
+                length = foundPath.Count - 1,
+                path = foundPath,
+                edges
+            }).ToJson();
+        }
+
+        private static string WorkspaceGraphStats(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var graphName = GetGraphName(args);
+
+            var ds = ws.Get(graphName);
+            if (ds is not IGraphDataset graph)
+                return ToolResult.Fail("workspace_graph_stats",
+                    $"'{graphName}' is not a graph dataset").ToJson();
+
+            // Degree stats
+            var nodeIds = graph.GetNodeIds().ToList();
+            var outDegrees = new List<int>();
+            var inDegrees = new List<int>();
+            foreach (var id in nodeIds)
+            {
+                outDegrees.Add(graph.GetOutDegree(id));
+                inDegrees.Add(graph.GetInDegree(id));
+            }
+
+            // Connected components (BFS)
+            var visited = new HashSet<string>();
+            int components = 0;
+            foreach (var id in nodeIds)
+            {
+                if (visited.Contains(id)) continue;
+                components++;
+                var queue = new Queue<string>();
+                queue.Enqueue(id);
+                while (queue.Count > 0)
+                {
+                    var curr = queue.Dequeue();
+                    if (!visited.Add(curr)) continue;
+                    foreach (var n in graph.GetNeighbors(curr))
+                        if (!visited.Contains(n)) queue.Enqueue(n);
+                }
+            }
+
+            // Top nodes by out-degree
+            var topOut = nodeIds
+                .Select(id => new { id, outDeg = graph.GetOutDegree(id) })
+                .OrderByDescending(x => x.outDeg)
+                .Take(5)
+                .ToList();
+
+            return ToolResult.Ok("workspace_graph_stats", new
+            {
+                graph = graphName,
+                nodes = graph.NodeCount,
+                edges = graph.EdgeCount,
+                connectedComponents = components,
+                avgOutDegree = outDegrees.Count > 0 ? outDegrees.Average() : 0,
+                maxOutDegree = outDegrees.Count > 0 ? outDegrees.Max() : 0,
+                avgInDegree = inDegrees.Count > 0 ? inDegrees.Average() : 0,
+                maxInDegree = inDegrees.Count > 0 ? inDegrees.Max() : 0,
+                topByOutDegree = topOut,
+                density = nodeIds.Count > 1
+                    ? (double)graph.EdgeCount / (nodeIds.Count * (nodeIds.Count - 1))
+                    : 0
+            }).ToJson();
+        }
+
+        private static string WorkspaceBatch(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var steps = GetRowArray(args, "steps");
+
+            if (steps.Count == 0)
+                return ToolResult.Fail("workspace_batch", "No steps provided").ToJson();
+            if (steps.Count > 20)
+                return ToolResult.Fail("workspace_batch", "Maximum 20 steps per batch").ToJson();
+
+            var results = new List<object>();
+            int succeeded = 0;
+            int failed = 0;
+
+            for (int i = 0; i < steps.Count; i++)
+            {
+                var step = steps[i];
+                if (!step.TryGetValue("tool", out var toolObj))
+                {
+                    results.Add(new { step = i, success = false, error = "Missing 'tool' field" });
+                    failed++;
+                    continue;
+                }
+
+                var toolName = toolObj.ToString();
+                var stepArgs = new Dictionary<string, object>();
+
+                // Inherit workspace from batch
+                stepArgs["workspace"] = ws == _store.Workspace ? "default" :
+                    _store.ListWorkspaces().FirstOrDefault(w => w.Workspace == ws).Name ?? "default";
+
+                // Merge step args
+                if (step.TryGetValue("args", out var argsObj) && argsObj is JsonElement argsJe && argsJe.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in argsJe.EnumerateObject())
+                        stepArgs[prop.Name] = prop.Value;
+                }
+                else if (step.TryGetValue("args", out var argsDict) && argsDict is Dictionary<string, object> d)
+                {
+                    foreach (var kv in d)
+                        stepArgs[kv.Key] = kv.Value;
+                }
+
+                try
+                {
+                    var result = Execute(toolName, stepArgs);
+                    var parsed = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(result);
+                    var success = parsed.TryGetProperty("success", out var s) && s.GetBoolean();
+                    if (success) succeeded++; else failed++;
+
+                    object stepResult;
+                    if (parsed.TryGetProperty("result", out var r))
+                        stepResult = r;
+                    else if (parsed.TryGetProperty("error", out var e))
+                        stepResult = new { error = e.GetString() };
+                    else
+                        stepResult = null;
+
+                    results.Add(new { step = i, tool = toolName, success, result = stepResult });
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new { step = i, tool = toolName, success = false, error = ex.Message });
+                    failed++;
+                }
+            }
+
+            return ToolResult.Ok("workspace_batch", new
+            {
+                totalSteps = steps.Count,
+                succeeded,
+                failed,
+                results
             }).ToJson();
         }
 

@@ -33,7 +33,7 @@ namespace DataCore.Tests.Tools
             var json = DataCoreTools.GetToolSchemas();
             var docs = JsonSerializer.Deserialize<JsonElement[]>(json);
             Assert.NotNull(docs);
-            Assert.True(docs.Length > 40, $"Expected >40 schemas, got {docs.Length}");
+            Assert.True(docs.Length > 45, $"Expected >45 schemas, got {docs.Length}");
         }
 
         [Fact]
@@ -56,11 +56,13 @@ namespace DataCore.Tests.Tools
         public void GetToolNames_ReturnsAllTools()
         {
             var names = DataCoreTools.GetToolNames();
-            Assert.True(names.Count > 40);
+            Assert.Equal(53, names.Count);
             Assert.Contains("workspace_filter", names);
             Assert.Contains("workspace_open_graph", names);
             Assert.Contains("workspace_dataframe_create", names);
             Assert.Contains("workspace_describe_graph", names);
+            Assert.Contains("workspace_value_counts", names);
+            Assert.Contains("workspace_batch", names);
         }
 
         [Fact]
@@ -85,12 +87,12 @@ namespace DataCore.Tests.Tools
             var parameters = filter.GetProperty("parameters");
             var properties = parameters.GetProperty("properties");
 
-            Assert.True(properties.TryGetProperty("source", out _));
+            Assert.True(properties.TryGetProperty("dataset", out _));
             Assert.True(properties.TryGetProperty("filter", out _));
 
             var required = parameters.GetProperty("required");
             var requiredList = required.EnumerateArray().Select(e => e.GetString()).ToList();
-            Assert.Contains("source", requiredList);
+            Assert.Contains("dataset", requiredList);
             Assert.Contains("filter", requiredList);
         }
     }
