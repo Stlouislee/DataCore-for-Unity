@@ -25,6 +25,121 @@ namespace AroAro.DataCore.Tools
         }
 
         /// <summary>
+        /// 返回所有 tool 的 JSON Schema，供 Agent 框架自动注册。
+        /// </summary>
+        public static string GetToolSchemas()
+        {
+            var schemas = new List<object>
+            {
+                ToolSchema("workspace_create", "创建命名 workspace", new[] { Param("name","string","工作区名称",true) }),
+                ToolSchema("workspace_destroy", "销毁命名 workspace", new[] { Param("name","string","工作区名称",true) }),
+                ToolSchema("workspace_list", "列出所有 workspace", Array.Empty<object>()),
+                ToolSchema("workspace_open", "从 store 加载（复制语义）", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_open_ref", "从 store 加载（零拷贝）", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true) }),
+                ToolSchema("workspace_import_csv", "从 CSV 导入", new[] { Param("workspace","string","工作区",false,"default"), Param("csv","string","CSV 内容",true), Param("name","string","数据集名称",true), Param("hasHeader","boolean","含表头",false,true) }),
+                ToolSchema("workspace_describe", "数据集描述", new[] { Param("workspace","string","工作区",false,"default"), Param("name","string","数据集名称",false) }),
+                ToolSchema("workspace_sample", "查看样例行", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true), Param("count","integer","行数",false,10), Param("offset","integer","偏移",false,0) }),
+                ToolSchema("workspace_schema", "列 schema", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
+                ToolSchema("workspace_statistics", "统计摘要", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
+                ToolSchema("workspace_filter", "过滤行", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("filter","string","过滤表达式",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_select", "选择列", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("columns","array","列名列表",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_rename_columns", "重命名列", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("columns","object","映射 {old:new}",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_sort", "排序", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("column","string","排序列",true), Param("ascending","boolean","升序",false,true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_distinct", "去重", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("columns","array","去重列",false), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_add_column", "新增计算列", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("column","string","新列名",true), Param("expression","string","表达式",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_drop_columns", "删除列", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("columns","array","要删除的列",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_limit", "限制行数", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("count","integer","行数",true), Param("offset","integer","偏移",false,0), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_random_sample", "随机采样", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("count","integer","采样数",true), Param("seed","integer","种子",false), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_join", "Join", new[] { Param("workspace","string","工作区",false,"default"), Param("left","string","左表",true), Param("right","string","右表",true), Param("leftKey","string","左键",true), Param("rightKey","string","右键",false), Param("how","string","inner/left/right/full",false,"inner"), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_union", "上下拼接", new[] { Param("workspace","string","工作区",false,"default"), Param("left","string","上表",true), Param("right","string","下表",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_cross", "笛卡尔积", new[] { Param("workspace","string","工作区",false,"default"), Param("left","string","左表",true), Param("right","string","右表",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_aggregate", "Group by 聚合", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("groupBy","array","分组列",true), Param("aggregations","array","聚合配置",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_summarize", "全局聚合", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("aggregations","array","聚合配置",true) }),
+                ToolSchema("workspace_count", "计数", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("filter","string","过滤条件",false) }),
+                ToolSchema("workspace_save", "推回 store", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
+                ToolSchema("workspace_export_csv", "导出 CSV", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
+                ToolSchema("workspace_export_json", "导出 JSON", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true), Param("format","string","records/columns/values",false,"records") }),
+                ToolSchema("workspace_update", "更新行", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true), Param("filter","string","过滤条件",true), Param("set","object","更新值",true) }),
+                ToolSchema("workspace_delete_rows", "删除行", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true), Param("filter","string","过滤条件",true) }),
+                ToolSchema("workspace_append", "追加行", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true), Param("rows","array","行数据",true) }),
+                ToolSchema("workspace_clear", "清空数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
+                ToolSchema("workspace_clone", "克隆数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true), Param("resultName","string","结果名称",true) }),
+                ToolSchema("workspace_rename_dataset", "重命名", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","原名称",true), Param("newName","string","新名称",true) }),
+                ToolSchema("workspace_remove", "移除数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","数据集名称",true) }),
+                ToolSchema("workspace_search", "搜索数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("query","string","关键词",true) }),
+                ToolSchema("workspace_diff", "比较数据集", new[] { Param("workspace","string","工作区",false,"default"), Param("left","string","左表",true), Param("right","string","右表",true) }),
+                ToolSchema("workspace_dataframe_create", "创建 DataFrame", new[] { Param("workspace","string","工作区",false,"default"), Param("name","string","名称",true) }),
+                ToolSchema("workspace_dataframe_convert", "表格转 DataFrame", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","源数据集",true) }),
+                ToolSchema("workspace_dataframe_list", "列出 DataFrame", new[] { Param("workspace","string","工作区",false,"default") }),
+                ToolSchema("workspace_dataframe_remove", "移除 DataFrame", new[] { Param("workspace","string","工作区",false,"default"), Param("name","string","名称",true) }),
+                ToolSchema("workspace_dataframe_to_dataset", "DataFrame 转表格", new[] { Param("workspace","string","工作区",false,"default"), Param("source","string","DataFrame 名称",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_open_graph", "加载图到 Workspace", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","图数据集",true), Param("resultName","string","结果名称",false) }),
+                ToolSchema("workspace_add_nodes", "添加节点", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true), Param("nodes","array","节点列表",true) }),
+                ToolSchema("workspace_add_edges", "添加边", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true), Param("edges","array","边列表",true) }),
+                ToolSchema("workspace_graph_neighbors", "邻居查询", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true), Param("nodeId","string","节点 ID",true), Param("direction","string","in/out/all",false,"out") }),
+                ToolSchema("workspace_describe_graph", "描述图", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true) })
+            };
+
+            return JsonSerializer.Serialize(schemas, new JsonSerializerOptions { WriteIndented = true });
+        }
+
+        /// <summary>
+        /// 返回所有注册的 tool 名称列表
+        /// </summary>
+        public static IReadOnlyCollection<string> GetToolNames()
+        {
+            return new[]
+            {
+                "workspace_create", "workspace_destroy", "workspace_list",
+                "workspace_open", "workspace_open_ref", "workspace_import_csv",
+                "workspace_describe", "workspace_sample", "workspace_schema", "workspace_statistics",
+                "workspace_filter", "workspace_select", "workspace_rename_columns",
+                "workspace_sort", "workspace_distinct", "workspace_add_column",
+                "workspace_drop_columns", "workspace_limit", "workspace_random_sample",
+                "workspace_join", "workspace_union", "workspace_cross",
+                "workspace_aggregate", "workspace_summarize", "workspace_count",
+                "workspace_save", "workspace_export_csv", "workspace_export_json",
+                "workspace_update", "workspace_delete_rows", "workspace_append", "workspace_clear",
+                "workspace_clone", "workspace_rename_dataset", "workspace_remove",
+                "workspace_search", "workspace_diff",
+                "workspace_dataframe_create", "workspace_dataframe_convert",
+                "workspace_dataframe_list", "workspace_dataframe_remove", "workspace_dataframe_to_dataset",
+                "workspace_open_graph", "workspace_add_nodes", "workspace_add_edges",
+                "workspace_graph_neighbors", "workspace_describe_graph"
+            };
+        }
+
+        private static object ToolSchema(string name, string description, object[] parameters)
+        {
+            var props = new Dictionary<string, object>();
+            var required = new List<string>();
+            foreach (var p in parameters)
+            {
+                var pd = (Dictionary<string, object>)p;
+                var pn = (string)pd["name"];
+                var ps = new Dictionary<string, object> { ["type"] = pd["type"], ["description"] = pd["description"] };
+                if (pd.ContainsKey("default")) ps["default"] = pd["default"];
+                props[pn] = ps;
+                if ((bool)pd["required"]) required.Add(pn);
+            }
+            return new Dictionary<string, object>
+            {
+                ["name"] = name, ["description"] = description,
+                ["parameters"] = new Dictionary<string, object>
+                {
+                    ["type"] = "object", ["properties"] = props, ["required"] = required
+                }
+            };
+        }
+
+        private static object Param(string name, string type, string description, bool required = false, object defaultValue = null)
+        {
+            var d = new Dictionary<string, object> { ["name"] = name, ["type"] = type, ["description"] = description, ["required"] = required };
+            if (defaultValue != null) d["default"] = defaultValue;
+            return d;
+        }
+
+        /// <summary>
         /// 路由入口：按 tool name 分发到具体方法
         /// </summary>
         public static string Execute(string toolName, Dictionary<string, object> args)
