@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using AroAro.DataCore.Algorithms;
 using AroAro.DataCore.Session;
 using AroAro.DataCore.Workspace;
 using Microsoft.Data.Analysis;
@@ -85,7 +86,31 @@ namespace AroAro.DataCore.Tools
                 ToolSchema("workspace_fill_null", "空值填充", new[] { Param("workspace","string","工作区",false,"default"), Param("dataset","string","数据集名称",true), Param("column","string","列名（省略则全部列）",false), Param("value","string","填充值",true), Param("resultName","string","结果名称",false) }),
                 ToolSchema("workspace_graph_path", "图最短路径查找 (BFS)", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true), Param("from","string","起始节点",true), Param("to","string","目标节点",true), Param("maxDepth","integer","最大深度",false,10) }),
                 ToolSchema("workspace_graph_stats", "图统计信息（度分布、连通分量）", new[] { Param("workspace","string","工作区",false,"default"), Param("graph","string","图名称",true) }),
-                ToolSchema("workspace_batch", "批量执行多个 tool（减少 Agent 调用次数）", new[] { Param("workspace","string","工作区",false,"default"), Param("steps","array","步骤列表 [{tool, args}]",true) })
+                ToolSchema("workspace_batch", "批量执行多个 tool（减少 Agent 调用次数）", new[] { Param("workspace","string","工作区",false,"default"), Param("steps","array","步骤列表 [{tool, args}]",true) }),
+
+                // ── Phase 8: 分析与算法 ──
+                ToolSchema("workspace_analysis", "数据分析（describe/correlation/outliers/clustering/distribution/centrality/communities/shortest_path）", new[] {
+                    Param("workspace","string","工作区",false,"default"),
+                    Param("analysis","string","分析类型",true),
+                    Param("dataset","string","数据集名称",false),
+                    Param("graph","string","图名称",false),
+                    Param("columns","array","列名列表",false),
+                    Param("column","string","列名",false),
+                    Param("method","string","方法（centrality: degree/betweenness/closeness）",false),
+                    Param("k","integer","聚类数（clustering）",false,3),
+                    Param("from","string","起始节点（shortest_path）",false),
+                    Param("to","string","目标节点（shortest_path）",false),
+                    Param("resultName","string","结果名称",false),
+                    Param("bins","integer","直方图桶数（distribution）",false,10)
+                }),
+                ToolSchema("workspace_algorithm", "执行注册的算法或列出所有算法", new[] {
+                    Param("workspace","string","工作区",false,"default"),
+                    Param("algorithm","string","算法名称或 'list'",true),
+                    Param("dataset","string","数据集名称",false),
+                    Param("graph","string","图名称",false),
+                    Param("resultName","string","结果名称",false),
+                    Param("params","object","算法参数",false)
+                })
             };
 
             return JsonSerializer.Serialize(schemas, new JsonSerializerOptions { WriteIndented = true });
@@ -115,7 +140,8 @@ namespace AroAro.DataCore.Tools
                 "workspace_open_graph", "workspace_add_nodes", "workspace_add_edges",
                 "workspace_graph_neighbors", "workspace_describe_graph",
                 "workspace_value_counts", "workspace_cast_column", "workspace_fill_null",
-                "workspace_graph_path", "workspace_graph_stats", "workspace_batch"
+                "workspace_graph_path", "workspace_graph_stats", "workspace_batch",
+                "workspace_analysis", "workspace_algorithm"
             };
         }
 
@@ -234,6 +260,10 @@ namespace AroAro.DataCore.Tools
                     "workspace_graph_path" => WorkspaceGraphPath(args),
                     "workspace_graph_stats" => WorkspaceGraphStats(args),
                     "workspace_batch" => WorkspaceBatch(args),
+
+                    // Phase 8: 分析与算法
+                    "workspace_analysis" => WorkspaceAnalysis(args),
+                    "workspace_algorithm" => WorkspaceAlgorithm(args),
 
                     _ => ToolResult.Fail(toolName, $"Unknown tool: {toolName}",
                         "Use workspace_list to see available tools.").ToJson()
@@ -2606,6 +2636,906 @@ namespace AroAro.DataCore.Tools
                 succeeded,
                 failed,
                 results
+            }).ToJson();
+        }
+
+        #endregion
+
+        // ────────────────────────────────────────────────────────────
+        // Phase 8: Analysis & Algorithm Tools
+        // ────────────────────────────────────────────────────────────
+
+        #region Phase 8 Tools
+
+        private static string WorkspaceAnalysis(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var analysis = GetString(args, "analysis").ToLower();
+
+            return analysis switch
+            {
+                "describe" => AnalysisDescribe(ws, args),
+                "correlation" => AnalysisCorrelation(ws, args),
+                "outliers" => AnalysisOutliers(ws, args),
+                "clustering" => AnalysisClustering(ws, args),
+                "distribution" => AnalysisDistribution(ws, args),
+                "centrality" => AnalysisCentrality(ws, args),
+                "communities" => AnalysisCommunities(ws, args),
+                "shortest_path" => AnalysisShortestPath(ws, args),
+                _ => ToolResult.Fail("workspace_analysis",
+                    $"Unknown analysis type: '{analysis}'",
+                    "Available: describe, correlation, outliers, clustering, distribution, centrality, communities, shortest_path").ToJson()
+            };
+        }
+
+        private static string AnalysisDescribe(IWorkspace ws, Dictionary<string, object> args)
+        {
+            var dsName = GetDatasetName(args);
+            var (tabular, err) = GetTabularOrError(ws, dsName, "workspace_analysis");
+            if (err != null) return err;
+
+            var columns = new List<Dictionary<string, object>>();
+            foreach (var col in tabular.ColumnNames)
+            {
+                var colType = tabular.GetColumnType(col);
+                var info = new Dictionary<string, object>
+                {
+                    ["name"] = col,
+                    ["type"] = colType.ToString()
+                };
+
+                int nonNull = 0;
+                int unique = 0;
+                double nullRate = 0;
+
+                if (colType == ColumnType.Numeric)
+                {
+                    var data = tabular.GetNumericColumnRaw(col);
+                    var valid = data.Where(v => !double.IsNaN(v)).ToArray();
+                    nonNull = valid.Length;
+                    unique = valid.Distinct().Count();
+                    nullRate = data.Length > 0 ? 1.0 - (double)nonNull / data.Length : 0;
+
+                    if (valid.Length > 0)
+                    {
+                        var sorted = valid.OrderBy(v => v).ToArray();
+                        info["min"] = sorted[0];
+                        info["max"] = sorted[^1];
+                        info["mean"] = valid.Average();
+
+                        // Median
+                        int mid = sorted.Length / 2;
+                        info["median"] = sorted.Length % 2 == 0
+                            ? (sorted[mid - 1] + sorted[mid]) / 2.0
+                            : sorted[mid];
+
+                        // Std
+                        var mean = valid.Average();
+                        var variance = valid.Sum(v => (v - mean) * (v - mean)) / valid.Length;
+                        info["std"] = Math.Sqrt(variance);
+
+                        // Percentiles
+                        info["p25"] = Percentile(sorted, 25);
+                        info["p75"] = Percentile(sorted, 75);
+
+                        // Skewness
+                        if (valid.Length > 2 && info["std"] is double std && std > 0)
+                        {
+                            var skew = valid.Sum(v => Math.Pow((v - mean) / std, 3)) / valid.Length;
+                            info["skewness"] = skew;
+
+                            // Kurtosis (excess)
+                            if (valid.Length > 3)
+                            {
+                                var kurt = valid.Sum(v => Math.Pow((v - mean) / std, 4)) / valid.Length - 3.0;
+                                info["kurtosis"] = kurt;
+                            }
+                        }
+                    }
+                }
+                else if (colType == ColumnType.String)
+                {
+                    var data = tabular.GetStringColumn(col);
+                    var valid = data.Where(s => !string.IsNullOrEmpty(s)).ToArray();
+                    nonNull = valid.Length;
+                    unique = valid.Distinct().Count();
+                    nullRate = data.Length > 0 ? 1.0 - (double)nonNull / data.Length : 0;
+                }
+                else
+                {
+                    nonNull = tabular.RowCount;
+                }
+
+                info["nonNull"] = nonNull;
+                info["unique"] = unique;
+                info["nullRate"] = Math.Round(nullRate, 4);
+                columns.Add(info);
+            }
+
+            return ToolResult.Ok("workspace_analysis", new
+            {
+                analysis = "describe",
+                dataset = dsName,
+                rows = tabular.RowCount,
+                columns
+            }).ToJson();
+        }
+
+        private static double Percentile(double[] sorted, int p)
+        {
+            if (sorted.Length == 0) return 0;
+            if (sorted.Length == 1) return sorted[0];
+            double rank = (p / 100.0) * (sorted.Length - 1);
+            int low = (int)Math.Floor(rank);
+            int high = (int)Math.Ceiling(rank);
+            if (low == high) return sorted[low];
+            double frac = rank - low;
+            return sorted[low] * (1 - frac) + sorted[high] * frac;
+        }
+
+        private static string AnalysisCorrelation(IWorkspace ws, Dictionary<string, object> args)
+        {
+            var dsName = GetDatasetName(args);
+            var columns = GetStringArray(args, "columns");
+            var (tabular, err) = GetTabularOrError(ws, dsName, "workspace_analysis");
+            if (err != null) return err;
+
+            if (columns.Length == 0)
+                columns = tabular.ColumnNames.Where(c => tabular.GetColumnType(c) == ColumnType.Numeric).ToArray();
+
+            if (columns.Length < 2)
+                return ToolResult.Fail("workspace_analysis",
+                    "Correlation requires at least 2 numeric columns",
+                    "Provide 'columns' parameter or ensure dataset has multiple numeric columns").ToJson();
+
+            // Get data for each column
+            var data = new Dictionary<string, double[]>();
+            foreach (var col in columns)
+            {
+                if (!tabular.HasColumn(col))
+                    return ToolResult.Fail("workspace_analysis",
+                        $"Column '{col}' not found in '{dsName}'",
+                        $"Available: {string.Join(", ", tabular.ColumnNames)}").ToJson();
+                if (tabular.GetColumnType(col) != ColumnType.Numeric)
+                    return ToolResult.Fail("workspace_analysis",
+                        $"Column '{col}' is not numeric (type: {tabular.GetColumnType(col)})").ToJson();
+                data[col] = tabular.GetNumericColumnRaw(col);
+            }
+
+            // Build correlation matrix
+            var matrix = new Dictionary<string, Dictionary<string, double>>();
+            foreach (var c1 in columns)
+            {
+                matrix[c1] = new Dictionary<string, double>();
+                foreach (var c2 in columns)
+                {
+                    matrix[c1][c2] = c1 == c2 ? 1.0 : PearsonCorrelation(data[c1], data[c2]);
+                }
+            }
+
+            return ToolResult.Ok("workspace_analysis", new
+            {
+                analysis = "correlation",
+                dataset = dsName,
+                columns = columns,
+                matrix
+            }).ToJson();
+        }
+
+        private static double PearsonCorrelation(double[] x, double[] y)
+        {
+            int n = Math.Min(x.Length, y.Length);
+            if (n < 2) return 0;
+
+            double sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
+            for (int i = 0; i < n; i++)
+            {
+                sumX += x[i];
+                sumY += y[i];
+                sumXY += x[i] * y[i];
+                sumX2 += x[i] * x[i];
+                sumY2 += y[i] * y[i];
+            }
+
+            double denom = Math.Sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+            return denom == 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
+        }
+
+        private static string AnalysisOutliers(IWorkspace ws, Dictionary<string, object> args)
+        {
+            var dsName = GetDatasetName(args);
+            var column = GetString(args, "column");
+            var (tabular, err) = GetTabularOrError(ws, dsName, "workspace_analysis");
+            if (err != null) return err;
+
+            if (!tabular.HasColumn(column))
+                return ToolResult.Fail("workspace_analysis",
+                    $"Column '{column}' not found",
+                    $"Available: {string.Join(", ", tabular.ColumnNames)}").ToJson();
+            if (tabular.GetColumnType(column) != ColumnType.Numeric)
+                return ToolResult.Fail("workspace_analysis",
+                    $"Column '{column}' is not numeric").ToJson();
+
+            var data = tabular.GetNumericColumnRaw(column);
+            var sorted = data.OrderBy(v => v).ToArray();
+            double q1 = Percentile(sorted, 25);
+            double q3 = Percentile(sorted, 75);
+            double iqr = q3 - q1;
+            double lowerBound = q1 - 1.5 * iqr;
+            double upperBound = q3 + 1.5 * iqr;
+
+            var allRows = tabular.Query().ToDictionaries();
+            var outlierRows = new List<Dictionary<string, object>>();
+            for (int i = 0; i < data.Length; i++)
+            {
+                if (data[i] < lowerBound || data[i] > upperBound)
+                    outlierRows.Add(allRows[i]);
+            }
+
+            return ToolResult.Ok("workspace_analysis", new
+            {
+                analysis = "outliers",
+                dataset = dsName,
+                column,
+                bounds = new { lower = lowerBound, upper = upperBound },
+                q1,
+                q3,
+                iqr,
+                outlierCount = outlierRows.Count,
+                totalRows = tabular.RowCount,
+                outlierRows = outlierRows.Take(50).ToList()
+            }).ToJson();
+        }
+
+        private static string AnalysisClustering(IWorkspace ws, Dictionary<string, object> args)
+        {
+            var dsName = GetDatasetName(args);
+            var k = GetInt(args, "k", 3);
+            var resultName = GetOptionalString(args, "resultName", $"{dsName}_clusters");
+            var (tabular, err) = GetTabularOrError(ws, dsName, "workspace_analysis");
+            if (err != null) return err;
+
+            var numericCols = tabular.ColumnNames.Where(c => tabular.GetColumnType(c) == ColumnType.Numeric).ToArray();
+            if (numericCols.Length == 0)
+                return ToolResult.Fail("workspace_analysis",
+                    "Clustering requires at least 1 numeric column").ToJson();
+
+            int n = tabular.RowCount;
+            if (n < k)
+                return ToolResult.Fail("workspace_analysis",
+                    $"Dataset has {n} rows, cannot form {k} clusters").ToJson();
+
+            // Build feature matrix
+            var features = new double[n][];
+            for (int i = 0; i < n; i++)
+            {
+                features[i] = new double[numericCols.Length];
+                for (int j = 0; j < numericCols.Length; j++)
+                    features[i][j] = tabular.GetNumericColumnRaw(numericCols[j])[i];
+            }
+
+            // Simple K-Means
+            var (labels, centroids, inertia) = KMeans(features, k, maxIter: 100);
+
+            // Build result dataset with cluster labels
+            var result = _store.CreateTabular(resultName);
+            foreach (var col in tabular.ColumnNames)
+            {
+                var colType = tabular.GetColumnType(col);
+                if (colType == ColumnType.Numeric)
+                    result.AddNumericColumn(col, tabular.GetNumericColumnRaw(col));
+                else
+                    result.AddStringColumn(col, tabular.GetStringColumn(col));
+            }
+            result.AddNumericColumn("cluster", labels.Select(l => (double)l).ToArray());
+
+            ws.Register(resultName, result, DataSource.Derived);
+
+            // Format centroids
+            var centroidList = centroids.Select((c, idx) => new Dictionary<string, object>
+            {
+                ["cluster"] = idx,
+                ["center"] = numericCols.Zip(c, (name, val) => new { name, val })
+                    .ToDictionary(x => x.name, x => (object)x.val)
+            }).ToList();
+
+            return ToolResult.Ok("workspace_analysis", new
+            {
+                analysis = "clustering",
+                dataset = dsName,
+                resultName,
+                k,
+                rows = n,
+                centroids = centroidList,
+                inertia = Math.Round(inertia, 4),
+                features = numericCols,
+                sample = GetSample(result, 3)
+            }).ToJson();
+        }
+
+        private static (int[] labels, double[][] centroids, double inertia) KMeans(double[][] data, int k, int maxIter = 100)
+        {
+            int n = data.Length;
+            int dims = data[0].Length;
+            var rng = new Random(42);
+            var labels = new int[n];
+
+            // Initialize centroids randomly from data points
+            var centroids = new double[k][];
+            var used = new HashSet<int>();
+            for (int i = 0; i < k; i++)
+            {
+                int idx;
+                do { idx = rng.Next(n); } while (used.Contains(idx));
+                used.Add(idx);
+                centroids[i] = (double[])data[idx].Clone();
+            }
+
+            for (int iter = 0; iter < maxIter; iter++)
+            {
+                bool changed = false;
+
+                // Assign clusters
+                for (int i = 0; i < n; i++)
+                {
+                    int bestCluster = 0;
+                    double bestDist = double.MaxValue;
+                    for (int c = 0; c < k; c++)
+                    {
+                        double dist = EuclideanDistSq(data[i], centroids[c]);
+                        if (dist < bestDist) { bestDist = dist; bestCluster = c; }
+                    }
+                    if (labels[i] != bestCluster) { labels[i] = bestCluster; changed = true; }
+                }
+
+                if (!changed) break;
+
+                // Recompute centroids
+                var sums = new double[k][];
+                var counts = new int[k];
+                for (int c = 0; c < k; c++) { sums[c] = new double[dims]; counts[c] = 0; }
+                for (int i = 0; i < n; i++)
+                {
+                    int c = labels[i];
+                    counts[c]++;
+                    for (int d = 0; d < dims; d++)
+                        sums[c][d] += data[i][d];
+                }
+                for (int c = 0; c < k; c++)
+                {
+                    if (counts[c] == 0) continue;
+                    for (int d = 0; d < dims; d++)
+                        centroids[c][d] = sums[c][d] / counts[c];
+                }
+            }
+
+            // Compute inertia
+            double inertia = 0;
+            for (int i = 0; i < n; i++)
+                inertia += EuclideanDistSq(data[i], centroids[labels[i]]);
+
+            return (labels, centroids, inertia);
+        }
+
+        private static double EuclideanDistSq(double[] a, double[] b)
+        {
+            double sum = 0;
+            for (int i = 0; i < a.Length; i++)
+                sum += (a[i] - b[i]) * (a[i] - b[i]);
+            return sum;
+        }
+
+        private static string AnalysisDistribution(IWorkspace ws, Dictionary<string, object> args)
+        {
+            var dsName = GetDatasetName(args);
+            var column = GetString(args, "column");
+            var bins = GetInt(args, "bins", 10);
+            var (tabular, err) = GetTabularOrError(ws, dsName, "workspace_analysis");
+            if (err != null) return err;
+
+            if (!tabular.HasColumn(column))
+                return ToolResult.Fail("workspace_analysis",
+                    $"Column '{column}' not found",
+                    $"Available: {string.Join(", ", tabular.ColumnNames)}").ToJson();
+
+            var colType = tabular.GetColumnType(column);
+            if (colType == ColumnType.Numeric)
+            {
+                var data = tabular.GetNumericColumnRaw(column);
+                var valid = data.Where(v => !double.IsNaN(v)).ToArray();
+                if (valid.Length == 0)
+                    return ToolResult.Ok("workspace_analysis", new
+                    {
+                        analysis = "distribution",
+                        dataset = dsName,
+                        column,
+                        message = "No valid data"
+                    }).ToJson();
+
+                var sorted = valid.OrderBy(v => v).ToArray();
+                double min = sorted[0], max = sorted[^1];
+                double range = max - min;
+                if (range == 0) range = 1;
+                double binWidth = range / bins;
+
+                var histogram = new int[bins];
+                foreach (var v in valid)
+                {
+                    int bin = Math.Min((int)((v - min) / binWidth), bins - 1);
+                    histogram[bin]++;
+                }
+
+                var binData = new List<object>();
+                for (int i = 0; i < bins; i++)
+                {
+                    binData.Add(new
+                    {
+                        from = Math.Round(min + i * binWidth, 4),
+                        to = Math.Round(min + (i + 1) * binWidth, 4),
+                        count = histogram[i]
+                    });
+                }
+
+                var mean = valid.Average();
+                var variance = valid.Sum(v => (v - mean) * (v - mean)) / valid.Length;
+
+                return ToolResult.Ok("workspace_analysis", new
+                {
+                    analysis = "distribution",
+                    dataset = dsName,
+                    column,
+                    bins = binData,
+                    stats = new
+                    {
+                        count = valid.Length,
+                        min = sorted[0],
+                        max = sorted[^1],
+                        mean = Math.Round(mean, 4),
+                        median = Math.Round(Percentile(sorted, 50), 4),
+                        std = Math.Round(Math.Sqrt(variance), 4)
+                    }
+                }).ToJson();
+            }
+            else
+            {
+                // String distribution — frequency counts
+                var data = tabular.GetStringColumn(column);
+                var counts = data.Where(s => !string.IsNullOrEmpty(s))
+                    .GroupBy(s => s)
+                    .OrderByDescending(g => g.Count())
+                    .Take(bins)
+                    .Select(g => new { value = g.Key, count = g.Count() })
+                    .ToList();
+
+                return ToolResult.Ok("workspace_analysis", new
+                {
+                    analysis = "distribution",
+                    dataset = dsName,
+                    column,
+                    type = "categorical",
+                    uniqueValues = data.Where(s => !string.IsNullOrEmpty(s)).Distinct().Count(),
+                    topValues = counts
+                }).ToJson();
+            }
+        }
+
+        private static string AnalysisCentrality(IWorkspace ws, Dictionary<string, object> args)
+        {
+            var graphName = GetGraphName(args);
+            var method = GetOptionalString(args, "method", "degree").ToLower();
+
+            var ds = ws.Get(graphName);
+            if (ds is not IGraphDataset graph)
+                return ToolResult.Fail("workspace_analysis",
+                    $"'{graphName}' is not a graph dataset").ToJson();
+
+            var nodeIds = graph.GetNodeIds().ToList();
+            var result = new Dictionary<string, double>();
+
+            if (method == "degree")
+            {
+                foreach (var id in nodeIds)
+                    result[id] = graph.GetOutDegree(id) + graph.GetInDegree(id);
+            }
+            else if (method == "betweenness")
+            {
+                result = BetweennessCentrality(graph, nodeIds);
+            }
+            else if (method == "closeness")
+            {
+                result = ClosenessCentrality(graph, nodeIds);
+            }
+            else
+            {
+                return ToolResult.Fail("workspace_analysis",
+                    $"Unknown centrality method: '{method}'",
+                    "Available: degree, betweenness, closeness").ToJson();
+            }
+
+            // Normalize to [0, 1]
+            double maxVal = result.Values.DefaultIfEmpty(0).Max();
+            var normalized = result.ToDictionary(kv => kv.Key, kv => maxVal > 0 ? Math.Round(kv.Value / maxVal, 4) : 0.0);
+
+            var topNodes = result.OrderByDescending(kv => kv.Value).Take(10)
+                .Select(kv => new { id = kv.Key, score = Math.Round(kv.Value, 4), normalized = normalized[kv.Key] })
+                .ToList();
+
+            return ToolResult.Ok("workspace_analysis", new
+            {
+                analysis = "centrality",
+                graph = graphName,
+                method,
+                nodes = nodeIds.Count,
+                topNodes,
+                scores = normalized
+            }).ToJson();
+        }
+
+        private static Dictionary<string, double> BetweennessCentrality(IGraphDataset graph, List<string> nodeIds)
+        {
+            var betweenness = nodeIds.ToDictionary(id => id, id => 0.0);
+            var nodeSet = new HashSet<string>(nodeIds);
+
+            foreach (var s in nodeIds)
+            {
+                // BFS from s
+                var stack = new Stack<string>();
+                var predecessors = nodeIds.ToDictionary(id => id, id => new List<string>());
+                var sigma = nodeIds.ToDictionary(id => id, id => 0.0);
+                var dist = nodeIds.ToDictionary(id => id, id => -1);
+                sigma[s] = 1;
+                dist[s] = 0;
+
+                var queue = new Queue<string>();
+                queue.Enqueue(s);
+                var order = new List<string>();
+
+                while (queue.Count > 0)
+                {
+                    var v = queue.Dequeue();
+                    order.Add(v);
+                    stack.Push(v);
+
+                    foreach (var w in graph.GetOutNeighbors(v))
+                    {
+                        if (!nodeSet.Contains(w)) continue;
+                        // First visit?
+                        if (dist[w] < 0)
+                        {
+                            dist[w] = dist[v] + 1;
+                            queue.Enqueue(w);
+                        }
+                        // Shortest path to w via v?
+                        if (dist[w] == dist[v] + 1)
+                        {
+                            sigma[w] += sigma[v];
+                            predecessors[w].Add(v);
+                        }
+                    }
+                }
+
+                // Back-propagation
+                var delta = nodeIds.ToDictionary(id => id, id => 0.0);
+                while (stack.Count > 0)
+                {
+                    var w = stack.Pop();
+                    foreach (var v in predecessors[w])
+                        delta[v] += (sigma[v] / sigma[w]) * (1 + delta[w]);
+                    if (w != s)
+                        betweenness[w] += delta[w];
+                }
+            }
+
+            // Normalize for undirected (divide by 2)
+            foreach (var key in betweenness.Keys.ToList())
+                betweenness[key] /= 2.0;
+
+            return betweenness;
+        }
+
+        private static Dictionary<string, double> ClosenessCentrality(IGraphDataset graph, List<string> nodeIds)
+        {
+            var closeness = new Dictionary<string, double>();
+            var nodeSet = new HashSet<string>(nodeIds);
+
+            foreach (var s in nodeIds)
+            {
+                // BFS from s
+                var dist = new Dictionary<string, int> { [s] = 0 };
+                var queue = new Queue<string>();
+                queue.Enqueue(s);
+                int totalDist = 0;
+
+                while (queue.Count > 0)
+                {
+                    var v = queue.Dequeue();
+                    foreach (var w in graph.GetOutNeighbors(v))
+                    {
+                        if (!nodeSet.Contains(w) || dist.ContainsKey(w)) continue;
+                        dist[w] = dist[v] + 1;
+                        totalDist += dist[w];
+                        queue.Enqueue(w);
+                    }
+                }
+
+                int reachable = dist.Count - 1; // exclude self
+                closeness[s] = reachable > 0 && totalDist > 0 ? (double)reachable / totalDist : 0;
+            }
+
+            return closeness;
+        }
+
+        private static string AnalysisCommunities(IWorkspace ws, Dictionary<string, object> args)
+        {
+            var graphName = GetGraphName(args);
+
+            var ds = ws.Get(graphName);
+            if (ds is not IGraphDataset graph)
+                return ToolResult.Fail("workspace_analysis",
+                    $"'{graphName}' is not a graph dataset").ToJson();
+
+            var nodeIds = graph.GetNodeIds().ToList();
+            if (nodeIds.Count == 0)
+                return ToolResult.Ok("workspace_analysis", new
+                {
+                    analysis = "communities",
+                    graph = graphName,
+                    communities = 0,
+                    message = "Empty graph"
+                }).ToJson();
+
+            // Label Propagation Algorithm
+            var labels = nodeIds.ToDictionary(id => id, id => id); // initial: each node is its own label
+            int maxIter = 30;
+
+            for (int iter = 0; iter < maxIter; iter++)
+            {
+                bool changed = false;
+                // Shuffle order
+                var rng = new Random(iter);
+                var shuffled = nodeIds.OrderBy(_ => rng.Next()).ToList();
+
+                foreach (var node in shuffled)
+                {
+                    var neighbors = graph.GetNeighbors(node).Where(n => labels.ContainsKey(n)).ToList();
+                    if (neighbors.Count == 0) continue;
+
+                    // Majority vote among neighbors
+                    var labelCounts = neighbors
+                        .GroupBy(n => labels[n])
+                        .OrderByDescending(g => g.Count())
+                        .First();
+                    var newLabel = labelCounts.Key;
+
+                    if (labels[node] != newLabel)
+                    {
+                        labels[node] = newLabel;
+                        changed = true;
+                    }
+                }
+
+                if (!changed) break;
+            }
+
+            // Group by community
+            var communities = labels.GroupBy(kv => kv.Value)
+                .Select(g => new
+                {
+                    id = g.Key,
+                    size = g.Count(),
+                    members = g.Select(kv => kv.Key).ToList()
+                })
+                .OrderByDescending(c => c.size)
+                .ToList();
+
+            return ToolResult.Ok("workspace_analysis", new
+            {
+                analysis = "communities",
+                graph = graphName,
+                nodes = nodeIds.Count,
+                communities = communities.Count,
+                data = communities
+            }).ToJson();
+        }
+
+        private static string AnalysisShortestPath(IWorkspace ws, Dictionary<string, object> args)
+        {
+            var graphName = GetGraphName(args);
+            var from = GetString(args, "from");
+            var to = GetString(args, "to");
+
+            var ds = ws.Get(graphName);
+            if (ds is not IGraphDataset graph)
+                return ToolResult.Fail("workspace_analysis",
+                    $"'{graphName}' is not a graph dataset").ToJson();
+
+            if (!graph.HasNode(from))
+                return ToolResult.Fail("workspace_analysis",
+                    $"Node '{from}' not found",
+                    $"Available nodes: {string.Join(", ", graph.GetNodeIds().Take(10))}").ToJson();
+            if (!graph.HasNode(to))
+                return ToolResult.Fail("workspace_analysis",
+                    $"Node '{to}' not found",
+                    $"Available nodes: {string.Join(", ", graph.GetNodeIds().Take(10))}").ToJson();
+
+            // BFS
+            var visited = new HashSet<string> { from };
+            var queue = new Queue<List<string>>();
+            queue.Enqueue(new List<string> { from });
+            List<string> foundPath = null;
+
+            while (queue.Count > 0 && foundPath == null)
+            {
+                var path = queue.Dequeue();
+                var current = path[^1];
+                foreach (var neighbor in graph.GetOutNeighbors(current))
+                {
+                    if (neighbor == to)
+                    {
+                        foundPath = new List<string>(path) { neighbor };
+                        break;
+                    }
+                    if (!visited.Contains(neighbor))
+                    {
+                        visited.Add(neighbor);
+                        queue.Enqueue(new List<string>(path) { neighbor });
+                    }
+                }
+            }
+
+            if (foundPath == null)
+                return ToolResult.Ok("workspace_analysis", new
+                {
+                    analysis = "shortest_path",
+                    graph = graphName,
+                    from,
+                    to,
+                    found = false,
+                    message = $"No path found from '{from}' to '{to}'"
+                }).ToJson();
+
+            return ToolResult.Ok("workspace_analysis", new
+            {
+                analysis = "shortest_path",
+                graph = graphName,
+                from,
+                to,
+                found = true,
+                length = foundPath.Count - 1,
+                path = foundPath
+            }).ToJson();
+        }
+
+        private static string WorkspaceAlgorithm(Dictionary<string, object> args)
+        {
+            var ws = GetWorkspace(args);
+            var algorithmName = GetString(args, "algorithm");
+            var resultName = GetOptionalString(args, "resultName");
+
+            // List mode
+            if (algorithmName.Equals("list", StringComparison.OrdinalIgnoreCase))
+            {
+                var algorithms = AlgorithmRegistry.Default.GetAll().Select(a => new
+                {
+                    name = a.Name,
+                    description = a.Description,
+                    kind = a.Kind.ToString(),
+                    parameters = a.Parameters.Select(p => new
+                    {
+                        name = p.Name,
+                        description = p.Description,
+                        type = p.ValueType.Name,
+                        required = p.Required,
+                        defaultValue = p.DefaultValue
+                    }).ToList()
+                }).ToList();
+
+                return ToolResult.Ok("workspace_algorithm", new
+                {
+                    mode = "list",
+                    count = algorithms.Count,
+                    algorithms
+                }).ToJson();
+            }
+
+            // Execute mode
+            if (!AlgorithmRegistry.Default.TryGet(algorithmName, out var algorithm))
+                return ToolResult.Fail("workspace_algorithm",
+                    $"Algorithm '{algorithmName}' not found",
+                    $"Available: {string.Join(", ", AlgorithmRegistry.Default.GetNames())}").ToJson();
+
+            // Get input dataset
+            IDataSet input = null;
+            string inputName = null;
+
+            if (args.TryGetValue("dataset", out var dsObj) && dsObj != null)
+            {
+                inputName = dsObj.ToString();
+                try { input = ws.Get(inputName); }
+                catch (KeyNotFoundException)
+                {
+                    return ToolResult.Fail("workspace_algorithm",
+                        $"Dataset '{inputName}' not found in workspace",
+                        $"Available: {string.Join(", ", ws.AllNames.Take(10))}").ToJson();
+                }
+            }
+            else if (args.TryGetValue("graph", out var gObj) && gObj != null)
+            {
+                inputName = gObj.ToString();
+                try { input = ws.Get(inputName); }
+                catch (KeyNotFoundException)
+                {
+                    return ToolResult.Fail("workspace_algorithm",
+                        $"Graph '{inputName}' not found in workspace",
+                        $"Available: {string.Join(", ", ws.AllNames.Take(10))}").ToJson();
+                }
+            }
+            else
+            {
+                return ToolResult.Fail("workspace_algorithm",
+                    "Missing input dataset. Provide 'dataset' or 'graph' parameter").ToJson();
+            }
+
+            // Build algorithm context
+            var builder = AlgorithmContext.Create()
+                .WithStore(_store.UnderlyingStore)
+                .WithOutputName(resultName ?? $"{algorithmName}_{inputName}");
+
+            // Pass algorithm-specific params
+            if (args.TryGetValue("params", out var paramsObj) && paramsObj != null)
+            {
+                Dictionary<string, object> algoParams = null;
+
+                if (paramsObj is JsonElement je && je.ValueKind == JsonValueKind.Object)
+                {
+                    algoParams = new Dictionary<string, object>();
+                    foreach (var prop in je.EnumerateObject())
+                        algoParams[prop.Name] = JsonElementToObject(prop.Value);
+                }
+                else if (paramsObj is Dictionary<string, object> dict)
+                {
+                    algoParams = dict;
+                }
+
+                if (algoParams != null)
+                {
+                    foreach (var kv in algoParams)
+                        builder.WithParameter(kv.Key, kv.Value);
+                }
+            }
+
+            var context = builder.Build();
+
+            // Validate
+            var validationErrors = algorithm.ValidateParameters(context);
+            if (validationErrors.Count > 0)
+                return ToolResult.Fail("workspace_algorithm",
+                    $"Parameter validation failed: {string.Join("; ", validationErrors)}").ToJson();
+
+            // Execute
+            var algoResult = algorithm.Execute(input, context);
+
+            if (!algoResult.Success)
+                return ToolResult.Fail("workspace_algorithm",
+                    $"Algorithm '{algorithmName}' failed: {algoResult.Error}").ToJson();
+
+            // Register output if produced
+            if (algoResult.OutputDataset != null)
+            {
+                var outName = context.OutputName;
+                ws.Register(outName, algoResult.OutputDataset, DataSource.Derived);
+            }
+
+            return ToolResult.Ok("workspace_algorithm", new
+            {
+                algorithm = algorithmName,
+                input = inputName,
+                outputName = context.OutputName,
+                success = algoResult.Success,
+                duration = algoResult.Duration.TotalMilliseconds,
+                metrics = algoResult.Metrics,
+                metadata = algoResult.Metadata,
+                hasOutput = algoResult.OutputDataset != null
             }).ToJson();
         }
 

@@ -308,7 +308,7 @@ namespace DataCore.Tests.Tools
         public void ToolNames_CountIs52()
         {
             var names = DataCoreTools.GetToolNames();
-            Assert.Equal(53, names.Count);
+            Assert.Equal(55, names.Count);
         }
     }
 }

@@ -56,7 +56,7 @@ namespace DataCore.Tests.Tools
         public void GetToolNames_ReturnsAllTools()
         {
             var names = DataCoreTools.GetToolNames();
-            Assert.Equal(53, names.Count);
+            Assert.Equal(55, names.Count);
             Assert.Contains("workspace_filter", names);
             Assert.Contains("workspace_open_graph", names);
             Assert.Contains("workspace_dataframe_create", names);
