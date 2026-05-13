@@ -12,11 +12,18 @@ This document provides a comprehensive overview of the public API for AroAro Dat
   - [QueryOp (Enum)](#queryop-enum)
   - [ITabularQuery](#itabulardatery)
   - [IGraphQuery](#igraphquery)
+- [AroAro.DataCore.Workspace](#aroarodatacoreworkspace)
+  - [IWorkspace](#iworkspace)
+  - [Workspace](#workspace)
+- [AroAro.DataCore.Tools](#aroarodatacoretools)
+  - [DataCoreTools](#datacoretools)
+  - [FilterExpressionParser](#filterexpressionparser)
+  - [ToolResult](#toolresult)
 - [AroAro.DataCore (Unity Integration)](#unity-integration)
   - [DataCoreEditorComponent](#datacoreeditorcomponent)
 - [AroAro.DataCore.Events](#aroarodatacoreevents)
   - [DataCoreEventManager](#datacoreeventmanager)
-- [AroAro.DataCore.Session](#aroarodatacoresession)
+- [AroAro.DataCore.Session](#aroarodatacoresession) *(Deprecated)*
   - [SessionManager](#sessionmanager)
   - [ISession](#isession)
 
@@ -169,6 +176,115 @@ Fluent API for traversing and filtering graph data.
 #### Execution
 - `IEnumerable<string> ToNodeIds()`: Returns IDs of matching nodes.
 - `IEnumerable<(string, string)> ToEdges()`: Returns (SourceID, TargetID) pairs.
+
+---
+
+## AroAro.DataCore.Workspace
+
+### IWorkspace
+Unified in-memory working area — the "desktop" for data operations.
+
+#### Properties
+- `DatasetNames`: Names of datasets in the workspace.
+- `DatasetCount`: Number of datasets.
+- `AllNames`: Unified view (store ∪ workspace).
+- `DataFrameNames`: Names of DataFrames in the workspace.
+- `DataFrameCount`: Number of DataFrames.
+
+#### Registration
+- `void Register(name, dataset, source, retention)`: Register an IDataSet.
+- `void Register(name, data, source, retention)`: Register from dictionary data.
+- `void RegisterAuto(baseName, dataset, source, retention)`: Auto-naming on conflict.
+
+#### Retrieval
+- `IDataSet Get(name)`: Get dataset (workspace first, fallback to store).
+- `bool Has(name)`: Check existence in workspace only.
+- `bool TryPeek(name, out entry)`: Metadata-only lookup.
+
+#### Introspection
+- `WorkspaceEntry Describe(name)`: Single dataset details.
+- `IReadOnlyList<WorkspaceEntry> DescribeAll()`: All dataset details (cached).
+- `string Summary()`: One-line workspace status.
+
+#### Lifecycle
+- `bool Remove(name)`: Remove from workspace.
+- `bool Rename(oldName, newName)`: Rename dataset.
+- `IDataSet Clone(name, newName)`: Deep copy.
+- `void Clear()`: Clear workspace (not store).
+
+#### DataFrame
+- `DataFrame CreateDataFrame(name)`: Create empty DataFrame.
+- `DataFrame GetDataFrame(name)`: Get DataFrame.
+- `bool HasDataFrame(name)`: Check existence.
+- `bool RemoveDataFrame(name)`: Remove DataFrame.
+- `DataFrame ConvertToDataFrame(datasetName)`: Convert tabular to DataFrame.
+
+---
+
+### Workspace
+Concrete implementation of `IWorkspace`. Created automatically by `DataCoreStore`.
+
+---
+
+## AroAro.DataCore.Tools
+
+### DataCoreTools
+Static dispatch layer for 46 Agent tools.
+
+#### Static Methods
+- `void Initialize(DataCoreStore store)`: Bind to store instance.
+- `string Execute(string toolName, Dictionary<string, object> args)`: Route and execute a tool, returns JSON.
+- `string GetToolSchemas()`: Returns JSON Schema array for all 46 tools.
+- `IReadOnlyCollection<string> GetToolNames()`: Returns all tool names.
+
+#### Tool Categories (46 total)
+| Category | Count | Tools |
+|----------|-------|-------|
+| Management | 3 | `workspace_create`, `workspace_destroy`, `workspace_list` |
+| Loading | 3 | `workspace_open`, `workspace_open_ref`, `workspace_import_csv` |
+| Inspection | 4 | `workspace_describe`, `workspace_sample`, `workspace_schema`, `workspace_statistics` |
+| Transform | 9 | `workspace_filter`, `workspace_select`, `workspace_rename_columns`, `workspace_sort`, `workspace_distinct`, `workspace_add_column`, `workspace_drop_columns`, `workspace_limit`, `workspace_random_sample` |
+| Combine | 3 | `workspace_join`, `workspace_union`, `workspace_cross` |
+| Aggregate | 3 | `workspace_aggregate`, `workspace_summarize`, `workspace_count` |
+| Persist | 3 | `workspace_save`, `workspace_export_csv`, `workspace_export_json` |
+| Modify | 4 | `workspace_update`, `workspace_delete_rows`, `workspace_append`, `workspace_clear` |
+| Meta | 5 | `workspace_clone`, `workspace_rename_dataset`, `workspace_remove`, `workspace_search`, `workspace_diff` |
+| DataFrame | 5 | `workspace_dataframe_create`, `workspace_dataframe_convert`, `workspace_dataframe_list`, `workspace_dataframe_remove`, `workspace_dataframe_to_dataset` |
+| Graph | 5 | `workspace_open_graph`, `workspace_add_nodes`, `workspace_add_edges`, `workspace_graph_neighbors`, `workspace_describe_graph` |
+
+---
+
+### FilterExpressionParser
+Parses human-readable filter expressions into predicates (with LRU cache).
+
+#### Static Methods
+- `Func<Dictionary<string, object>, bool> Parse(string expression)`: Parse and cache a filter predicate.
+- `ITabularQuery ApplyTo(ITabularQuery query, string expression)`: Apply filter to a query.
+- `void ClearCache()`: Clear the predicate cache.
+- `int CacheSize`: Number of cached predicates.
+
+#### Supported Syntax
+```
+Comparison: age > 18, score >= 90, name == Alice, status != inactive
+Logic:      AND, OR, NOT
+String:     city contains Shang, name starts with A, name ends with ng
+Null:       email is null, email is not null
+Range:      age between 18 35
+Set:        city in Shanghai Beijing Guangzhou
+Parens:     (age > 18 AND city == Shanghai) OR admin == true
+```
+
+---
+
+### ToolResult
+Unified JSON return structure for all tools.
+
+#### Properties
+- `bool Success`: Whether the tool succeeded.
+- `string Action`: Tool name.
+- `object Result`: Result data (on success).
+- `string Error`: Error message (on failure).
+- `string Suggestion`: Correction suggestion (on failure).
 
 ---
 

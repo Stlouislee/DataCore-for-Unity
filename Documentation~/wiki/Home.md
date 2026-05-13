@@ -10,6 +10,13 @@ AroAro DataCore is a powerful data management suite for Unity, providing storage
 - **Persistence**: Automated persistence via LiteDB embedded database.
 - **I/O Support**: Native importers for CSV and GraphML formats.
 
+### 🤖 Workspace & Agent Tools
+- **Workspace**: Unified in-memory working area replacing Session as the default "desktop".
+- **46 Agent Tools**: Complete tool dispatch layer for AI agent integration (filter, join, aggregate, graph ops, etc.).
+- **Tool Schema**: `GetToolSchemas()` returns JSON Schema for all tools — plug into any Agent framework.
+- **Filter Expressions**: Human-readable filter syntax (`age > 18 AND city == Shanghai`) with compiled predicate cache.
+- **DataFrame Support**: First-class DataFrame integration within Workspace.
+
 ### 🎮 Unity Integration
 - **Editor Interface**: Manage your data directly in the Inspector.
 - **Real-time Preview**: Fast inline previews and dedicated data visualization windows.

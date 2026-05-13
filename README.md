@@ -144,6 +144,44 @@ store.Workspace.Clear(); // clear workspace, store data unaffected
 - **Source tracking**: Every dataset tagged as Store, Derived, or Imported
 - **AI-friendly**: `DescribeAll()` returns schema, row counts, and sample data
 - **Lazy caching**: Metadata is computed on-demand and cached until invalidated
+- **DataFrame support**: `CreateDataFrame`, `ConvertToDataFrame`, full lifecycle
+- **Multi-workspace**: `store.CreateWorkspace("analysis")` + indexer `store["analysis"]`
+
+### Option 4: Agent Tools (For AI Integration)
+
+46 static tools for AI agent integration via `DataCoreTools.Execute()`:
+
+```csharp
+using AroAro.DataCore.Tools;
+
+DataCoreTools.Initialize(store);
+
+// Filter with human-readable expressions
+var result = DataCoreTools.Execute("workspace_filter", new Dictionary<string, object>
+{
+    ["source"] = "player-stats",
+    ["filter"] = "score > 300 AND class == Warrior",
+    ["resultName"] = "top-warriors"
+});
+// → {"success":true,"action":"workspace_filter","result":{"name":"top-warriors","rows":42,...}}
+
+// Join two datasets
+DataCoreTools.Execute("workspace_join", new Dictionary<string, object>
+{
+    ["left"] = "Players", ["right"] = "Scores",
+    ["leftKey"] = "id", ["rightKey"] = "player_id",
+    ["resultName"] = "PlayerScores"
+});
+
+// Graph operations
+DataCoreTools.Execute("workspace_open_graph", new Dictionary<string, object>
+{
+    ["dataset"] = "social-network"
+});
+
+// Get all tool schemas for Agent framework registration
+string schemas = DataCoreTools.GetToolSchemas();
+```
 
 ## Editor Integration
 
@@ -250,6 +288,9 @@ dataCore.ImportCsvToTabular("path/to/file.csv", "MyDataset", true, ',');
 - **Graph Data**: Create and manipulate graph datasets with nodes and edges
 - **Persistence**: Automatic saving and loading of datasets
 - **Workspace**: Unified in-memory working area for data analysis workflows — register results, track sources, introspect state
+- **Agent Tools**: 46 tools via `DataCoreTools.Execute()` with JSON Schema exposure for AI frameworks
+- **Filter Expressions**: Human-readable syntax (`age > 18 AND city == Shanghai`) with predicate cache
+- **DataFrame**: First-class DataFrame support within workspace
 
 ### Algorithm Framework
 - **Built-in Algorithms**: PageRank, Connected Components, Min-Max Normalization

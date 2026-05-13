@@ -34,8 +34,8 @@ Workspace 是 DataCore 的统一内存工作区，替代 Session 成为 `DataCor
 ### 测试状态
 
 ```
-Total:  809
-Passed: 790
+Total:  835
+Passed: 816
 Skipped: 19 (已有 Session 测试，非 Workspace 引入)
 Failed:  0
 ```
@@ -58,7 +58,7 @@ Failed:  0
 
 ---
 
-## 三、已实现的 35 个 Tool
+## 三、已实现的 46 个 Tool
 
 ### 管理（3）
 - `workspace_create` — 创建命名 workspace
@@ -114,6 +114,20 @@ Failed:  0
 - `workspace_remove` — 从 workspace 移除
 - `workspace_search` — 搜索数据集名
 - `workspace_diff` — 比较两个数据集
+
+### DataFrame（5）— Phase 2 新增
+- `workspace_dataframe_create` — 创建空 DataFrame
+- `workspace_dataframe_convert` — 表格数据集转 DataFrame
+- `workspace_dataframe_list` — 列出所有 DataFrame
+- `workspace_dataframe_remove` — 移除 DataFrame
+- `workspace_dataframe_to_dataset` — DataFrame 转回表格数据集
+
+### 图数据（5）— Phase 4 新增
+- `workspace_open_graph` — 从 Store 加载图到 Workspace
+- `workspace_add_nodes` — 批量添加节点
+- `workspace_add_edges` — 批量添加边
+- `workspace_graph_neighbors` — 邻居查询（in/out/all 方向）
+- `workspace_describe_graph` — 图数据集描述
 
 ---
 
@@ -242,48 +256,40 @@ workspace_filter(workspace: "analysis", source: "Users", filter: "age > 18", res
 
 ## 八、需要你实现的（Phase 2-6）
 
-### Phase 2：DataFrame 支持（P2）
+### ~~Phase 2：DataFrame 支持（P2）~~ ✅ 已完成
 
-Session 有完整的 DataFrame 缓存和查询能力，Workspace 没有。需要决定 DataFrame 放在哪里。
+Workspace 现有完整的 DataFrame 支持：
+- `IWorkspace.CreateDataFrame/GetDataFrame/HasDataFrame/RemoveDataFrame/ConvertToDataFrame`
+- 5 个 Agent tool：`workspace_dataframe_create/convert/list/remove/to_dataset`
+- 测试：6 个新测试
 
-**参考文件**：
-- `Runtime/Session/Session.cs` — `#region DataFrame Support Methods`
-- `Runtime/Session/DataFrameAdapter.cs`
-- `Runtime/Session/DataFrameConverter.cs`
-- `Runtime/Session/SessionDataFrameQueryBuilder.cs`
-- `Runtime/Session/DataFrameMemoryManager.cs`
+### ~~Phase 3：Editor 集成（P2）~~ ✅ 已完成
 
-### Phase 3：Editor 集成（P2）
+- `DataCoreEditorComponent` 新增 Workspace API（GetWorkspace、GetAllDatasetViews、LoadToWorkspace）
+- `DataCorePreviewWindow` 支持 Workspace 数据预览（ShowWorkspaceWindow）
+- Inspector 新增 Workspace Datasets 分区
 
-`DataCoreEditorComponent` 和 `DataCorePreviewWindow` 只显示 store 的数据集。Workspace 里的 derived 数据在 Inspector 里看不见。
+### ~~Phase 4：图数据 Tool 支持（P2）~~ ✅ 已完成
 
-**需要做的事**：
-1. DataCoreEditorComponent — Inspector 面板显示 Workspace 内容（分区显示 Store/Workspace）
-2. DataCorePreviewWindow — 预览窗口支持 Workspace 数据集
-3. 创建按钮 — 支持从 Editor 创建 Workspace 数据集
+5 个新 tool：
+- `workspace_open_graph` — 从 Store 加载图到 Workspace
+- `workspace_add_nodes` — 批量添加节点
+- `workspace_add_edges` — 批量添加边
+- `workspace_graph_neighbors` — 邻居查询（in/out/all）
+- `workspace_describe_graph` — 图数据集描述
 
-**参考文件**：
-- `Runtime/DataCoreEditorComponent.cs`
-- `Runtime/Editor/DataCorePreviewWindow.cs`（如果存在）
+### ~~Phase 5：Tool Schema 暴露（P1）~~ ✅ 已完成
 
-### Phase 4：图数据 Tool 支持（P2）
+- `DataCoreTools.GetToolSchemas()` — 返回全部 46 个 tool 的 JSON Schema
+- `DataCoreTools.GetToolNames()` — 返回 tool 名称列表
+- 测试：5 个新测试
 
-当前 35 个 tool 只覆盖了表格数据。图数据的 tool 还需要实现：
-- `workspace_open_graph`
-- `workspace_add_nodes`
-- `workspace_add_edges`
-- `workspace_graph_neighbors`
-- `workspace_describe_graph`
+### ~~Phase 6：性能优化（P3）~~ ✅ 已完成
 
-### Phase 5：Tool Schema 暴露（P1）
-
-当前 `DataCoreTools.GetToolSchemas()` 还未实现。需要为每个 tool 生成标准的 JSON Schema，供 Agent 框架自动注册。
-
-### Phase 6：性能优化（P3）
-
-- `workspace_open` 的 CSV 复制对大数据集可能很慢，考虑用 `Clone()` 或内存共享
-- `workspace_join` 用的是嵌套循环，大数据集需要 Hash Join 优化
-- Filter 表达式解析器可以缓存编译后的谓词
+- `CopyTabular`：直接数据复制替代 CSV 序列化往返
+- `FilterExpressionParser`：ConcurrentDictionary 谓词缓存
+- `workspace_join`：已确认使用 Hash Join
+- 测试：6 个新测试
 
 ---
 
@@ -335,4 +341,4 @@ dotnet test --filter "FullyQualifiedName~WorkspaceTests"
 
 ---
 
-**Phase 1 完成。代码是干净的，测试是绿的，35 个 tool 已就绪。下一步是 DataFrame、Editor 集成或图数据 tool。去吧。**
+**Phase 1-6 全部完成。代码是干净的，测试是绿的，46 个 tool 已就绪。**

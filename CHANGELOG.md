@@ -1,3 +1,40 @@
+## 0.6.0
+
+### New Features
+- **DataFrame Support (Phase 2)**: Workspace now has first-class DataFrame support
+  - `IWorkspace.CreateDataFrame(name)` — create empty DataFrame in workspace
+  - `IWorkspace.ConvertToDataFrame(datasetName)` — convert tabular dataset to DataFrame
+  - `IWorkspace.GetDataFrame/HasDataFrame/RemoveDataFrame` — full lifecycle
+  - 5 new Agent tools: `workspace_dataframe_create`, `workspace_dataframe_convert`, `workspace_dataframe_list`, `workspace_dataframe_remove`, `workspace_dataframe_to_dataset`
+
+- **Editor Integration (Phase 3)**: Inspector now shows Workspace content
+  - `DataCoreEditorComponent.GetWorkspace()` / `GetWorkspace(name)` — access workspaces
+  - `DataCoreEditorComponent.GetAllDatasetViews()` — unified Store + Workspace view
+  - `DataCoreEditorComponent.LoadToWorkspace(datasetName)` — load from Store to Workspace
+  - `DataCorePreviewWindow.ShowWorkspaceWindow()` — preview Workspace datasets
+  - Inspector: new "Workspace Datasets" section with source tagging, preview, and remove
+
+- **Graph Data Tools (Phase 4)**: 5 new Agent tools for graph operations
+  - `workspace_open_graph` — load graph from Store into Workspace
+  - `workspace_add_nodes` — batch add nodes with properties
+  - `workspace_add_edges` — batch add edges with properties
+  - `workspace_graph_neighbors` — neighbor query (in/out/all direction)
+  - `workspace_describe_graph` — graph dataset description with samples
+
+- **Tool Schema Exposure (Phase 5)**: Agent framework auto-registration support
+  - `DataCoreTools.GetToolSchemas()` — returns JSON Schema for all 46 tools
+  - `DataCoreTools.GetToolNames()` — returns tool name list
+  - Each schema includes name, description, and parameters (JSON Schema object)
+
+- **Performance Optimizations (Phase 6)**
+  - `CopyTabular`: Direct data copy via `Query().ToDictionaries()` + `AddRows()` replaces CSV serialization round-trip
+  - `FilterExpressionParser`: `ConcurrentDictionary` predicate cache — same expression returns cached compiled predicate
+  - `workspace_join`: Confirmed already using Hash Join (dictionary indexing)
+
+### Tests
+- 26 new tests across 4 test files (DataFrameToolsTests, GraphToolsTests, ToolSchemaTests, PerformanceOptimizationTests)
+- Full suite: 816 passed, 19 skipped, 0 failed
+
 ## 0.5.0
 
 ### New Features
