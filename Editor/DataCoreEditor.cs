@@ -28,9 +28,12 @@ namespace AroAro.DataCore.Editor
         // GraphML 导入相关字段
         private string graphmlFilePath = "";
         private string graphmlDatasetName = "ImportedGraphML";
+        private int graphmlEncodingIndex = 0;
+        private static readonly string[] _graphmlEncodings = { "Auto Detect", "UTF-8", "UTF-16", "ASCII", "ISO-8859-1" };
+        private static readonly string[] _graphmlEncodingValues = { "", "utf-8", "utf-16", "us-ascii", "iso-8859-1" };
         
         // 预览相关字段
-        private Vector2 previewScrollPosition;
+        private Dictionary<string, Vector2> previewScrollPositions = new Dictionary<string, Vector2>();
         private int previewMaxRows = 10;
         private int previewMaxNodes = 20;
 
@@ -46,6 +49,8 @@ namespace AroAro.DataCore.Editor
         private void OnEnable()
         {
             component = (DataCoreEditorComponent)target;
+            csvFilePath = EditorPrefs.GetString("DataCoreEditor_csvFilePath", "");
+            csvDatasetName = EditorPrefs.GetString("DataCoreEditor_csvDatasetName", "ImportedCSV");
         }
 
         public override void OnInspectorGUI()
@@ -300,7 +305,10 @@ namespace AroAro.DataCore.Editor
                 {
                     var columns = data.First().Keys.ToList();
                     
-                    previewScrollPosition = EditorGUILayout.BeginScrollView(previewScrollPosition, GUILayout.Height(150));
+                    if (!previewScrollPositions.TryGetValue(datasetName, out var previewScroll))
+                        previewScroll = Vector2.zero;
+                    previewScroll = EditorGUILayout.BeginScrollView(previewScroll, GUILayout.Height(150));
+                    previewScrollPositions[datasetName] = previewScroll;
                     
                     // 表头
                     EditorGUILayout.BeginHorizontal();
@@ -317,7 +325,7 @@ namespace AroAro.DataCore.Editor
                         foreach (var col in columns)
                         {
                             var value = row.TryGetValue(col, out var v) ? v?.ToString() ?? "" : "";
-                            var display = value.Length > 10 ? value.Substring(0, 10) + "..." : value;
+                            var display = value.Length > 25 ? value.Substring(0, 25) + "…" : value;
                             EditorGUILayout.LabelField(display, GUILayout.Width(80));
                         }
                         EditorGUILayout.EndHorizontal();
@@ -346,7 +354,10 @@ namespace AroAro.DataCore.Editor
             {
                 EditorGUI.indentLevel++;
                 
-                previewScrollPosition = EditorGUILayout.BeginScrollView(previewScrollPosition, GUILayout.Height(150));
+                if (!previewScrollPositions.TryGetValue(datasetName, out var graphScroll))
+                    graphScroll = Vector2.zero;
+                graphScroll = EditorGUILayout.BeginScrollView(graphScroll, GUILayout.Height(150));
+                previewScrollPositions[datasetName] = graphScroll;
                 
                 // 显示节点
                 EditorGUILayout.LabelField("Nodes:", EditorStyles.boldLabel);
@@ -398,6 +409,8 @@ namespace AroAro.DataCore.Editor
                 {
                     csvFilePath = path;
                     csvDatasetName = System.IO.Path.GetFileNameWithoutExtension(path);
+                    EditorPrefs.SetString("DataCoreEditor_csvFilePath", csvFilePath);
+                    EditorPrefs.SetString("DataCoreEditor_csvDatasetName", csvDatasetName);
                 }
             }
             EditorGUILayout.EndHorizontal();
@@ -528,6 +541,7 @@ namespace AroAro.DataCore.Editor
             EditorGUILayout.EndHorizontal();
             
             graphmlDatasetName = EditorGUILayout.TextField("Dataset Name", graphmlDatasetName);
+            graphmlEncodingIndex = EditorGUILayout.Popup("Encoding", graphmlEncodingIndex, _graphmlEncodings);
             
             EditorGUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
@@ -562,7 +576,12 @@ namespace AroAro.DataCore.Editor
 
             try
             {
-                var graph = component.ImportGraphMLToGraph(graphmlFilePath, graphmlDatasetName);
+                System.Text.Encoding encoding = null;
+                if (graphmlEncodingIndex > 0 && graphmlEncodingIndex < _graphmlEncodingValues.Length)
+                {
+                    encoding = System.Text.Encoding.GetEncoding(_graphmlEncodingValues[graphmlEncodingIndex]);
+                }
+                var graph = component.ImportGraphMLToGraph(graphmlFilePath, graphmlDatasetName, encoding);
                 EditorUtility.DisplayDialog("Import GraphML", $"Successfully imported {graph.NodeCount} nodes and {graph.EdgeCount} edges.", "OK");
                 EditorUtility.SetDirty(component);
             }

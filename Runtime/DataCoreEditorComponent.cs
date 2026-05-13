@@ -318,6 +318,14 @@ namespace AroAro.DataCore
         /// </summary>
         public IGraphDataset ImportGraphMLToGraph(string graphmlFilePath, string datasetName)
         {
+            return ImportGraphMLToGraph(graphmlFilePath, datasetName, null);
+        }
+
+        /// <summary>
+        /// 从 GraphML 文件导入数据（指定编码）
+        /// </summary>
+        public IGraphDataset ImportGraphMLToGraph(string graphmlFilePath, string datasetName, System.Text.Encoding encoding)
+        {
             if (string.IsNullOrEmpty(graphmlFilePath))
                 throw new ArgumentException("GraphML file path cannot be null or empty", nameof(graphmlFilePath));
 
@@ -328,7 +336,7 @@ namespace AroAro.DataCore
                 throw new FileNotFoundException($"GraphML file not found: {graphmlFilePath}");
 
             InitializeStore();
-            return Import.GraphMLImporter.ImportFromFile(_store, graphmlFilePath, datasetName);
+            return Import.GraphMLImporter.ImportFromFile(_store, graphmlFilePath, datasetName, encoding);
         }
 
         /// <summary>

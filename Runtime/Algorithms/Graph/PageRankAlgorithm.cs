@@ -32,6 +32,27 @@ namespace AroAro.DataCore.Algorithms.Graph
                 new("tolerance", "Convergence threshold (max delta between iterations)", typeof(double), false, 1e-6),
             };
 
+        public override IReadOnlyList<string> ValidateParameters(AlgorithmContext context)
+        {
+            var errors = new List<string>(base.ValidateParameters(context));
+            if (context.Has("dampingFactor"))
+            {
+                double d = context.Get<double>("dampingFactor");
+                if (d < 0.0 || d > 1.0) errors.Add($"dampingFactor must be 0.0-1.0, got {d}.");
+            }
+            if (context.Has("maxIterations"))
+            {
+                int m = context.Get<int>("maxIterations");
+                if (m <= 0) errors.Add($"maxIterations must be positive, got {m}.");
+            }
+            if (context.Has("tolerance"))
+            {
+                double t = context.Get<double>("tolerance");
+                if (t <= 0.0) errors.Add($"tolerance must be positive, got {t}.");
+            }
+            return errors;
+        }
+
         protected override AlgorithmResult ExecuteGraph(IGraphDataset input, AlgorithmContext context)
         {
             double damping = context.Get("dampingFactor", 0.85);

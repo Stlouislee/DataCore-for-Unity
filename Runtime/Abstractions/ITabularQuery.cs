@@ -97,6 +97,16 @@ namespace AroAro.DataCore
         ITabularQuery OrderBy(string column, SortDirection direction)
             => direction == SortDirection.Descending ? OrderByDescending(column) : OrderBy(column);
 
+        /// <summary>
+        /// Then-sort by column ascending (secondary sort)
+        /// </summary>
+        ITabularQuery ThenBy(string column);
+
+        /// <summary>
+        /// Then-sort by column descending (secondary sort)
+        /// </summary>
+        ITabularQuery ThenByDescending(string column);
+
         #endregion
 
         #region 分页

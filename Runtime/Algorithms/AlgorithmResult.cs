@@ -85,7 +85,7 @@ namespace AroAro.DataCore.Algorithms
                 success: true,
                 algorithmName: algorithmName,
                 outputDataset: outputDataset,
-                metrics: metrics,
+                metrics: metrics ?? new Dictionary<string, object>(),
                 metadata: meta,
                 duration: duration,
                 error: null);
@@ -116,7 +116,7 @@ namespace AroAro.DataCore.Algorithms
                 success: false,
                 algorithmName: algorithmName,
                 outputDataset: null,
-                metrics: null,
+                metrics: new Dictionary<string, object>(),
                 metadata: new Dictionary<string, object>
                 {
                     ["algorithmName"] = algorithmName,

@@ -169,6 +169,7 @@ namespace AroAro.DataCore.Algorithms
         #endregion
 
         /// <summary>Shorthand: create a context with no parameters.</summary>
-        public static AlgorithmContext Empty => Create().Build();
+        private static readonly AlgorithmContext _empty = Create().Build();
+        public static AlgorithmContext Empty => _empty;
     }
 }

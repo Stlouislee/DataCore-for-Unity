@@ -14,6 +14,7 @@ namespace AroAro.DataCore.LiteDb
         private readonly List<Func<TabularRow, bool>> _filters;
         private string _orderByColumn;
         private bool _orderDescending;
+        private List<(string Column, bool Descending)> _thenByColumns = new();
         private int _skip;
         private int _limit = int.MaxValue;
         private List<string> _selectColumns;
@@ -97,6 +98,17 @@ namespace AroAro.DataCore.LiteDb
             return this;
         }
 
+        public ITabularQuery WhereEndsWith(string column, string value)
+        {
+            _filters.Add(row =>
+            {
+                if (!row.Data.TryGetValue(column, out var bsonValue) || !bsonValue.IsString)
+                    return false;
+                return bsonValue.AsString?.EndsWith(value) ?? false;
+            });
+            return this;
+        }
+
         public ITabularQuery WhereIn<T>(string column, IEnumerable<T> values)
         {
             var valueSet = new HashSet<object>(values.Cast<object>());
@@ -146,6 +158,18 @@ namespace AroAro.DataCore.LiteDb
             return this;
         }
 
+        public ITabularQuery ThenBy(string column)
+        {
+            _thenByColumns.Add((column, false));
+            return this;
+        }
+
+        public ITabularQuery ThenByDescending(string column)
+        {
+            _thenByColumns.Add((column, true));
+            return this;
+        }
+
         public ITabularQuery Skip(int count)
         {
             _skip = Math.Max(0, count);
@@ -185,9 +209,17 @@ namespace AroAro.DataCore.LiteDb
 
             if (!string.IsNullOrEmpty(_orderByColumn))
             {
-                rows = _orderDescending
+                var ordered = _orderDescending
                     ? rows.OrderByDescending(r => GetSortValue(r, _orderByColumn))
                     : rows.OrderBy(r => GetSortValue(r, _orderByColumn));
+
+                foreach (var (col, desc) in _thenByColumns)
+                {
+                    ordered = desc
+                        ? ordered.ThenByDescending(r => GetSortValue(r, col))
+                        : ordered.ThenBy(r => GetSortValue(r, col));
+                }
+                rows = ordered;
             }
 
             rows = rows.Skip(_skip).Take(_limit);
@@ -220,9 +252,17 @@ namespace AroAro.DataCore.LiteDb
 
             if (!string.IsNullOrEmpty(_orderByColumn))
             {
-                rows = _orderDescending
+                var ordered = _orderDescending
                     ? rows.OrderByDescending(r => GetSortValue(r, _orderByColumn))
                     : rows.OrderBy(r => GetSortValue(r, _orderByColumn));
+
+                foreach (var (col, desc) in _thenByColumns)
+                {
+                    ordered = desc
+                        ? ordered.ThenByDescending(r => GetSortValue(r, col))
+                        : ordered.ThenBy(r => GetSortValue(r, col));
+                }
+                rows = ordered;
             }
 
             return rows.Skip(_skip).Take(_limit).Select(r => r.RowIndex).ToArray();
@@ -234,9 +274,17 @@ namespace AroAro.DataCore.LiteDb
 
             if (!string.IsNullOrEmpty(_orderByColumn))
             {
-                rows = _orderDescending
+                var ordered = _orderDescending
                     ? rows.OrderByDescending(r => GetSortValue(r, _orderByColumn))
                     : rows.OrderBy(r => GetSortValue(r, _orderByColumn));
+
+                foreach (var (col, desc) in _thenByColumns)
+                {
+                    ordered = desc
+                        ? ordered.ThenByDescending(r => GetSortValue(r, col))
+                        : ordered.ThenBy(r => GetSortValue(r, col));
+                }
+                rows = ordered;
             }
 
             var row = rows.FirstOrDefault();

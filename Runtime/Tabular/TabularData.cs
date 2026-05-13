@@ -337,6 +337,13 @@ namespace AroAro.DataCore.Tabular
             return data.Length == 0 ? 0 : data.Max();
         }
 
+        /// <summary>
+        /// Import data from CSV content, replacing all existing columns and data.
+        /// </summary>
+        /// <remarks>
+        /// ⚠️ This method clears all existing columns before importing. Any previous data is lost.
+        /// Call this only on a fresh dataset or when you intend to replace all data.
+        /// </remarks>
         public void ImportFromCsv(string csvContent, bool hasHeader = true, char delimiter = ',')
         {
             var parsed = AroAro.DataCore.Import.CsvParser.ParseAll(csvContent, delimiter);
@@ -456,13 +463,36 @@ namespace AroAro.DataCore.Tabular
             return Average(columnName);
         }
 
+        [Obsolete("Use StdPop() for population std or StdSample() for sample std. Will be removed in v1.0.")]
         public double Std(string columnName)
+        {
+            return StdSample(columnName);
+        }
+
+        /// <summary>
+        /// Population standard deviation (N denominator, no Bessel correction).
+        /// Use this when the data represents the entire population.
+        /// </summary>
+        public double StdPop(string columnName)
+        {
+            var data = GetNumericColumnRaw(columnName);
+            if (data.Length == 0) return 0;
+            var mean = data.Average();
+            var sumSquares = data.Sum(v => (v - mean) * (v - mean));
+            return Math.Sqrt(sumSquares / data.Length);
+        }
+
+        /// <summary>
+        /// Sample standard deviation (N-1 denominator, with Bessel correction).
+        /// Use this when the data is a sample from a larger population.
+        /// </summary>
+        public double StdSample(string columnName)
         {
             var data = GetNumericColumnRaw(columnName);
             if (data.Length < 2) return 0;
             var mean = data.Average();
             var sumSquares = data.Sum(v => (v - mean) * (v - mean));
-            return Math.Sqrt(sumSquares / (data.Length - 1)); // Bessel correction
+            return Math.Sqrt(sumSquares / (data.Length - 1));
         }
 
         public int[] Where(string column, QueryOp op, object value)
@@ -599,6 +629,7 @@ namespace AroAro.DataCore.Tabular
             private List<Func<Dictionary<string, object>, bool>> _filters = new();
             private string _orderByColumn;
             private bool _orderDescending;
+            private List<(string Column, bool Descending)> _thenByColumns = new();
             private int _skip;
             private int _take = int.MaxValue;
             private List<string> _selectedColumns;
@@ -667,6 +698,12 @@ namespace AroAro.DataCore.Tabular
                 return this;
             }
 
+            public ITabularQuery WhereEndsWith(string column, string value)
+            {
+                _filters.Add(row => row.TryGetValue(column, out var v) && v?.ToString().EndsWith(value) == true);
+                return this;
+            }
+
             public ITabularQuery WhereIn<T>(string column, IEnumerable<T> values)
             {
                 var set = new HashSet<object>(values.Cast<object>());
@@ -698,6 +735,7 @@ namespace AroAro.DataCore.Tabular
                     QueryOp.Le => WhereLessThanOrEqual(column, Convert.ToDouble(value)),
                     QueryOp.Contains => WhereContains(column, value?.ToString() ?? ""),
                     QueryOp.StartsWith => WhereStartsWith(column, value?.ToString() ?? ""),
+                    QueryOp.EndsWith => WhereEndsWith(column, value?.ToString() ?? ""),
                     _ => this
                 };
             }
@@ -713,6 +751,18 @@ namespace AroAro.DataCore.Tabular
             {
                 _orderByColumn = column;
                 _orderDescending = true;
+                return this;
+            }
+
+            public ITabularQuery ThenBy(string column)
+            {
+                _thenByColumns.Add((column, false));
+                return this;
+            }
+
+            public ITabularQuery ThenByDescending(string column)
+            {
+                _thenByColumns.Add((column, true));
                 return this;
             }
 
@@ -762,18 +812,38 @@ namespace AroAro.DataCore.Tabular
                 if (!string.IsNullOrEmpty(_orderByColumn))
                 {
                     var colType = _source.GetColumnType(_orderByColumn);
+                    IOrderedEnumerable<(int index, Dictionary<string, object> row)> ordered;
                     if (colType == ColumnType.Numeric)
                     {
-                        result = _orderDescending
+                        ordered = _orderDescending
                             ? result.OrderByDescending(x => Convert.ToDouble(x.row[_orderByColumn]))
                             : result.OrderBy(x => Convert.ToDouble(x.row[_orderByColumn]));
                     }
                     else
                     {
-                        result = _orderDescending
+                        ordered = _orderDescending
                             ? result.OrderByDescending(x => x.row[_orderByColumn]?.ToString() ?? "")
                             : result.OrderBy(x => x.row[_orderByColumn]?.ToString() ?? "");
                     }
+
+                    // Apply ThenBy/ThenByDescending columns
+                    foreach (var (col, desc) in _thenByColumns)
+                    {
+                        var thenColType = _source.GetColumnType(col);
+                        if (thenColType == ColumnType.Numeric)
+                        {
+                            ordered = desc
+                                ? ordered.ThenByDescending(x => Convert.ToDouble(x.row[col]))
+                                : ordered.ThenBy(x => Convert.ToDouble(x.row[col]));
+                        }
+                        else
+                        {
+                            ordered = desc
+                                ? ordered.ThenByDescending(x => x.row[col]?.ToString() ?? "")
+                                : ordered.ThenBy(x => x.row[col]?.ToString() ?? "");
+                        }
+                    }
+                    result = ordered;
                 }
 
                 var rows = result.Skip(_skip).Take(_take).Select(x => x.row);

@@ -165,7 +165,7 @@ namespace AroAro.DataCore.Editor
                 foreach (var columnName in columns)
                 {
                     var value = row.TryGetValue(columnName, out var v) ? v?.ToString() ?? "" : "";
-                    var displayValue = value.Length > 15 ? value.Substring(0, 15) + "..." : value;
+                    var displayValue = value.Length > 25 ? value.Substring(0, 25) + "…" : value;
                     EditorGUILayout.LabelField(displayValue, GUILayout.Width(120));
                 }
                 EditorGUILayout.EndHorizontal();
