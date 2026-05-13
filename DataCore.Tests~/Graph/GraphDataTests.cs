@@ -584,12 +584,10 @@ namespace DataCore.Tests.Graph
 
         [Fact]
         [Trait("Bug", "batch-not-atomic")]
-        public void AddNodes_Batch_PartialFailure_NotAtomic()
+        public void AddNodes_Batch_Failure_IsAtomic()
         {
-            // Known issue: AddNodes is not atomic. If one node in the batch
-            // fails (e.g., duplicate ID), previously added nodes are NOT rolled back.
-            // This leaves the graph in an inconsistent state where some nodes
-            // from the batch were added and some were not.
+            // AddNodes validates all nodes before applying any.
+            // If any node in the batch fails validation, no nodes are added.
             var graph = new GraphData("batch");
             graph.AddNode("existing");
 
@@ -604,11 +602,11 @@ namespace DataCore.Tests.Graph
             // The batch operation will throw on "existing" (duplicate)
             Assert.Throws<ArgumentException>(() => graph.AddNodes(nodes));
 
-            // But new1 and new2 were already added before the failure
-            // This is the non-atomic behavior
-            Assert.True(graph.HasNode("new1"), "new1 was added before the failure");
-            Assert.True(graph.HasNode("new2"), "new2 was added before the failure");
-            Assert.False(graph.HasNode("new3"), "new3 was never reached");
+            // Atomic behavior: no nodes from the batch should have been added
+            Assert.False(graph.HasNode("new1"), "new1 should not be added (atomic rollback)");
+            Assert.False(graph.HasNode("new2"), "new2 should not be added (atomic rollback)");
+            Assert.False(graph.HasNode("new3"), "new3 should not be added (atomic rollback)");
+            Assert.True(graph.HasNode("existing"), "existing should still be present");
         }
 
         [Fact]

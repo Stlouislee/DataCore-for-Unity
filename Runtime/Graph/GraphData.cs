@@ -200,7 +200,7 @@ namespace AroAro.DataCore.Graph
 
         public IEnumerable<(string From, string To)> GetEdges()
         {
-            return _edgeProperties.Keys.Select(ParseEdgeKey);
+            return _edgeProperties.Keys.Select(ParseEdgeKey).ToList();
         }
 
         public IEnumerable<string> GetOutNeighbors(string nodeId)
@@ -245,24 +245,46 @@ namespace AroAro.DataCore.Graph
 
         public int AddNodes(IEnumerable<(string Id, IDictionary<string, object> Properties)> nodes)
         {
-            int count = 0;
-            foreach (var (id, props) in nodes)
+            var nodeList = nodes.ToList();
+            // Phase 1: Validate all
+            var seen = new HashSet<string>();
+            foreach (var (id, _) in nodeList)
             {
-                AddNode(id, props);
-                count++;
+                if (string.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+                if (_nodes.ContainsKey(id) || !seen.Add(id))
+                    throw new ArgumentException($"Duplicate node ID: {id}");
             }
-            return count;
+            // Phase 2: Apply all
+            foreach (var (id, props) in nodeList)
+            {
+                _nodes[id] = props != null ? new Dictionary<string, object>(props) : new Dictionary<string, object>();
+                _outAdjacency[id] = new HashSet<string>();
+                _inAdjacency[id] = new HashSet<string>();
+            }
+            return nodeList.Count;
         }
 
         public int AddEdges(IEnumerable<(string From, string To, IDictionary<string, object> Properties)> edges)
         {
-            int count = 0;
-            foreach (var (from, to, props) in edges)
+            var edgeList = edges.ToList();
+            // Phase 1: Validate all
+            foreach (var (from, to, _) in edgeList)
             {
-                AddEdge(from, to, props);
-                count++;
+                if (!_nodes.ContainsKey(from)) throw new ArgumentException($"Source node '{from}' not found");
+                if (!_nodes.ContainsKey(to)) throw new ArgumentException($"Target node '{to}' not found");
+                var key = GetEdgeKey(from, to);
+                if (_edgeProperties.ContainsKey(key))
+                    throw new ArgumentException($"Edge from '{from}' to '{to}' already exists");
             }
-            return count;
+            // Phase 2: Apply all
+            foreach (var (from, to, props) in edgeList)
+            {
+                var edgeKey = GetEdgeKey(from, to);
+                _edgeProperties[edgeKey] = props != null ? new Dictionary<string, object>(props) : new Dictionary<string, object>();
+                _outAdjacency[from].Add(to);
+                _inAdjacency[to].Add(from);
+            }
+            return edgeList.Count;
         }
 
         public void Clear()
@@ -497,7 +519,9 @@ namespace AroAro.DataCore.Graph
                 {
                     var (current, depth) = queue.Dequeue();
 
-                    // Apply node filters
+                    // Apply node filters — nodes that fail filters are still traversed
+                    // (neighbors are explored) but not yielded. This is intentional:
+                    // filters control *output*, not traversal scope.
                     bool passesFilter = _nodeFilters.All(f => f(current));
                     if (passesFilter)
                         yield return current;

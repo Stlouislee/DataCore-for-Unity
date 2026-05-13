@@ -16,9 +16,34 @@ namespace AroAro.DataCore.Editor
         private Vector2 _scrollPosition;
         private int _maxRowsToShow = 100;
         private int _maxNodesToShow = 50;
-        
+
+        // Track open windows by "{source}:{datasetName}" to prevent duplicates
+        private static readonly Dictionary<string, DataCorePreviewWindow> _openWindows = new Dictionary<string, DataCorePreviewWindow>();
+
+        private static string GetWindowKey(string source, string datasetName) => $"{source}:{datasetName}";
+
+        private static DataCorePreviewWindow FindOrReopen(string key, string source, string datasetName)
+        {
+            if (_openWindows.TryGetValue(key, out var existing) && existing != null)
+            {
+                existing.Focus();
+                return existing;
+            }
+            return null;
+        }
+
         public static void ShowWindow(DataCoreEditorComponent component, string datasetName)
         {
+            var key = GetWindowKey("Store", datasetName);
+            var existing = FindOrReopen(key, "Store", datasetName);
+            if (existing != null)
+            {
+                // Refresh data in case it changed
+                existing._dataset = component.GetStore().Get<IDataSet>(datasetName);
+                existing.Repaint();
+                return;
+            }
+
             var window = CreateInstance<DataCorePreviewWindow>();
             window.titleContent = new GUIContent($"DataCore Preview - {datasetName}");
             window._component = component;
@@ -26,6 +51,7 @@ namespace AroAro.DataCore.Editor
             window._source = "Store";
             window._dataset = component.GetStore().Get<IDataSet>(datasetName);
             window.minSize = new Vector2(800, 600);
+            _openWindows[key] = window;
             window.ShowUtility();
         }
 
@@ -34,6 +60,15 @@ namespace AroAro.DataCore.Editor
         /// </summary>
         public static void ShowWorkspaceWindow(DataCoreEditorComponent component, string datasetName)
         {
+            var key = GetWindowKey("Workspace", datasetName);
+            var existing = FindOrReopen(key, "Workspace", datasetName);
+            if (existing != null)
+            {
+                existing._dataset = component.GetWorkspaceDataset(datasetName);
+                existing.Repaint();
+                return;
+            }
+
             var window = CreateInstance<DataCorePreviewWindow>();
             window.titleContent = new GUIContent($"DataCore Preview - {datasetName} (Workspace)");
             window._component = component;
@@ -41,7 +76,14 @@ namespace AroAro.DataCore.Editor
             window._source = "Workspace";
             window._dataset = component.GetWorkspaceDataset(datasetName);
             window.minSize = new Vector2(800, 600);
+            _openWindows[key] = window;
             window.ShowUtility();
+        }
+
+        private void OnDestroy()
+        {
+            var key = GetWindowKey(_source, _datasetName);
+            _openWindows.Remove(key);
         }
 
         private void OnGUI()

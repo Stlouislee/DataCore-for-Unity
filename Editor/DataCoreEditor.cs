@@ -454,6 +454,27 @@ namespace AroAro.DataCore.Editor
             };
         }
 
+        private bool DatasetNameExists(string name)
+        {
+            try
+            {
+                var store = component.GetStore();
+                if (store != null && store.Names.Contains(name))
+                    return true;
+            }
+            catch { /* store not available */ }
+
+            try
+            {
+                var ws = component.GetWorkspace();
+                if (ws != null && ws.DescribeAll().Any(e => string.Equals(e.Name, name, StringComparison.Ordinal)))
+                    return true;
+            }
+            catch { /* workspace not available */ }
+
+            return false;
+        }
+
         private void ImportCsv()
         {
             if (string.IsNullOrEmpty(csvFilePath))
@@ -461,13 +482,19 @@ namespace AroAro.DataCore.Editor
                 EditorUtility.DisplayDialog("Import CSV", "Please select a CSV file first.", "OK");
                 return;
             }
-            
+
             if (string.IsNullOrEmpty(csvDatasetName))
             {
                 EditorUtility.DisplayDialog("Import CSV", "Please enter a dataset name.", "OK");
                 return;
             }
-            
+
+            if (DatasetNameExists(csvDatasetName))
+            {
+                EditorUtility.DisplayDialog("Import CSV", $"A dataset named '{csvDatasetName}' already exists. Please choose a different name.", "OK");
+                return;
+            }
+
             try
             {
                 var tabular = component.ImportCsvToTabular(csvFilePath, csvDatasetName, csvHasHeader, GetCsvDelimiter());
@@ -520,13 +547,19 @@ namespace AroAro.DataCore.Editor
                 EditorUtility.DisplayDialog("Import GraphML", "Please select a GraphML file first.", "OK");
                 return;
             }
-            
+
             if (string.IsNullOrEmpty(graphmlDatasetName))
             {
                 EditorUtility.DisplayDialog("Import GraphML", "Please enter a dataset name.", "OK");
                 return;
             }
-            
+
+            if (DatasetNameExists(graphmlDatasetName))
+            {
+                EditorUtility.DisplayDialog("Import GraphML", $"A dataset named '{graphmlDatasetName}' already exists. Please choose a different name.", "OK");
+                return;
+            }
+
             try
             {
                 var graph = component.ImportGraphMLToGraph(graphmlFilePath, graphmlDatasetName);
@@ -553,13 +586,20 @@ namespace AroAro.DataCore.Editor
             {
                 if (!string.IsNullOrEmpty(newTabularName))
                 {
-                    component.CreateTabularDataset(newTabularName);
-                    EditorUtility.SetDirty(component);
-                    newTabularName = "NewTabular";
+                    if (DatasetNameExists(newTabularName))
+                    {
+                        EditorUtility.DisplayDialog("Duplicate Name", $"A dataset named '{newTabularName}' already exists.", "OK");
+                    }
+                    else
+                    {
+                        component.CreateTabularDataset(newTabularName);
+                        EditorUtility.SetDirty(component);
+                        newTabularName = "NewTabular";
+                    }
                 }
             }
             EditorGUILayout.EndHorizontal();
-            
+
             // 创建图数据集
             EditorGUILayout.BeginHorizontal();
             newGraphName = EditorGUILayout.TextField("Graph Name", newGraphName);
@@ -567,9 +607,16 @@ namespace AroAro.DataCore.Editor
             {
                 if (!string.IsNullOrEmpty(newGraphName))
                 {
-                    component.CreateGraphDataset(newGraphName);
-                    EditorUtility.SetDirty(component);
-                    newGraphName = "NewGraph";
+                    if (DatasetNameExists(newGraphName))
+                    {
+                        EditorUtility.DisplayDialog("Duplicate Name", $"A dataset named '{newGraphName}' already exists.", "OK");
+                    }
+                    else
+                    {
+                        component.CreateGraphDataset(newGraphName);
+                        EditorUtility.SetDirty(component);
+                        newGraphName = "NewGraph";
+                    }
                 }
             }
             EditorGUILayout.EndHorizontal();
@@ -658,9 +705,16 @@ namespace AroAro.DataCore.Editor
         private void RunSelfTest()
         {
             var go = new GameObject("DataCore Test Runner");
-            var test = go.AddComponent<DataCoreSelfTest>();
-            test.RunTests();
-            DestroyImmediate(go);
+            go.hideFlags = HideFlags.HideAndDontSave;
+            try
+            {
+                var test = go.AddComponent<DataCoreSelfTest>();
+                test.RunTests();
+            }
+            finally
+            {
+                DestroyImmediate(go);
+            }
         }
     }
 }
