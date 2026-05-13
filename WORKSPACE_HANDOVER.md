@@ -314,11 +314,72 @@ Workspace 现有完整的 DataFrame 支持：
 
 4. **Tool 参数没有 Schema 验证** — 当前直接从 `Dictionary<string, object>` 取值，类型不匹配时抛异常。建议后续加 JSON Schema 验证层。
 
-5. **.meta 文件缺失** — `Runtime/Tools/` 下的 3 个新文件没有 Unity .meta 文件，Unity 导入时会自动生成，但 GUID 不可控。建议手动生成。
+5. **.meta 文件缺失** — ~~`Runtime/Tools/` 下的 3 个新文件没有 Unity .meta 文件~~ ✅ 已在 Phase 7 补全。
 
 ---
 
-## 十一、快速上手
+## 十一、Tool Coverage Gap Analysis（对照 pandas/SQL/dplyr）
+
+### 当前 53 个 Tool 的覆盖情况
+
+| 类别 | 已覆盖 | 缺失 |
+|------|--------|------|
+| **IO/Manage** | open/import/export/save/create/destroy/list | Parquet/Excel 导出 |
+| **Inspect** | describe/sample/schema/statistics/count/value_counts | 数据概况一键报告、列级分位数 |
+| **Transform** | filter/select/rename/sort/distinct/add_column/drop/limit/random/cast/fill_null | 条件列、字符串操作、分箱、正则过滤 |
+| **Combine** | join(inner/left/right/full)/union/cross | anti-join、semi-join |
+| **Aggregate** | aggregate(group by)/summarize/count | 透视表(pivot)、melt/unpivot |
+| **Modify** | update/delete_rows/append/clear | — |
+| **Meta** | clone/rename/remove/search/diff | — |
+| **Graph** | open/add_nodes/add_edges/neighbors/describe/path/stats | 图算法(PageRank 等已有但未暴露为 tool) |
+| **DataFrame** | create/convert/list/remove/to_dataset | — |
+| **Batch** | batch | — |
+
+### 缺失的高频操作（按优先级）
+
+#### P1 — 立即需要
+
+| Tool | 说明 | 对标 |
+|------|------|------|
+| `workspace_if_column` | 条件列：根据表达式生成新列（if/else 逻辑） | `pd.Series.where`, SQL `CASE WHEN` |
+| `workspace_string_ops` | 字符串操作：lower/upper/trim/replace/substring/contains(regex) | `pd.str.*`, SQL string functions |
+| `workspace_head` | 取前 N 行（简化 limit offset=0） | `df.head(n)`, SQL `LIMIT n` |
+| `workspace_describe_all` | 一键数据概况：每列类型、非空数、唯一数、min/max/mean、top 值 | `df.describe(include='all')` |
+
+#### P2 — 结构变换与高级分析
+
+| Tool | 说明 | 对标 |
+|------|------|------|
+| `workspace_pivot` | 透视表：行→列转换 | `pd.pivot_table`, SQL `PIVOT` |
+| `workspace_melt` | 反透视：宽表→长表 | `pd.melt`, SQL `UNPIVOT` |
+| `workspace_window` | 窗口函数：排名/累计/滑动平均 | `ROW_NUMBER()`, `RANK()`, `SUM() OVER` |
+| `workspace_anti_join` | 找不匹配的行 | `LEFT JOIN ... WHERE NULL`, `~isin()` |
+| `workspace_regex_filter` | 正则表达式过滤 | `pd.str.contains(regex)`, `REGEXP` |
+| `workspace_date_parse` | 日期解析：提取年/月/日/星期/季度 | `pd.to_datetime`, SQL date functions |
+
+#### P3 — 数据质量与高级功能
+
+| Tool | 说明 | 对标 |
+|------|------|------|
+| `workspace_profile` | 数据质量报告：缺失率、类型分布、异常值检测 | `pandas-profiling` |
+| `workspace_bin` | 分箱：连续值→离散区间 | `pd.cut`, SQL `NTILE` |
+| `workspace_concat_columns` | 列拼接：合并多列为字符串 | `pd.Series.str.cat` |
+| `workspace_quantile` | 分位数计算 | `pd.Series.quantile` |
+| `workspace_coalesce` | 多列取第一个非空值 | SQL `COALESCE()` |
+| `workspace_cast_column` 增强 | 支持 date/bool/int/float 互转 | — |
+
+### 建议实现顺序
+
+```
+Phase 8:  workspace_if_column + workspace_string_ops + workspace_head + workspace_describe_all
+Phase 9:  workspace_pivot + workspace_melt + workspace_anti_join
+Phase 10: workspace_window + workspace_regex_filter + workspace_date_parse
+Phase 11: workspace_profile + workspace_bin + workspace_coalesce
+```
+
+---
+
+## 十二、快速上手
 
 ```bash
 # 克隆
@@ -341,4 +402,4 @@ dotnet test --filter "FullyQualifiedName~WorkspaceTests"
 
 ---
 
-**Phase 1-6 全部完成。代码是干净的，测试是绿的，46 个 tool 已就绪。**
+**Phase 1-7 全部完成。代码是干净的，测试是绿的，53 个 tool 已就绪。下一阶段见 Phase 8-11 roadmap。**
