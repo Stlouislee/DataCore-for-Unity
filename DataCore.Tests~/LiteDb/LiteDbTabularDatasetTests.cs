@@ -957,6 +957,62 @@ namespace DataCore.Tests.LiteDb
 
         #endregion
 
+        #region ColumnMeta Indexed flag (Issue #145)
+
+        [Fact]
+        public void IsColumnIndexed_Default_ReturnsFalse()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("col", new double[] { 1, 2, 3 });
+
+            Assert.False(ds.IsColumnIndexed("col"));
+        }
+
+        [Fact]
+        public void IsColumnIndexed_AfterCreateIndex_ReturnsTrue()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("col", new double[] { 1, 2, 3 });
+
+            ds.CreateIndex("col");
+
+            Assert.True(ds.IsColumnIndexed("col"));
+        }
+
+        [Fact]
+        public void IsColumnIndexed_NonExistentColumn_ReturnsFalse()
+        {
+            var ds = CreateDataset();
+
+            Assert.False(ds.IsColumnIndexed("nonexistent"));
+        }
+
+        [Fact]
+        public void IsColumnIndexed_UnindexedColumn_ReturnsFalse()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("a", new double[] { 1, 2 });
+            ds.AddNumericColumn("b", new double[] { 3, 4 });
+            ds.CreateIndex("a");
+
+            Assert.True(ds.IsColumnIndexed("a"));
+            Assert.False(ds.IsColumnIndexed("b"));
+        }
+
+        [Fact]
+        public void CreateIndex_CalledTwice_NoError()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("col", new double[] { 1, 2, 3 });
+
+            ds.CreateIndex("col");
+            ds.CreateIndex("col");
+
+            Assert.True(ds.IsColumnIndexed("col"));
+        }
+
+        #endregion
+
         #region Metadata batch flush (issue #77)
 
         [Fact]

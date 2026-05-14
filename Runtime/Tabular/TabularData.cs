@@ -20,6 +20,7 @@ namespace AroAro.DataCore.Tabular
         private readonly Dictionary<string, ColumnType> _columnTypes = new();
         private readonly Dictionary<string, double[]> _numericData = new();
         private readonly Dictionary<string, string[]> _stringData = new();
+        private readonly HashSet<string> _indexedColumns = new();
         private int _rowCount = 0;
 
         public TabularData(string name)
@@ -543,8 +544,14 @@ namespace AroAro.DataCore.Tabular
 
         public void CreateIndex(string columnName)
         {
-            // 内存实现中索引不必要，但为了接口兼容提供空实现
-            // No-op for in-memory implementation
+            // 内存实现中索引不必要，但为了接口兼容记录状态
+            if (HasColumn(columnName))
+                _indexedColumns.Add(columnName);
+        }
+
+        public bool IsColumnIndexed(string name)
+        {
+            return _indexedColumns.Contains(name);
         }
 
         public void Compact()

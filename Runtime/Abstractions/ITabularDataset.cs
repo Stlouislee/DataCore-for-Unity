@@ -89,6 +89,11 @@ namespace AroAro.DataCore
         /// </summary>
         ColumnType GetColumnType(string name);
 
+        /// <summary>
+        /// 检查列是否有索引
+        /// </summary>
+        bool IsColumnIndexed(string name);
+
         #endregion
 
         #region 行操作

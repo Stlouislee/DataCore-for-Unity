@@ -813,6 +813,7 @@ namespace AroAro.DataCore.LiteDb
         public string Name { get; set; }
         public string Type { get; set; }
         public int Index { get; set; }
+        public bool Indexed { get; set; }
     }
 
     internal class TabularRow

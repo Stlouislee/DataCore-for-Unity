@@ -317,6 +317,13 @@ namespace AroAro.DataCore.LiteDb
             };
         }
 
+        public bool IsColumnIndexed(string name)
+        {
+            ThrowIfDisposed();
+            var col = _metadata.Columns.FirstOrDefault(c => c.Name == name);
+            return col != null && col.Indexed;
+        }
+
         #endregion
 
         #region 行操作
@@ -786,6 +793,15 @@ namespace AroAro.DataCore.LiteDb
         public void CreateIndex(string columnName)
         {
             _rows.EnsureIndex($"Data.{columnName}");
+            lock (_lock)
+            {
+                var col = _metadata.Columns.FirstOrDefault(c => c.Name == columnName);
+                if (col != null && !col.Indexed)
+                {
+                    col.Indexed = true;
+                    ForceUpdateMetadata();
+                }
+            }
         }
 
         #endregion
