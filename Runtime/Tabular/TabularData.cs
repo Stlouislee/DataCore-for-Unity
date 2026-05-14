@@ -61,6 +61,34 @@ namespace AroAro.DataCore.Tabular
         public int ColumnCount => _columnNames.Count;
         public IReadOnlyCollection<string> ColumnNames => _columnNames.AsReadOnly();
 
+        public void AddColumn(string name, string type, bool indexed = false)
+        {
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentNullException(nameof(name));
+
+            if (_numericData.ContainsKey(name) || _stringData.ContainsKey(name))
+                return; // Already exists, no-op
+
+            _columnNames.Add(name);
+            var colType = type switch
+            {
+                "Numeric" => ColumnType.Numeric,
+                "String" => ColumnType.String,
+                "Boolean" => ColumnType.Boolean,
+                "DateTime" => ColumnType.DateTime,
+                _ => ColumnType.String
+            };
+            _columnTypes[name] = colType;
+
+            if (colType == ColumnType.Numeric)
+                _numericData[name] = new double[_rowCount];
+            else
+                _stringData[name] = new string[_rowCount];
+
+            if (indexed)
+                _indexedColumns.Add(name);
+        }
+
         public void AddNumericColumn(string name, double[] data)
         {
             if (string.IsNullOrEmpty(name))

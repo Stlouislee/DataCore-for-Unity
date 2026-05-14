@@ -119,6 +119,28 @@ namespace AroAro.DataCore.LiteDb
 
         #region 列操作
 
+        public void AddColumn(string name, string type, bool indexed = false)
+        {
+            ThrowIfDisposed();
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Column name is required", nameof(name));
+
+            lock (_lock)
+            {
+                EnsureColumn(name, type);
+                if (indexed)
+                {
+                    var col = _metadata.Columns.First(c => c.Name == name);
+                    if (!col.Indexed)
+                    {
+                        col.Indexed = true;
+                        _rows.EnsureIndex($"Data.{name}");
+                        ForceUpdateMetadata();
+                    }
+                }
+            }
+        }
+
         public void AddNumericColumn(string name, double[] data)
         {
             ThrowIfDisposed();

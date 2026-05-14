@@ -1013,6 +1013,55 @@ namespace DataCore.Tests.LiteDb
 
         #endregion
 
+        #region Schema-driven auto-index (Issue #146)
+
+        [Fact]
+        public void AddColumn_WithIndexed_AutoCreatesIndex()
+        {
+            var ds = CreateDataset();
+
+            ds.AddColumn("region", "String", indexed: true);
+
+            Assert.True(ds.IsColumnIndexed("region"));
+            Assert.True(ds.HasColumn("region"));
+        }
+
+        [Fact]
+        public void AddColumn_WithoutIndexed_NoAutoIndex()
+        {
+            var ds = CreateDataset();
+
+            ds.AddColumn("revenue", "Numeric", indexed: false);
+
+            Assert.False(ds.IsColumnIndexed("revenue"));
+        }
+
+        [Fact]
+        public void AddColumn_IndexedThenAddData_QueryUsesColumn()
+        {
+            var ds = CreateDataset();
+
+            ds.AddColumn("category", "String", indexed: true);
+            ds.AddStringColumn("category", new[] { "A", "B", "C" });
+
+            Assert.Equal(3, ds.RowCount);
+            Assert.True(ds.IsColumnIndexed("category"));
+        }
+
+        [Fact]
+        public void AddColumn_AlreadyExists_NoError()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("x", new double[] { 1, 2 });
+
+            // Adding same column again should be a no-op
+            ds.AddColumn("x", "Numeric", indexed: true);
+
+            Assert.Equal(2, ds.RowCount);
+        }
+
+        #endregion
+
         #region Metadata batch flush (issue #77)
 
         [Fact]
