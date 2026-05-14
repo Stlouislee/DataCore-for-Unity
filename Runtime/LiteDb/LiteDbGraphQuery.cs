@@ -17,6 +17,7 @@ namespace AroAro.DataCore.LiteDb
         private bool _traverseOut;
         private bool _traverseIn;
         private int _maxDepth = int.MaxValue;
+        private bool _useDFS;
 
         internal LiteDbGraphQuery(LiteDbGraphDataset dataset)
         {
@@ -96,6 +97,18 @@ namespace AroAro.DataCore.LiteDb
             return this;
         }
 
+        public IGraphQuery UseBFS()
+        {
+            _useDFS = false;
+            return this;
+        }
+
+        public IGraphQuery UseDFS()
+        {
+            _useDFS = true;
+            return this;
+        }
+
         #endregion
 
         #region IGraphQuery 实现 - 执行
@@ -139,78 +152,90 @@ namespace AroAro.DataCore.LiteDb
                 yield break;
 
             // Pre-load all nodes into dictionary for O(1) lookup
-            // Single O(V) cost instead of O(V) per BFS step
             var nodeMap = _dataset.GetAllNodesInternal()
                 .ToDictionary(n => n.NodeId, n => n);
 
-            var visited = new HashSet<string>();
-            var queue = new Queue<(string nodeId, int depth)>();
-            
-            queue.Enqueue((_startNodeId, 0));
-            visited.Add(_startNodeId);
-
-            while (queue.Count > 0)
+            if (_useDFS)
             {
-                var (current, depth) = queue.Dequeue();
-                
-                // O(1) dictionary lookup replaces O(N) linear scan per step
-                if (nodeMap.TryGetValue(current, out var node))
+                // DFS using explicit stack
+                var visited = new HashSet<string>();
+                var stack = new Stack<(string nodeId, int depth)>();
+                stack.Push((_startNodeId, 0));
+                visited.Add(_startNodeId);
+
+                while (stack.Count > 0)
                 {
-                    bool passesFilter = true;
-                    foreach (var filter in _nodeFilters)
+                    var (current, depth) = stack.Pop();
+
+                    if (nodeMap.TryGetValue(current, out var node))
                     {
-                        if (!filter(node))
+                        bool passesFilter = true;
+                        foreach (var filter in _nodeFilters)
                         {
-                            passesFilter = false;
-                            break;
+                            if (!filter(node))
+                            {
+                                passesFilter = false;
+                                break;
+                            }
                         }
+                        if (passesFilter)
+                            yield return current;
                     }
-                    if (passesFilter)
-                        yield return current;
-                }
 
-                if (depth >= _maxDepth)
-                    continue;
+                    if (depth >= _maxDepth)
+                        continue;
 
-                IEnumerable<string> neighbors = Enumerable.Empty<string>();
-                
-                if (_traverseOut)
-                    neighbors = neighbors.Concat(_dataset.GetOutNeighbors(current));
-                
-                if (_traverseIn)
-                    neighbors = neighbors.Concat(_dataset.GetInNeighbors(current));
-                
-                if (!_traverseOut && !_traverseIn)
-                    neighbors = _dataset.GetNeighbors(current);
-
-                foreach (var neighbor in neighbors.Distinct())
-                {
-                    if (!visited.Contains(neighbor))
+                    // Push neighbors in reverse order so first neighbor is processed first
+                    var neighbors = GetNeighborNodes(current).Distinct().Reverse().ToList();
+                    foreach (var neighbor in neighbors)
                     {
-                        // Check edge filters — look up the actual edge from DB
-                        bool edgePassesFilter = true;
-                        if (_edgeFilters.Count > 0)
-                        {
-                            GraphEdge edge = null;
-                            if (_traverseOut && !_traverseIn)
-                                edge = _dataset.FindEdgeInternal(current, neighbor);
-                            else if (_traverseIn && !_traverseOut)
-                                edge = _dataset.FindEdgeInternal(neighbor, current);
-                            else
-                                edge = _dataset.FindEdgeInternal(current, neighbor)
-                                    ?? _dataset.FindEdgeInternal(neighbor, current);
+                        if (visited.Contains(neighbor))
+                            continue;
 
-                            if (edge != null)
+                        if (!PassesEdgeFilter(current, neighbor))
+                            continue;
+
+                        visited.Add(neighbor);
+                        stack.Push((neighbor, depth + 1));
+                    }
+                }
+            }
+            else
+            {
+                // BFS using queue
+                var visited = new HashSet<string>();
+                var queue = new Queue<(string nodeId, int depth)>();
+                queue.Enqueue((_startNodeId, 0));
+                visited.Add(_startNodeId);
+
+                while (queue.Count > 0)
+                {
+                    var (current, depth) = queue.Dequeue();
+
+                    if (nodeMap.TryGetValue(current, out var node))
+                    {
+                        bool passesFilter = true;
+                        foreach (var filter in _nodeFilters)
+                        {
+                            if (!filter(node))
                             {
-                                edgePassesFilter = _edgeFilters.All(f => f(edge));
-                            }
-                            else
-                            {
-                                edgePassesFilter = false;
+                                passesFilter = false;
+                                break;
                             }
                         }
+                        if (passesFilter)
+                            yield return current;
+                    }
 
-                        if (!edgePassesFilter)
+                    if (depth >= _maxDepth)
+                        continue;
+
+                    foreach (var neighbor in GetNeighborNodes(current).Distinct())
+                    {
+                        if (visited.Contains(neighbor))
+                            continue;
+
+                        if (!PassesEdgeFilter(current, neighbor))
                             continue;
 
                         visited.Add(neighbor);
@@ -218,6 +243,39 @@ namespace AroAro.DataCore.LiteDb
                     }
                 }
             }
+        }
+
+        private IEnumerable<string> GetNeighborNodes(string nodeId)
+        {
+            if (_traverseOut)
+                foreach (var n in _dataset.GetOutNeighbors(nodeId))
+                    yield return n;
+            if (_traverseIn)
+                foreach (var n in _dataset.GetInNeighbors(nodeId))
+                    yield return n;
+            if (!_traverseOut && !_traverseIn)
+                foreach (var n in _dataset.GetNeighbors(nodeId))
+                    yield return n;
+        }
+
+        private bool PassesEdgeFilter(string current, string neighbor)
+        {
+            if (_edgeFilters.Count == 0)
+                return true;
+
+            GraphEdge edge = null;
+            if (_traverseOut && !_traverseIn)
+                edge = _dataset.FindEdgeInternal(current, neighbor);
+            else if (_traverseIn && !_traverseOut)
+                edge = _dataset.FindEdgeInternal(neighbor, current);
+            else
+                edge = _dataset.FindEdgeInternal(current, neighbor)
+                    ?? _dataset.FindEdgeInternal(neighbor, current);
+
+            if (edge == null)
+                return false;
+
+            return _edgeFilters.All(f => f(edge));
         }
 
         private IEnumerable<GraphNode> ExecuteNodeFilters()

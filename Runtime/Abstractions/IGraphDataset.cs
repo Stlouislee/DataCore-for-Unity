@@ -284,6 +284,16 @@ namespace AroAro.DataCore
         /// </summary>
         IGraphQuery MaxDepth(int depth);
 
+        /// <summary>
+        /// 使用 BFS 遍历（默认）
+        /// </summary>
+        IGraphQuery UseBFS();
+
+        /// <summary>
+        /// 使用 DFS 遍历
+        /// </summary>
+        IGraphQuery UseDFS();
+
         #endregion
 
         #region 执行

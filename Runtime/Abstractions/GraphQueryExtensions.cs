@@ -90,6 +90,8 @@ namespace AroAro.DataCore
         public IGraphQuery TraverseOut() => _inner.TraverseOut();
         public IGraphQuery TraverseIn() => _inner.TraverseIn();
         public IGraphQuery MaxDepth(int depth) => _inner.MaxDepth(depth);
+        public IGraphQuery UseBFS() => _inner.UseBFS();
+        public IGraphQuery UseDFS() => _inner.UseDFS();
 
         // ── 执行：inner 执行后再用 lambda 过滤 ──
 

@@ -1111,6 +1111,131 @@ namespace DataCore.Tests.Graph
         }
 
         // ────────────────────────────────────────────────────────────────
+        // DFS traversal (Issue #151)
+        // ────────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void DFS_TraversesDepthFirst()
+        {
+            // Graph: A → B, A → C, B → D, C → E
+            var graph = new GraphData("dfs");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddNode("D");
+            graph.AddNode("E");
+            graph.AddEdge("A", "B");
+            graph.AddEdge("A", "C");
+            graph.AddEdge("B", "D");
+            graph.AddEdge("C", "E");
+
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .UseDFS()
+                .ToNodeIds()
+                .ToList();
+
+            // DFS from A: A first, then B, D (deep), then C, E
+            Assert.Equal("A", result[0]);
+            Assert.Contains("B", result);
+            Assert.Contains("C", result);
+            Assert.Contains("D", result);
+            Assert.Contains("E", result);
+            // B and D should come before C (DFS goes deep first)
+            Assert.True(result.IndexOf("D") < result.IndexOf("C"),
+                "DFS should visit D before C (depth-first)");
+        }
+
+        [Fact]
+        public void DFS_MaxDepth_LimitsTraversal()
+        {
+            var graph = new GraphData("chain");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddNode("D");
+            graph.AddEdge("A", "B");
+            graph.AddEdge("B", "C");
+            graph.AddEdge("C", "D");
+
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .UseDFS()
+                .MaxDepth(1)
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Contains("A", result);
+            Assert.Contains("B", result);
+            Assert.DoesNotContain("C", result);
+            Assert.DoesNotContain("D", result);
+        }
+
+        [Fact]
+        public void DFS_WithNodeFilter_FiltersNodes()
+        {
+            var graph = new GraphData("filtered");
+            graph.AddNode("A", new Dictionary<string, object> { ["active"] = true });
+            graph.AddNode("B", new Dictionary<string, object> { ["active"] = false });
+            graph.AddNode("C", new Dictionary<string, object> { ["active"] = true });
+            graph.AddEdge("A", "B");
+            graph.AddEdge("B", "C");
+
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .UseDFS()
+                .WhereNodeProperty("active", QueryOp.Eq, true)
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Contains("A", result);
+            Assert.DoesNotContain("B", result);
+            Assert.Contains("C", result);
+        }
+
+        [Fact]
+        public void UseBFS_SwitchesBackToBFS()
+        {
+            var graph = new GraphData("switch");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B");
+            graph.AddEdge("A", "C");
+
+            // DFS then switch back to BFS
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .UseDFS()
+                .UseBFS()
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Equal("A", result[0]);
+            Assert.Equal(3, result.Count);
+        }
+
+        [Fact]
+        public void DFS_SingleNode_ReturnsOnlyStartNode()
+        {
+            var graph = new GraphData("single");
+            graph.AddNode("only");
+
+            var result = graph.Query()
+                .From("only")
+                .UseDFS()
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Single(result);
+            Assert.Equal("only", result[0]);
+        }
+
+        // ────────────────────────────────────────────────────────────────
         // EdgeType (Issue #135)
         // ────────────────────────────────────────────────────────────────
 

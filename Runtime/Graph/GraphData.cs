@@ -448,6 +448,7 @@ namespace AroAro.DataCore.Graph
             private int _maxDepth = int.MaxValue;
             private bool _traverseOut = true;
             private bool _traverseIn = false;
+            private bool _useDFS;
             private List<Func<string, bool>> _nodeFilters = new();
             private List<Func<string, string, bool>> _edgeFilters = new();
 
@@ -529,6 +530,18 @@ namespace AroAro.DataCore.Graph
                 return this;
             }
 
+            public IGraphQuery UseBFS()
+            {
+                _useDFS = false;
+                return this;
+            }
+
+            public IGraphQuery UseDFS()
+            {
+                _useDFS = true;
+                return this;
+            }
+
             public IEnumerable<string> ToNodeIds()
             {
                 if (string.IsNullOrEmpty(_startNode))
@@ -537,7 +550,7 @@ namespace AroAro.DataCore.Graph
                     return ApplyNodeFilters(nodes);
                 }
 
-                return BFS();
+                return _useDFS ? DFS() : BFS();
             }
 
             public IEnumerable<(string From, string To)> ToEdges()
@@ -578,9 +591,6 @@ namespace AroAro.DataCore.Graph
                 {
                     var (current, depth) = queue.Dequeue();
 
-                    // Apply node filters — nodes that fail filters are still traversed
-                    // (neighbors are explored) but not yielded. This is intentional:
-                    // filters control *output*, not traversal scope.
                     bool passesFilter = _nodeFilters.All(f => f(current));
                     if (passesFilter)
                         yield return current;
@@ -601,22 +611,66 @@ namespace AroAro.DataCore.Graph
                         if (visited.Contains(neighbor))
                             continue;
 
-                        // Check edge filters — always pass (from, to) in edge-storage order
-                        bool edgePassesFilter;
-                        if (_traverseOut)
-                            edgePassesFilter = _edgeFilters.All(f => f(current, neighbor));
-                        else if (_traverseIn)
-                            edgePassesFilter = _edgeFilters.All(f => f(neighbor, current));
-                        else
-                            edgePassesFilter = _edgeFilters.All(f => f(current, neighbor) || f(neighbor, current));
-
-                        if (!edgePassesFilter)
+                        if (!PassesEdgeFilter(current, neighbor))
                             continue;
 
                         visited.Add(neighbor);
                         queue.Enqueue((neighbor, depth + 1));
                     }
                 }
+            }
+
+            private IEnumerable<string> DFS()
+            {
+                var visited = new HashSet<string> { _startNode };
+                var stack = new Stack<(string node, int depth)>();
+                stack.Push((_startNode, 0));
+
+                while (stack.Count > 0)
+                {
+                    var (current, depth) = stack.Pop();
+
+                    bool passesFilter = _nodeFilters.All(f => f(current));
+                    if (passesFilter)
+                        yield return current;
+
+                    if (depth >= _maxDepth)
+                        continue;
+
+                    IEnumerable<string> neighbors;
+                    if (_traverseOut && _traverseIn)
+                        neighbors = _source.GetNeighbors(current);
+                    else if (_traverseOut)
+                        neighbors = _source.GetOutNeighbors(current);
+                    else
+                        neighbors = _source.GetInNeighbors(current);
+
+                    // Push in reverse so first neighbor is processed first
+                    foreach (var neighbor in neighbors.Reverse())
+                    {
+                        if (visited.Contains(neighbor))
+                            continue;
+
+                        if (!PassesEdgeFilter(current, neighbor))
+                            continue;
+
+                        visited.Add(neighbor);
+                        stack.Push((neighbor, depth + 1));
+                    }
+                }
+            }
+
+            private bool PassesEdgeFilter(string from, string to)
+            {
+                if (_edgeFilters.Count == 0)
+                    return true;
+
+                if (_traverseOut)
+                    return _edgeFilters.All(f => f(from, to));
+                else if (_traverseIn)
+                    return _edgeFilters.All(f => f(to, from));
+                else
+                    return _edgeFilters.All(f => f(from, to) || f(to, from));
             }
 
             private static bool CompareValues(object left, QueryOp op, object right)
