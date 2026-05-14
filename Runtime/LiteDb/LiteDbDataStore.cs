@@ -849,6 +849,7 @@ namespace AroAro.DataCore.LiteDb
         public ObjectId Id { get; set; }
         public string FromNodeId { get; set; }
         public string ToNodeId { get; set; }
+        public string Type { get; set; } = string.Empty;
         public double Weight { get; set; }
         public BsonDocument Properties { get; set; } = new();
     }

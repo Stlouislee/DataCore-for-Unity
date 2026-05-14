@@ -1111,6 +1111,173 @@ namespace DataCore.Tests.Graph
         }
 
         // ────────────────────────────────────────────────────────────────
+        // EdgeType (Issue #135)
+        // ────────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void AddEdge_WithType_TypeIsStored()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+
+            graph.AddEdge("A", "B", "WorksAt");
+
+            Assert.True(graph.HasEdge("A", "B"));
+        }
+
+        [Fact]
+        public void GetOutNeighbors_WithType_FiltersCorrectly()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("A", "C", "Colleague");
+
+            var friends = graph.GetOutNeighbors("A", "Friend").ToList();
+            Assert.Single(friends);
+            Assert.Contains("B", friends);
+
+            var colleagues = graph.GetOutNeighbors("A", "Colleague").ToList();
+            Assert.Single(colleagues);
+            Assert.Contains("C", colleagues);
+        }
+
+        [Fact]
+        public void GetInNeighbors_WithType_FiltersCorrectly()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "C", "Friend");
+            graph.AddEdge("B", "C", "Colleague");
+
+            var friends = graph.GetInNeighbors("C", "Friend").ToList();
+            Assert.Single(friends);
+            Assert.Contains("A", friends);
+        }
+
+        [Fact]
+        public void GetNeighbors_WithType_FiltersCorrectly()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("C", "B", "Colleague");
+
+            var friends = graph.GetNeighbors("B", "Friend").ToList();
+            Assert.Single(friends);
+            Assert.Contains("A", friends);
+        }
+
+        [Fact]
+        public void GetOutNeighbors_NoType_ReturnsAll()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("A", "C", "Colleague");
+
+            var all = graph.GetOutNeighbors("A").ToList();
+            Assert.Equal(2, all.Count);
+        }
+
+        [Fact]
+        public void WhereEdgeType_FiltersEdgesInQuery()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("A", "C", "Colleague");
+
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .WhereEdgeType("Friend")
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Contains("A", result);
+            Assert.Contains("B", result);
+            Assert.DoesNotContain("C", result);
+        }
+
+        [Fact]
+        public void WhereEdgeType_CountEdges_FiltersCorrectly()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("A", "C", "Colleague");
+
+            var count = graph.Query()
+                .WhereEdgeType("Friend")
+                .CountEdges();
+
+            Assert.Equal(1, count);
+        }
+
+        [Fact]
+        public void WhereEdgeType_ToEdges_FiltersCorrectly()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("A", "C", "Colleague");
+
+            var edges = graph.Query()
+                .WhereEdgeType("Friend")
+                .ToEdges()
+                .ToList();
+
+            Assert.Single(edges);
+            Assert.Equal("A", edges[0].From);
+            Assert.Equal("B", edges[0].To);
+        }
+
+        [Fact]
+        public void AddEdge_NullType_DefaultsToEmpty()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+
+            graph.AddEdge("A", "B");
+
+            var neighbors = graph.GetOutNeighbors("A", "").ToList();
+            Assert.Single(neighbors);
+            Assert.Contains("B", neighbors);
+        }
+
+        [Fact]
+        public void WithName_CopyPreservesEdgeTypes()
+        {
+            var original = new GraphData("test");
+            original.AddNode("A");
+            original.AddNode("B");
+            original.AddEdge("A", "B", "Friend");
+
+            var copy = original.WithName("copy") as GraphData;
+
+            var friends = copy.GetOutNeighbors("A", "Friend").ToList();
+            Assert.Single(friends);
+            Assert.Contains("B", friends);
+        }
+
+        // ────────────────────────────────────────────────────────────────
         // LambdaFilteredGraphQuery: Where(Func<QueryRow, bool>)
         // ────────────────────────────────────────────────────────────────
 

@@ -61,6 +61,13 @@ namespace AroAro.DataCore.LiteDb
             return this;
         }
 
+        public IGraphQuery WhereEdgeType(string edgeType)
+        {
+            var type = edgeType ?? string.Empty;
+            _edgeFilters.Add(edge => edge.Type == type);
+            return this;
+        }
+
         #endregion
 
         #region IGraphQuery 实现 - 遍历

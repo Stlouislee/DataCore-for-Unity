@@ -82,6 +82,9 @@ namespace AroAro.DataCore
         public IGraphQuery WhereEdgeProperty(string property, QueryOp op, object value)
             => new LambdaFilteredGraphQuery(_inner.WhereEdgeProperty(property, op, value), _predicate);
 
+        public IGraphQuery WhereEdgeType(string edgeType)
+            => new LambdaFilteredGraphQuery(_inner.WhereEdgeType(edgeType), _predicate);
+
         // ── 遍历：委托 ──
         public IGraphQuery From(string nodeId) => _inner.From(nodeId);
         public IGraphQuery TraverseOut() => _inner.TraverseOut();
