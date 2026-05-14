@@ -119,6 +119,28 @@ namespace AroAro.DataCore.LiteDb
 
         #region 列操作
 
+        public void AddColumn(string name, string type, bool indexed = false)
+        {
+            ThrowIfDisposed();
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Column name is required", nameof(name));
+
+            lock (_lock)
+            {
+                EnsureColumn(name, type);
+                if (indexed)
+                {
+                    var col = _metadata.Columns.First(c => c.Name == name);
+                    if (!col.Indexed)
+                    {
+                        col.Indexed = true;
+                        _rows.EnsureIndex($"Data.{name}");
+                        ForceUpdateMetadata();
+                    }
+                }
+            }
+        }
+
         public void AddNumericColumn(string name, double[] data)
         {
             ThrowIfDisposed();
@@ -315,6 +337,13 @@ namespace AroAro.DataCore.LiteDb
                 "DateTime" => ColumnType.DateTime,
                 _ => ColumnType.Unknown
             };
+        }
+
+        public bool IsColumnIndexed(string name)
+        {
+            ThrowIfDisposed();
+            var col = _metadata.Columns.FirstOrDefault(c => c.Name == name);
+            return col != null && col.Indexed;
         }
 
         #endregion
@@ -734,7 +763,11 @@ namespace AroAro.DataCore.LiteDb
                 var values = columns.Select(col =>
                 {
                     row.Data.TryGetValue(col, out var value);
-                    return EscapeCsvField(value?.ToString() ?? "");
+                    // Use AsString for strings to avoid BsonValue.ToString() adding quotes
+                    var str = value == null || value.IsNull ? "" :
+                              value.IsString ? value.AsString :
+                              value.ToString();
+                    return EscapeCsvField(str);
                 });
                 sb.AppendLine(string.Join(delimiter.ToString(), values));
             }
@@ -782,6 +815,15 @@ namespace AroAro.DataCore.LiteDb
         public void CreateIndex(string columnName)
         {
             _rows.EnsureIndex($"Data.{columnName}");
+            lock (_lock)
+            {
+                var col = _metadata.Columns.FirstOrDefault(c => c.Name == columnName);
+                if (col != null && !col.Indexed)
+                {
+                    col.Indexed = true;
+                    ForceUpdateMetadata();
+                }
+            }
         }
 
         #endregion

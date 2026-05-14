@@ -54,19 +54,19 @@ namespace AroAro.DataCore.SampleDatasets
             Debug.Log($"=== Sample Queries for California Housing Dataset ===");
 
             // Query 1: High-value houses
-            var highValueIndices = housingData.Where("median_house_value", QueryOp.Gt, 500000);
+            var highValueIndices = housingData.Query().Where("median_house_value", QueryOp.Gt, 500000).ToRowIndices();
             Debug.Log($"High-value houses (>$500k): {highValueIndices.Length} properties");
 
             // Query 2: High-income areas
-            var highIncomeIndices = housingData.Where("median_income", QueryOp.Gt, 8.0);
+            var highIncomeIndices = housingData.Query().Where("median_income", QueryOp.Gt, 8.0).ToRowIndices();
             Debug.Log($"High-income areas (>$80k): {highIncomeIndices.Length} properties");
 
             // Query 3: Large households
-            var largeHouseholdIndices = housingData.Where("households", QueryOp.Gt, 1000);
+            var largeHouseholdIndices = housingData.Query().Where("households", QueryOp.Gt, 1000).ToRowIndices();
             Debug.Log($"Large households (>1000 people): {largeHouseholdIndices.Length} properties");
 
             // Query 4: Old houses
-            var oldHouseIndices = housingData.Where("housing_median_age", QueryOp.Gt, 50);
+            var oldHouseIndices = housingData.Query().Where("housing_median_age", QueryOp.Gt, 50).ToRowIndices();
             Debug.Log($"Old houses (>50 years): {oldHouseIndices.Length} properties");
         }
 

@@ -225,9 +225,12 @@ namespace AroAro.DataCore.Algorithms
             var all = new Dictionary<string, object>();
             for (int i = 0; i < StepResults.Count; i++)
             {
-                foreach (var kvp in StepResults[i].Metrics)
+                var step = StepResults[i];
+                if (step == null) continue;
+                string algoName = step.AlgorithmName ?? "unknown";
+                foreach (var kvp in step.Metrics)
                 {
-                    all[$"{i}.{StepResults[i].AlgorithmName}.{kvp.Key}"] = kvp.Value;
+                    all[$"{i}.{algoName}.{kvp.Key}"] = kvp.Value;
                 }
             }
             return all;

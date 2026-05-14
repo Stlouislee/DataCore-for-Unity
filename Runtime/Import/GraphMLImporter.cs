@@ -299,10 +299,20 @@ namespace AroAro.DataCore.Import
                 }
             }
             
-            // Add missing nodes first
+            // Add missing nodes first — apply default properties from key definitions
             if (missingNodes.Count > 0)
             {
-                var nodesToAdd = missingNodes.Select(id => (id, (IDictionary<string, object>)null));
+                var defaultNodeProps = new Dictionary<string, object>();
+                foreach (var kvp in keyMap)
+                {
+                    if ((kvp.Value.For == "all" || kvp.Value.For == "node") && kvp.Value.DefaultValue != null)
+                    {
+                        defaultNodeProps[kvp.Value.Name] = kvp.Value.DefaultValue;
+                    }
+                }
+
+                var propsToUse = defaultNodeProps.Count > 0 ? defaultNodeProps : null;
+                var nodesToAdd = missingNodes.Select(id => (id, (IDictionary<string, object>)(propsToUse != null ? new Dictionary<string, object>(propsToUse) : null)));
                 try
                 {
                     graph.AddNodes(nodesToAdd);

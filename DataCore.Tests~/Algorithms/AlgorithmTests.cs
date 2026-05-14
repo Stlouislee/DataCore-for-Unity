@@ -194,12 +194,11 @@ namespace DataCore.Tests.Algorithms
         [Fact]
         public void Context_Empty_CreatesNewInstanceEachTime()
         {
-            // Known issue: AlgorithmContext.Empty is a property that calls Create().Build()
-            // each time, creating a new instance. Ideally it should cache the empty instance.
+            // AlgorithmContext.Empty is now a cached singleton
             var c1 = AlgorithmContext.Empty;
             var c2 = AlgorithmContext.Empty;
 
-            Assert.NotSame(c1, c2);
+            Assert.Same(c1, c2);
         }
 
         [Fact]
@@ -627,22 +626,18 @@ namespace DataCore.Tests.Algorithms
         [Trait("Bug", "pagerank-damping-validation")]
         public void PageRank_DampingFactor_NoRangeCheck()
         {
-            // Known issue: PageRank accepts any dampingFactor value without
-            // validating it's in the range [0, 1]. Values outside this range
-            // produce meaningless results. Ideally, ValidateParameters should
-            // check range.
+            // PageRank now validates dampingFactor is in [0, 1]
             var graph = CreateSmallGraph();
             var algo = new PageRankAlgorithm();
 
-            // This should fail validation but doesn't
             var context = AlgorithmContext.Create()
                 .WithParameter("dampingFactor", 5.0) // Invalid: > 1
                 .Build();
 
             var result = algo.Execute(graph, context);
 
-            // The algorithm runs without validation error
-            Assert.True(result.Success);
+            // Should fail validation
+            Assert.False(result.Success);
         }
 
         [Fact]
@@ -658,8 +653,8 @@ namespace DataCore.Tests.Algorithms
 
             var result = algo.Execute(graph, context);
 
-            // Should fail validation but runs anyway
-            Assert.True(result.Success);
+            // Should fail validation
+            Assert.False(result.Success);
         }
 
         [Fact]

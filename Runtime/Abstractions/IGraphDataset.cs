@@ -76,6 +76,11 @@ namespace AroAro.DataCore
         void AddEdge(string fromId, string toId, IDictionary<string, object> properties = null);
 
         /// <summary>
+        /// 添加带类型的边
+        /// </summary>
+        void AddEdge(string fromId, string toId, string edgeType, IDictionary<string, object> properties = null);
+
+        /// <summary>
         /// 移除边
         /// </summary>
         bool RemoveEdge(string fromId, string toId);
@@ -110,14 +115,29 @@ namespace AroAro.DataCore
         IEnumerable<string> GetOutNeighbors(string nodeId);
 
         /// <summary>
+        /// 获取指定边类型的出边邻居
+        /// </summary>
+        IEnumerable<string> GetOutNeighbors(string nodeId, string edgeType);
+
+        /// <summary>
         /// 获取入边邻居
         /// </summary>
         IEnumerable<string> GetInNeighbors(string nodeId);
 
         /// <summary>
+        /// 获取指定边类型的入边邻居
+        /// </summary>
+        IEnumerable<string> GetInNeighbors(string nodeId, string edgeType);
+
+        /// <summary>
         /// 获取所有邻居
         /// </summary>
         IEnumerable<string> GetNeighbors(string nodeId);
+
+        /// <summary>
+        /// 获取指定边类型的所有邻居
+        /// </summary>
+        IEnumerable<string> GetNeighbors(string nodeId, string edgeType);
 
         /// <summary>
         /// 获取节点的出度
@@ -151,6 +171,11 @@ namespace AroAro.DataCore
         /// 批量添加边
         /// </summary>
         int AddEdges(IEnumerable<(string From, string To, IDictionary<string, object> Properties)> edges);
+
+        /// <summary>
+        /// 批量添加带类型的边
+        /// </summary>
+        int AddEdges(IEnumerable<(string From, string To, string Type, IDictionary<string, object> Properties)> edges);
 
         /// <summary>
         /// 清空所有数据
@@ -230,6 +255,11 @@ namespace AroAro.DataCore
         /// </summary>
         IGraphQuery WhereEdgeProperty(string property, QueryOp op, object value);
 
+        /// <summary>
+        /// 过滤具有指定类型的边
+        /// </summary>
+        IGraphQuery WhereEdgeType(string edgeType);
+
         #endregion
 
         #region 遍历
@@ -253,6 +283,16 @@ namespace AroAro.DataCore
         /// 限制遍历深度
         /// </summary>
         IGraphQuery MaxDepth(int depth);
+
+        /// <summary>
+        /// 使用 BFS 遍历（默认）
+        /// </summary>
+        IGraphQuery UseBFS();
+
+        /// <summary>
+        /// 使用 DFS 遍历
+        /// </summary>
+        IGraphQuery UseDFS();
 
         #endregion
 

@@ -813,6 +813,7 @@ namespace AroAro.DataCore.LiteDb
         public string Name { get; set; }
         public string Type { get; set; }
         public int Index { get; set; }
+        public bool Indexed { get; set; }
     }
 
     internal class TabularRow
@@ -849,6 +850,7 @@ namespace AroAro.DataCore.LiteDb
         public ObjectId Id { get; set; }
         public string FromNodeId { get; set; }
         public string ToNodeId { get; set; }
+        public string Type { get; set; } = string.Empty;
         public double Weight { get; set; }
         public BsonDocument Properties { get; set; } = new();
     }

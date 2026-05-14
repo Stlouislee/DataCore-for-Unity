@@ -1,3 +1,85 @@
+## 0.7.0
+
+### New Features
+- **Analysis API (Phase 8)**: Statistical and graph analysis via unified dispatch tools
+  - `workspace_analysis` — dispatches based on `analysis` parameter for tabular and graph analyses
+  - **Tabular analyses**: `describe` (per-column profile with skewness/kurtosis/null rate), `correlation` (Pearson matrix), `outliers` (IQR-based detection), `clustering` (K-Means with centroid output and inertia), `distribution` (histogram bins + frequency counts)
+  - **Graph analyses**: `centrality` (degree/betweenness/closeness with normalized scores), `communities` (Label Propagation Algorithm), `shortest_path` (BFS between two nodes)
+  - All analysis results register as new datasets in Workspace (DataSource.Derived)
+
+- **Algorithm Bridge (Phase 8)**: Agent tool interface to the Algorithm Framework
+  - `workspace_algorithm` — bridges to `AlgorithmRegistry.Default`
+  - `algorithm = "list"` → returns all registered algorithms (PageRank, ConnectedComponents, MinMaxNormalize) with metadata
+  - Execute mode → looks up algorithm, builds AlgorithmContext, executes, registers output dataset, returns metrics/metadata
+
+### Tools
+- 2 new tools: `workspace_analysis`, `workspace_algorithm` (55 total)
+
+### Tests
+- 37 new tests across analysis and algorithm tool test files
+- Full suite: 869 passed (850 pass, 19 skip, 0 failed)
+
+## 0.6.0
+
+### New Features
+- **DataFrame Support (Phase 2)**: Workspace now has first-class DataFrame support
+  - `IWorkspace.CreateDataFrame(name)` — create empty DataFrame in workspace
+  - `IWorkspace.ConvertToDataFrame(datasetName)` — convert tabular dataset to DataFrame
+  - `IWorkspace.GetDataFrame/HasDataFrame/RemoveDataFrame` — full lifecycle
+  - 5 new Agent tools: `workspace_dataframe_create`, `workspace_dataframe_convert`, `workspace_dataframe_list`, `workspace_dataframe_remove`, `workspace_dataframe_to_dataset`
+
+- **Editor Integration (Phase 3)**: Inspector now shows Workspace content
+  - `DataCoreEditorComponent.GetWorkspace()` / `GetWorkspace(name)` — access workspaces
+  - `DataCoreEditorComponent.GetAllDatasetViews()` — unified Store + Workspace view
+  - `DataCoreEditorComponent.LoadToWorkspace(datasetName)` — load from Store to Workspace
+  - `DataCorePreviewWindow.ShowWorkspaceWindow()` — preview Workspace datasets
+  - Inspector: new "Workspace Datasets" section with source tagging, preview, and remove
+
+- **Graph Data Tools (Phase 4)**: 5 new Agent tools for graph operations
+  - `workspace_open_graph` — load graph from Store into Workspace
+  - `workspace_add_nodes` — batch add nodes with properties
+  - `workspace_add_edges` — batch add edges with properties
+  - `workspace_graph_neighbors` — neighbor query (in/out/all direction)
+  - `workspace_describe_graph` — graph dataset description with samples
+
+- **Tool Schema Exposure (Phase 5)**: Agent framework auto-registration support
+  - `DataCoreTools.GetToolSchemas()` — returns JSON Schema for all 46 tools
+  - `DataCoreTools.GetToolNames()` — returns tool name list
+  - Each schema includes name, description, and parameters (JSON Schema object)
+
+- **Performance Optimizations (Phase 6)**
+  - `CopyTabular`: Direct data copy via `Query().ToDictionaries()` + `AddRows()` replaces CSV serialization round-trip
+  - `FilterExpressionParser`: `ConcurrentDictionary` predicate cache — same expression returns cached compiled predicate
+  - `workspace_join`: Confirmed already using Hash Join (dictionary indexing)
+
+### Tests
+- 26 new tests across 4 test files (DataFrameToolsTests, GraphToolsTests, ToolSchemaTests, PerformanceOptimizationTests)
+- Full suite: 816 passed, 19 skipped, 0 failed
+
+## 0.5.0
+
+### New Features
+- **Workspace**: Unified in-memory working area replacing the Session pattern as the default "desktop" for data operations
+  - `store.Workspace` — always available on `DataCoreStore`, no manual creation needed
+  - `Register(name, dataset, source)` — register datasets from `IDataSet`, dictionary data, or auto-naming
+  - `Get(name)` — auto-falls back to store (lazy load into workspace)
+  - `Describe(name)` / `DescribeAll()` — full metadata with schema, row counts, and sample data (AI agent friendly)
+  - `Summary()` — one-line workspace status
+  - `Rename` / `Clone` / `Remove` / `Clear` — complete lifecycle management
+  - Source tracking: `DataSource.Store` / `DataSource.Derived` / `DataSource.Imported`
+  - `WorkspaceRetentionPolicy`: `Strong` / `Weak` / `Auto` (auto uses weak for datasets ≥100K rows)
+  - `DescribeAll` lazy-caches with dirty flag invalidation
+  - `TryPeek(name)` — metadata-only lookup without triggering data load
+  - `AllNames` — unified view of store ∪ workspace
+  - Async API: `DescribeAllAsync`, `RegisterAsync`
+  - Event: `WorkspaceDatasetRegistered` added to `DataCoreEventManager`
+
+### Deprecations
+- **SessionManager** and **Session** marked `[Obsolete]` — use `Workspace` instead. Will be removed in a future version.
+
+### Tests
+- 52 new tests in `WorkspaceTests.cs` covering all Workspace functionality
+
 ## 0.4.1 (Phase 3 — Cleanup & Bug Fixes)
 
 ### Bug Fixes

@@ -43,6 +43,11 @@ namespace AroAro.DataCore
         #region 列操作
 
         /// <summary>
+        /// 添加列定义（不添加数据，仅注册 schema）
+        /// </summary>
+        void AddColumn(string name, string type, bool indexed = false);
+
+        /// <summary>
         /// 添加数值列
         /// </summary>
         void AddNumericColumn(string name, double[] data);
@@ -88,6 +93,11 @@ namespace AroAro.DataCore
         /// 获取列类型
         /// </summary>
         ColumnType GetColumnType(string name);
+
+        /// <summary>
+        /// 检查列是否有索引
+        /// </summary>
+        bool IsColumnIndexed(string name);
 
         #endregion
 

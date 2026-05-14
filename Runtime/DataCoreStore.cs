@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AroAro.DataCore.Events;
 using AroAro.DataCore.Session;
+using AroAro.DataCore.Workspace;
 
 namespace AroAro.DataCore
 {
@@ -27,6 +29,7 @@ namespace AroAro.DataCore
     {
         private readonly IDataStore _store;
         private readonly Lazy<SessionManager> _sessionManager;
+        private readonly ConcurrentDictionary<string, IWorkspace> _workspaces = new(StringComparer.Ordinal);
         private bool _disposed;
 
         /// <summary>
@@ -44,6 +47,8 @@ namespace AroAro.DataCore
         {
             _store = DataStoreFactory.Create(dbPath);
             _sessionManager = new Lazy<SessionManager>(() => new SessionManager(this));
+            Workspace = new Workspace.Workspace(this);
+            _workspaces["default"] = Workspace;
         }
 
         /// <summary>
@@ -54,6 +59,74 @@ namespace AroAro.DataCore
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _sessionManager = new Lazy<SessionManager>(() => new SessionManager(this));
+            Workspace = new Workspace.Workspace(this);
+            _workspaces["default"] = Workspace;
+        }
+
+        /// <summary>
+        /// 默认工作区 — 构造即存在，永远可用。
+        /// </summary>
+        public IWorkspace Workspace { get; }
+
+        /// <summary>
+        /// 索引器：按名称获取工作区。不存在时抛出异常。
+        /// </summary>
+        public IWorkspace this[string name]
+        {
+            get
+            {
+                if (_workspaces.TryGetValue(name, out var ws))
+                    return ws;
+                throw new KeyNotFoundException($"Workspace '{name}' not found. Use CreateWorkspace() first.");
+            }
+        }
+
+        /// <summary>
+        /// 创建命名工作区
+        /// </summary>
+        public IWorkspace CreateWorkspace(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Workspace name required", nameof(name));
+            if (_workspaces.ContainsKey(name))
+                throw new InvalidOperationException($"Workspace '{name}' already exists");
+
+            var ws = new Workspace.Workspace(this);
+            _workspaces[name] = ws;
+            return ws;
+        }
+
+        /// <summary>
+        /// 销毁命名工作区（不影响 default）
+        /// </summary>
+        public bool DestroyWorkspace(string name)
+        {
+            if (name == "default")
+                throw new InvalidOperationException("Cannot destroy the default workspace");
+            if (_workspaces.TryRemove(name, out var ws))
+            {
+                ws.Dispose();
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取命名工作区（不存在时自动创建）
+        /// </summary>
+        public IWorkspace GetWorkspace(string name)
+        {
+            if (_workspaces.TryGetValue(name, out var ws))
+                return ws;
+            return CreateWorkspace(name);
+        }
+
+        /// <summary>
+        /// 列出所有工作区（名称 + 实例）
+        /// </summary>
+        public IReadOnlyList<(string Name, IWorkspace Workspace)> ListWorkspaces()
+        {
+            return _workspaces.Select(kv => (kv.Key, kv.Value)).ToList().AsReadOnly();
         }
 
         /// <summary>
@@ -94,6 +167,7 @@ namespace AroAro.DataCore
         /// <summary>
         /// 会话管理器
         /// </summary>
+        [Obsolete("Use Workspace instead. SessionManager will be removed in a future version.")]
         public SessionManager SessionManager => _sessionManager.Value;
 
         #region 创建数据集
@@ -429,7 +503,13 @@ namespace AroAro.DataCore
         public void Dispose()
         {
             if (_disposed) return;
-            
+
+            foreach (var ws in _workspaces.Values)
+            {
+                try { ws.Dispose(); } catch { /* best-effort */ }
+            }
+            _workspaces.Clear();
+
             if (_sessionManager.IsValueCreated)
                 _sessionManager.Value.CloseAllSessions();
             _store?.Dispose();

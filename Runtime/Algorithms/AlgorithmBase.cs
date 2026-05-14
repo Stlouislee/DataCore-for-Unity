@@ -88,8 +88,7 @@ namespace AroAro.DataCore.Algorithms
                 sw.Stop();
 
                 // Patch duration into result metadata
-                var metadata = new Dictionary<string, object>(
-                    result.Metadata as IDictionary<string, object> ?? new Dictionary<string, object>());
+                var metadata = new Dictionary<string, object>(result.Metadata);
                 metadata["algorithmName"] = Name;
                 metadata["duration"] = sw.Elapsed;
                 metadata["inputDataset"] = input?.Name;

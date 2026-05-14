@@ -35,6 +35,7 @@ namespace AroAro.DataCore.LiteDb
             _nodes.EnsureIndex(n => n.NodeId, true);
             _edges.EnsureIndex(e => e.FromNodeId);
             _edges.EnsureIndex(e => e.ToNodeId);
+            _edges.EnsureIndex(e => e.Type);
             _idleFlushTimer = new System.Threading.Timer(_ => FlushMetadata(), null, Timeout.Infinite, Timeout.Infinite);
             RegisterLifecycleCallbacks();
         }
@@ -244,6 +245,11 @@ namespace AroAro.DataCore.LiteDb
 
         public void AddEdge(string fromId, string toId, IDictionary<string, object> properties = null)
         {
+            AddEdge(fromId, toId, null, properties);
+        }
+
+        public void AddEdge(string fromId, string toId, string edgeType, IDictionary<string, object> properties = null)
+        {
             ThrowIfDisposed();
             
             if (string.IsNullOrWhiteSpace(fromId))
@@ -262,6 +268,7 @@ namespace AroAro.DataCore.LiteDb
                 {
                     FromNodeId = fromId,
                     ToNodeId = toId,
+                    Type = edgeType ?? string.Empty,
                     Weight = 1.0,
                     Properties = BsonValueConverter.ToBsonDocument(properties)
                 };
@@ -275,6 +282,11 @@ namespace AroAro.DataCore.LiteDb
 
         public int AddEdges(IEnumerable<(string From, string To, IDictionary<string, object> Properties)> edges)
         {
+            return AddEdges(edges.Select(e => (e.From, e.To, (string)null, e.Properties)));
+        }
+
+        public int AddEdges(IEnumerable<(string From, string To, string Type, IDictionary<string, object> Properties)> edges)
+        {
             ThrowIfDisposed();
             
             int count;
@@ -285,6 +297,7 @@ namespace AroAro.DataCore.LiteDb
                 {
                     FromNodeId = e.From,
                     ToNodeId = e.To,
+                    Type = e.Type ?? string.Empty,
                     Weight = 1.0,
                     Properties = BsonValueConverter.ToBsonDocument(e.Properties)
                 }).ToList();
@@ -399,6 +412,18 @@ namespace AroAro.DataCore.LiteDb
             return neighbors;
         }
 
+        public IEnumerable<string> GetOutNeighbors(string nodeId, string edgeType)
+        {
+            ThrowIfDisposed();
+            List<string> neighbors;
+            lock (_lock)
+            {
+                var type = edgeType ?? string.Empty;
+                neighbors = _edges.Find(e => e.FromNodeId == nodeId && e.Type == type).Select(e => e.ToNodeId).Distinct().ToList();
+            }
+            return neighbors;
+        }
+
         public IEnumerable<string> GetInNeighbors(string nodeId)
         {
             ThrowIfDisposed();
@@ -406,6 +431,18 @@ namespace AroAro.DataCore.LiteDb
             lock (_lock)
             {
                 neighbors = _edges.Find(e => e.ToNodeId == nodeId).Select(e => e.FromNodeId).Distinct().ToList();
+            }
+            return neighbors;
+        }
+
+        public IEnumerable<string> GetInNeighbors(string nodeId, string edgeType)
+        {
+            ThrowIfDisposed();
+            List<string> neighbors;
+            lock (_lock)
+            {
+                var type = edgeType ?? string.Empty;
+                neighbors = _edges.Find(e => e.ToNodeId == nodeId && e.Type == type).Select(e => e.FromNodeId).Distinct().ToList();
             }
             return neighbors;
         }
@@ -418,6 +455,20 @@ namespace AroAro.DataCore.LiteDb
             {
                 var outNeighbors = _edges.Find(e => e.FromNodeId == nodeId).Select(e => e.ToNodeId);
                 var inNeighbors = _edges.Find(e => e.ToNodeId == nodeId).Select(e => e.FromNodeId);
+                neighbors = outNeighbors.Union(inNeighbors).Distinct().ToList();
+            }
+            return neighbors;
+        }
+
+        public IEnumerable<string> GetNeighbors(string nodeId, string edgeType)
+        {
+            ThrowIfDisposed();
+            List<string> neighbors;
+            lock (_lock)
+            {
+                var type = edgeType ?? string.Empty;
+                var outNeighbors = _edges.Find(e => e.FromNodeId == nodeId && e.Type == type).Select(e => e.ToNodeId);
+                var inNeighbors = _edges.Find(e => e.ToNodeId == nodeId && e.Type == type).Select(e => e.FromNodeId);
                 neighbors = outNeighbors.Union(inNeighbors).Distinct().ToList();
             }
             return neighbors;

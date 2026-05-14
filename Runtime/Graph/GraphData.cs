@@ -16,6 +16,7 @@ namespace AroAro.DataCore.Graph
         private readonly string _id;
         private readonly Dictionary<string, Dictionary<string, object>> _nodes = new();
         private readonly Dictionary<string, Dictionary<string, object>> _edgeProperties = new();
+        private readonly Dictionary<string, string> _edgeTypes = new();
         private readonly Dictionary<string, HashSet<string>> _outAdjacency = new();
         private readonly Dictionary<string, HashSet<string>> _inAdjacency = new();
 
@@ -41,7 +42,7 @@ namespace AroAro.DataCore.Graph
                 copy._nodes[kvp.Key] = new Dictionary<string, object>(kvp.Value);
             }
             
-            // Copy edge properties and rebuild adjacency lists from edges
+            // Copy edge properties, types and rebuild adjacency lists from edges
             foreach (var kvp in _edgeProperties)
             {
                 var (from, to) = ParseEdgeKey(kvp.Key);
@@ -50,6 +51,8 @@ namespace AroAro.DataCore.Graph
                 if (copy._nodes.ContainsKey(from) && copy._nodes.ContainsKey(to))
                 {
                     copy._edgeProperties[kvp.Key] = new Dictionary<string, object>(kvp.Value);
+                    if (_edgeTypes.TryGetValue(kvp.Key, out var edgeType))
+                        copy._edgeTypes[kvp.Key] = edgeType;
                     
                     // Ensure adjacency lists exist for both nodes
                     if (!copy._outAdjacency.ContainsKey(from))
@@ -144,6 +147,11 @@ namespace AroAro.DataCore.Graph
 
         public void AddEdge(string fromId, string toId, IDictionary<string, object> properties = null)
         {
+            AddEdge(fromId, toId, null, properties);
+        }
+
+        public void AddEdge(string fromId, string toId, string edgeType, IDictionary<string, object> properties = null)
+        {
             if (!_nodes.ContainsKey(fromId))
                 throw new ArgumentException($"Source node '{fromId}' not found");
             if (!_nodes.ContainsKey(toId))
@@ -156,6 +164,7 @@ namespace AroAro.DataCore.Graph
             _edgeProperties[edgeKey] = properties != null 
                 ? new Dictionary<string, object>(properties) 
                 : new Dictionary<string, object>();
+            _edgeTypes[edgeKey] = edgeType ?? string.Empty;
             _outAdjacency[fromId].Add(toId);
             _inAdjacency[toId].Add(fromId);
         }
@@ -167,6 +176,7 @@ namespace AroAro.DataCore.Graph
                 return false;
 
             _edgeProperties.Remove(edgeKey);
+            _edgeTypes.Remove(edgeKey);
             _outAdjacency[fromId].Remove(toId);
             _inAdjacency[toId].Remove(fromId);
             return true;
@@ -200,7 +210,7 @@ namespace AroAro.DataCore.Graph
 
         public IEnumerable<(string From, string To)> GetEdges()
         {
-            return _edgeProperties.Keys.Select(ParseEdgeKey);
+            return _edgeProperties.Keys.Select(ParseEdgeKey).ToList();
         }
 
         public IEnumerable<string> GetOutNeighbors(string nodeId)
@@ -210,6 +220,18 @@ namespace AroAro.DataCore.Graph
             return neighbors;
         }
 
+        public IEnumerable<string> GetOutNeighbors(string nodeId, string edgeType)
+        {
+            if (!_outAdjacency.TryGetValue(nodeId, out var neighbors))
+                throw new KeyNotFoundException($"Node '{nodeId}' not found");
+            var type = edgeType ?? string.Empty;
+            return neighbors.Where(toId =>
+            {
+                var key = GetEdgeKey(nodeId, toId);
+                return _edgeTypes.TryGetValue(key, out var t) && t == type;
+            });
+        }
+
         public IEnumerable<string> GetInNeighbors(string nodeId)
         {
             if (!_inAdjacency.TryGetValue(nodeId, out var neighbors))
@@ -217,10 +239,29 @@ namespace AroAro.DataCore.Graph
             return neighbors;
         }
 
+        public IEnumerable<string> GetInNeighbors(string nodeId, string edgeType)
+        {
+            if (!_inAdjacency.TryGetValue(nodeId, out var neighbors))
+                throw new KeyNotFoundException($"Node '{nodeId}' not found");
+            var type = edgeType ?? string.Empty;
+            return neighbors.Where(fromId =>
+            {
+                var key = GetEdgeKey(fromId, nodeId);
+                return _edgeTypes.TryGetValue(key, out var t) && t == type;
+            });
+        }
+
         public IEnumerable<string> GetNeighbors(string nodeId)
         {
             var outNeighbors = GetOutNeighbors(nodeId);
             var inNeighbors = GetInNeighbors(nodeId);
+            return outNeighbors.Union(inNeighbors);
+        }
+
+        public IEnumerable<string> GetNeighbors(string nodeId, string edgeType)
+        {
+            var outNeighbors = GetOutNeighbors(nodeId, edgeType);
+            var inNeighbors = GetInNeighbors(nodeId, edgeType);
             return outNeighbors.Union(inNeighbors);
         }
 
@@ -245,30 +286,59 @@ namespace AroAro.DataCore.Graph
 
         public int AddNodes(IEnumerable<(string Id, IDictionary<string, object> Properties)> nodes)
         {
-            int count = 0;
-            foreach (var (id, props) in nodes)
+            var nodeList = nodes.ToList();
+            // Phase 1: Validate all
+            var seen = new HashSet<string>();
+            foreach (var (id, _) in nodeList)
             {
-                AddNode(id, props);
-                count++;
+                if (string.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+                if (_nodes.ContainsKey(id) || !seen.Add(id))
+                    throw new ArgumentException($"Duplicate node ID: {id}");
             }
-            return count;
+            // Phase 2: Apply all
+            foreach (var (id, props) in nodeList)
+            {
+                _nodes[id] = props != null ? new Dictionary<string, object>(props) : new Dictionary<string, object>();
+                _outAdjacency[id] = new HashSet<string>();
+                _inAdjacency[id] = new HashSet<string>();
+            }
+            return nodeList.Count;
         }
 
         public int AddEdges(IEnumerable<(string From, string To, IDictionary<string, object> Properties)> edges)
         {
-            int count = 0;
-            foreach (var (from, to, props) in edges)
+            return AddEdges(edges.Select(e => (e.From, e.To, (string)null, e.Properties)));
+        }
+
+        public int AddEdges(IEnumerable<(string From, string To, string Type, IDictionary<string, object> Properties)> edges)
+        {
+            var edgeList = edges.ToList();
+            // Phase 1: Validate all
+            foreach (var (from, to, _, _) in edgeList)
             {
-                AddEdge(from, to, props);
-                count++;
+                if (!_nodes.ContainsKey(from)) throw new ArgumentException($"Source node '{from}' not found");
+                if (!_nodes.ContainsKey(to)) throw new ArgumentException($"Target node '{to}' not found");
+                var key = GetEdgeKey(from, to);
+                if (_edgeProperties.ContainsKey(key))
+                    throw new ArgumentException($"Edge from '{from}' to '{to}' already exists");
             }
-            return count;
+            // Phase 2: Apply all
+            foreach (var (from, to, edgeType, props) in edgeList)
+            {
+                var edgeKey = GetEdgeKey(from, to);
+                _edgeProperties[edgeKey] = props != null ? new Dictionary<string, object>(props) : new Dictionary<string, object>();
+                _edgeTypes[edgeKey] = edgeType ?? string.Empty;
+                _outAdjacency[from].Add(to);
+                _inAdjacency[to].Add(from);
+            }
+            return edgeList.Count;
         }
 
         public void Clear()
         {
             _nodes.Clear();
             _edgeProperties.Clear();
+            _edgeTypes.Clear();
             _outAdjacency.Clear();
             _inAdjacency.Clear();
         }
@@ -378,6 +448,7 @@ namespace AroAro.DataCore.Graph
             private int _maxDepth = int.MaxValue;
             private bool _traverseOut = true;
             private bool _traverseIn = false;
+            private bool _useDFS;
             private List<Func<string, bool>> _nodeFilters = new();
             private List<Func<string, string, bool>> _edgeFilters = new();
 
@@ -422,6 +493,17 @@ namespace AroAro.DataCore.Graph
                 return this;
             }
 
+            public IGraphQuery WhereEdgeType(string edgeType)
+            {
+                var type = edgeType ?? string.Empty;
+                _edgeFilters.Add((from, to) =>
+                {
+                    var key = GetEdgeKey(from, to);
+                    return _source._edgeTypes.TryGetValue(key, out var t) && t == type;
+                });
+                return this;
+            }
+
             public IGraphQuery From(string nodeId)
             {
                 _startNode = nodeId;
@@ -448,6 +530,18 @@ namespace AroAro.DataCore.Graph
                 return this;
             }
 
+            public IGraphQuery UseBFS()
+            {
+                _useDFS = false;
+                return this;
+            }
+
+            public IGraphQuery UseDFS()
+            {
+                _useDFS = true;
+                return this;
+            }
+
             public IEnumerable<string> ToNodeIds()
             {
                 if (string.IsNullOrEmpty(_startNode))
@@ -456,7 +550,7 @@ namespace AroAro.DataCore.Graph
                     return ApplyNodeFilters(nodes);
                 }
 
-                return BFS();
+                return _useDFS ? DFS() : BFS();
             }
 
             public IEnumerable<(string From, string To)> ToEdges()
@@ -497,7 +591,6 @@ namespace AroAro.DataCore.Graph
                 {
                     var (current, depth) = queue.Dequeue();
 
-                    // Apply node filters
                     bool passesFilter = _nodeFilters.All(f => f(current));
                     if (passesFilter)
                         yield return current;
@@ -518,22 +611,66 @@ namespace AroAro.DataCore.Graph
                         if (visited.Contains(neighbor))
                             continue;
 
-                        // Check edge filters — always pass (from, to) in edge-storage order
-                        bool edgePassesFilter;
-                        if (_traverseOut)
-                            edgePassesFilter = _edgeFilters.All(f => f(current, neighbor));
-                        else if (_traverseIn)
-                            edgePassesFilter = _edgeFilters.All(f => f(neighbor, current));
-                        else
-                            edgePassesFilter = _edgeFilters.All(f => f(current, neighbor) || f(neighbor, current));
-
-                        if (!edgePassesFilter)
+                        if (!PassesEdgeFilter(current, neighbor))
                             continue;
 
                         visited.Add(neighbor);
                         queue.Enqueue((neighbor, depth + 1));
                     }
                 }
+            }
+
+            private IEnumerable<string> DFS()
+            {
+                var visited = new HashSet<string> { _startNode };
+                var stack = new Stack<(string node, int depth)>();
+                stack.Push((_startNode, 0));
+
+                while (stack.Count > 0)
+                {
+                    var (current, depth) = stack.Pop();
+
+                    bool passesFilter = _nodeFilters.All(f => f(current));
+                    if (passesFilter)
+                        yield return current;
+
+                    if (depth >= _maxDepth)
+                        continue;
+
+                    IEnumerable<string> neighbors;
+                    if (_traverseOut && _traverseIn)
+                        neighbors = _source.GetNeighbors(current);
+                    else if (_traverseOut)
+                        neighbors = _source.GetOutNeighbors(current);
+                    else
+                        neighbors = _source.GetInNeighbors(current);
+
+                    // Push in reverse so first neighbor is processed first
+                    foreach (var neighbor in neighbors.Reverse())
+                    {
+                        if (visited.Contains(neighbor))
+                            continue;
+
+                        if (!PassesEdgeFilter(current, neighbor))
+                            continue;
+
+                        visited.Add(neighbor);
+                        stack.Push((neighbor, depth + 1));
+                    }
+                }
+            }
+
+            private bool PassesEdgeFilter(string from, string to)
+            {
+                if (_edgeFilters.Count == 0)
+                    return true;
+
+                if (_traverseOut)
+                    return _edgeFilters.All(f => f(from, to));
+                else if (_traverseIn)
+                    return _edgeFilters.All(f => f(to, from));
+                else
+                    return _edgeFilters.All(f => f(from, to) || f(to, from));
             }
 
             private static bool CompareValues(object left, QueryOp op, object right)

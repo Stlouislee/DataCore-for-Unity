@@ -957,6 +957,111 @@ namespace DataCore.Tests.LiteDb
 
         #endregion
 
+        #region ColumnMeta Indexed flag (Issue #145)
+
+        [Fact]
+        public void IsColumnIndexed_Default_ReturnsFalse()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("col", new double[] { 1, 2, 3 });
+
+            Assert.False(ds.IsColumnIndexed("col"));
+        }
+
+        [Fact]
+        public void IsColumnIndexed_AfterCreateIndex_ReturnsTrue()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("col", new double[] { 1, 2, 3 });
+
+            ds.CreateIndex("col");
+
+            Assert.True(ds.IsColumnIndexed("col"));
+        }
+
+        [Fact]
+        public void IsColumnIndexed_NonExistentColumn_ReturnsFalse()
+        {
+            var ds = CreateDataset();
+
+            Assert.False(ds.IsColumnIndexed("nonexistent"));
+        }
+
+        [Fact]
+        public void IsColumnIndexed_UnindexedColumn_ReturnsFalse()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("a", new double[] { 1, 2 });
+            ds.AddNumericColumn("b", new double[] { 3, 4 });
+            ds.CreateIndex("a");
+
+            Assert.True(ds.IsColumnIndexed("a"));
+            Assert.False(ds.IsColumnIndexed("b"));
+        }
+
+        [Fact]
+        public void CreateIndex_CalledTwice_NoError()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("col", new double[] { 1, 2, 3 });
+
+            ds.CreateIndex("col");
+            ds.CreateIndex("col");
+
+            Assert.True(ds.IsColumnIndexed("col"));
+        }
+
+        #endregion
+
+        #region Schema-driven auto-index (Issue #146)
+
+        [Fact]
+        public void AddColumn_WithIndexed_AutoCreatesIndex()
+        {
+            var ds = CreateDataset();
+
+            ds.AddColumn("region", "String", indexed: true);
+
+            Assert.True(ds.IsColumnIndexed("region"));
+            Assert.True(ds.HasColumn("region"));
+        }
+
+        [Fact]
+        public void AddColumn_WithoutIndexed_NoAutoIndex()
+        {
+            var ds = CreateDataset();
+
+            ds.AddColumn("revenue", "Numeric", indexed: false);
+
+            Assert.False(ds.IsColumnIndexed("revenue"));
+        }
+
+        [Fact]
+        public void AddColumn_IndexedThenAddData_QueryUsesColumn()
+        {
+            var ds = CreateDataset();
+
+            ds.AddColumn("category", "String", indexed: true);
+            ds.AddStringColumn("category", new[] { "A", "B", "C" });
+
+            Assert.Equal(3, ds.RowCount);
+            Assert.True(ds.IsColumnIndexed("category"));
+        }
+
+        [Fact]
+        public void AddColumn_AlreadyExists_NoError()
+        {
+            var ds = CreateDataset();
+            ds.AddNumericColumn("x", new double[] { 1, 2 });
+
+            // Adding same column again should be a no-op
+            ds.AddColumn("x", "Numeric", indexed: true);
+
+            Assert.Equal(2, ds.RowCount);
+        }
+
+        #endregion
+
         #region Metadata batch flush (issue #77)
 
         [Fact]

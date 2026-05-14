@@ -3,6 +3,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using AroAro.DataCore.Workspace;
 
 namespace AroAro.DataCore.Editor
 {
@@ -11,19 +12,78 @@ namespace AroAro.DataCore.Editor
         private DataCoreEditorComponent _component;
         private string _datasetName;
         private IDataSet _dataset;
+        private string _source;
         private Vector2 _scrollPosition;
         private int _maxRowsToShow = 100;
         private int _maxNodesToShow = 50;
-        
+
+        // Track open windows by "{source}:{datasetName}" to prevent duplicates
+        private static readonly Dictionary<string, DataCorePreviewWindow> _openWindows = new Dictionary<string, DataCorePreviewWindow>();
+
+        private static string GetWindowKey(string source, string datasetName) => $"{source}:{datasetName}";
+
+        private static DataCorePreviewWindow FindOrReopen(string key, string source, string datasetName)
+        {
+            if (_openWindows.TryGetValue(key, out var existing) && existing != null)
+            {
+                existing.Focus();
+                return existing;
+            }
+            return null;
+        }
+
         public static void ShowWindow(DataCoreEditorComponent component, string datasetName)
         {
+            var key = GetWindowKey("Store", datasetName);
+            var existing = FindOrReopen(key, "Store", datasetName);
+            if (existing != null)
+            {
+                // Refresh data in case it changed
+                existing._dataset = component.GetStore().Get<IDataSet>(datasetName);
+                existing.Repaint();
+                return;
+            }
+
             var window = CreateInstance<DataCorePreviewWindow>();
             window.titleContent = new GUIContent($"DataCore Preview - {datasetName}");
             window._component = component;
             window._datasetName = datasetName;
+            window._source = "Store";
             window._dataset = component.GetStore().Get<IDataSet>(datasetName);
             window.minSize = new Vector2(800, 600);
+            _openWindows[key] = window;
             window.ShowUtility();
+        }
+
+        /// <summary>
+        /// 从 Workspace 打开预览窗口
+        /// </summary>
+        public static void ShowWorkspaceWindow(DataCoreEditorComponent component, string datasetName)
+        {
+            var key = GetWindowKey("Workspace", datasetName);
+            var existing = FindOrReopen(key, "Workspace", datasetName);
+            if (existing != null)
+            {
+                existing._dataset = component.GetWorkspaceDataset(datasetName);
+                existing.Repaint();
+                return;
+            }
+
+            var window = CreateInstance<DataCorePreviewWindow>();
+            window.titleContent = new GUIContent($"DataCore Preview - {datasetName} (Workspace)");
+            window._component = component;
+            window._datasetName = datasetName;
+            window._source = "Workspace";
+            window._dataset = component.GetWorkspaceDataset(datasetName);
+            window.minSize = new Vector2(800, 600);
+            _openWindows[key] = window;
+            window.ShowUtility();
+        }
+
+        private void OnDestroy()
+        {
+            var key = GetWindowKey(_source, _datasetName);
+            _openWindows.Remove(key);
         }
 
         private void OnGUI()
@@ -35,7 +95,7 @@ namespace AroAro.DataCore.Editor
             }
 
             EditorGUILayout.LabelField($"Dataset: {_datasetName}", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField($"Type: {_dataset.Kind}");
+            EditorGUILayout.LabelField($"Type: {_dataset.Kind}  |  Source: {_source}");
             EditorGUILayout.Space();
 
             _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
@@ -105,7 +165,7 @@ namespace AroAro.DataCore.Editor
                 foreach (var columnName in columns)
                 {
                     var value = row.TryGetValue(columnName, out var v) ? v?.ToString() ?? "" : "";
-                    var displayValue = value.Length > 15 ? value.Substring(0, 15) + "..." : value;
+                    var displayValue = value.Length > 25 ? value.Substring(0, 25) + "…" : value;
                     EditorGUILayout.LabelField(displayValue, GUILayout.Width(120));
                 }
                 EditorGUILayout.EndHorizontal();

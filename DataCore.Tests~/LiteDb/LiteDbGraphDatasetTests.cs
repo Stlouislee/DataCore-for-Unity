@@ -751,6 +751,168 @@ namespace DataCore.Tests.LiteDb
 
         #endregion
 
+        #region EdgeType (Issue #135)
+
+        [Fact]
+        public void AddEdge_WithType_TypeIsStored()
+        {
+            var g = CreateGraph();
+            g.AddNode("a");
+            g.AddNode("b");
+
+            g.AddEdge("a", "b", "WorksAt");
+
+            var props = g.GetEdgeProperties("a", "b");
+            Assert.NotNull(props);
+            // Type is stored as a first-class field, not in properties
+            Assert.True(g.HasEdge("a", "b"));
+        }
+
+        [Fact]
+        public void AddEdge_WithType_GetEdgesReturnsEdge()
+        {
+            var g = CreateGraph();
+            g.AddNode("a");
+            g.AddNode("b");
+            g.AddNode("c");
+            g.AddEdge("a", "b", "Friend");
+            g.AddEdge("a", "c", "Colleague");
+
+            var edges = g.GetEdges().ToList();
+            Assert.Equal(2, edges.Count);
+        }
+
+        [Fact]
+        public void GetOutNeighbors_WithType_FiltersCorrectly()
+        {
+            var g = CreateGraph();
+            g.AddNode("a");
+            g.AddNode("b");
+            g.AddNode("c");
+            g.AddEdge("a", "b", "Friend");
+            g.AddEdge("a", "c", "Colleague");
+
+            var friends = g.GetOutNeighbors("a", "Friend").ToList();
+            Assert.Single(friends);
+            Assert.Contains("b", friends);
+
+            var colleagues = g.GetOutNeighbors("a", "Colleague").ToList();
+            Assert.Single(colleagues);
+            Assert.Contains("c", colleagues);
+        }
+
+        [Fact]
+        public void GetInNeighbors_WithType_FiltersCorrectly()
+        {
+            var g = CreateGraph();
+            g.AddNode("a");
+            g.AddNode("b");
+            g.AddNode("c");
+            g.AddEdge("a", "c", "Friend");
+            g.AddEdge("b", "c", "Colleague");
+
+            var friends = g.GetInNeighbors("c", "Friend").ToList();
+            Assert.Single(friends);
+            Assert.Contains("a", friends);
+
+            var colleagues = g.GetInNeighbors("c", "Colleague").ToList();
+            Assert.Single(colleagues);
+            Assert.Contains("b", colleagues);
+        }
+
+        [Fact]
+        public void GetNeighbors_WithType_FiltersCorrectly()
+        {
+            var g = CreateGraph();
+            g.AddNode("a");
+            g.AddNode("b");
+            g.AddNode("c");
+            g.AddEdge("a", "b", "Friend");
+            g.AddEdge("c", "b", "Colleague");
+
+            var friends = g.GetNeighbors("b", "Friend").ToList();
+            Assert.Single(friends);
+            Assert.Contains("a", friends);
+        }
+
+        [Fact]
+        public void GetOutNeighbors_NoType_ReturnsAll()
+        {
+            var g = CreateGraph();
+            g.AddNode("a");
+            g.AddNode("b");
+            g.AddNode("c");
+            g.AddEdge("a", "b", "Friend");
+            g.AddEdge("a", "c", "Colleague");
+
+            var all = g.GetOutNeighbors("a").ToList();
+            Assert.Equal(2, all.Count);
+        }
+
+        [Fact]
+        public void WhereEdgeType_FiltersEdgesInQuery()
+        {
+            var g = CreateGraph();
+            g.AddNode("a");
+            g.AddNode("b");
+            g.AddNode("c");
+            g.AddEdge("a", "b", "Friend");
+            g.AddEdge("a", "c", "Colleague");
+
+            var result = g.Query()
+                .From("a")
+                .TraverseOut()
+                .WhereEdgeType("Friend")
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Contains("a", result);
+            Assert.Contains("b", result);
+            Assert.DoesNotContain("c", result);
+        }
+
+        [Fact]
+        public void WhereEdgeType_CombinedWithNodeFilter()
+        {
+            var g = CreateGraph();
+            g.AddNode("a", new Dictionary<string, object> { { "active", true } });
+            g.AddNode("b", new Dictionary<string, object> { { "active", false } });
+            g.AddNode("c", new Dictionary<string, object> { { "active", true } });
+            g.AddEdge("a", "b", "Friend");
+            g.AddEdge("a", "c", "Friend");
+
+            var result = g.Query()
+                .From("a")
+                .TraverseOut()
+                .WhereEdgeType("Friend")
+                .WhereNodeProperty("active", QueryOp.Eq, true)
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Contains("a", result);
+            Assert.DoesNotContain("b", result);
+            Assert.Contains("c", result);
+        }
+
+        [Fact]
+        public void AddEdge_NullType_DefaultsToEmpty()
+        {
+            var g = CreateGraph();
+            g.AddNode("a");
+            g.AddNode("b");
+
+            // AddEdge without type (null defaults to empty)
+            g.AddEdge("a", "b");
+
+            // Edge should still be found via unfiltered query
+            var allNeighbors = g.GetOutNeighbors("a").ToList();
+            Assert.Single(allNeighbors);
+            Assert.Contains("b", allNeighbors);
+            Assert.True(g.HasEdge("a", "b"));
+        }
+
+        #endregion
+
         #region Dispose on dataset
 
         [Fact(Skip = "Known issue: Dispose does not enforce ObjectDisposedException on all operations")]

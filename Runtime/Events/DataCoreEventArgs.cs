@@ -302,4 +302,23 @@ namespace AroAro.DataCore.Events
     }
 
     #endregion
+
+    #region Workspace Events
+
+    /// <summary>
+    /// Workspace 数据集注册事件参数
+    /// </summary>
+    public class WorkspaceDatasetRegisteredEventArgs : EventArgs
+    {
+        public Workspace.IWorkspace Workspace { get; }
+        public IDataSet Dataset { get; }
+
+        public WorkspaceDatasetRegisteredEventArgs(Workspace.IWorkspace workspace, IDataSet dataset)
+        {
+            Workspace = workspace;
+            Dataset = dataset;
+        }
+    }
+
+    #endregion
 }

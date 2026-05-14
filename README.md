@@ -101,6 +101,88 @@ g.AddEdge("a", "b");
 store.Checkpoint();
 ```
 
+### Option 3: Workspace (Recommended for Data Analysis)
+
+The Workspace is a unified in-memory working area — think of it as your "desktop" for data operations. It's always available on `DataCoreStore`, no session management needed.
+
+```csharp
+using AroAro.DataCore;
+using AroAro.DataCore.Workspace;
+
+var store = new DataCoreStore("Data/my_database.db");
+
+// Load from persistent store into workspace
+store.Workspace.Get("player-stats"); // auto-loads from store
+
+// Register computed results directly
+var filtered = new List<Dictionary<string, object>>
+{
+    new() { ["name"] = "Alice", ["score"] = 100.0 },
+    new() { ["name"] = "Bob", ["score"] = 200.0 }
+};
+store.Workspace.Register("top-players", filtered, DataSource.Derived);
+
+// "What do I have right now?" — one call answers everything
+var all = store.Workspace.DescribeAll();
+// → [{ name: "player-stats", source: Store, rows: 1000, ... },
+//    { name: "top-players", source: Derived, rows: 2, ... }]
+
+// One-line summary
+store.Workspace.Summary();
+// → "Workspace: 2 datasets (1 store, 1 derived)"
+
+// Lifecycle management
+store.Workspace.Rename("top-players", "elite-players");
+store.Workspace.Clone("elite-players", "elite-backup");
+store.Workspace.Remove("elite-backup");
+store.Workspace.Clear(); // clear workspace, store data unaffected
+```
+
+**Workspace features:**
+- **Always available**: `store.Workspace` is ready on store creation
+- **Auto-fallback**: `Get()` checks workspace first, then loads from store
+- **Source tracking**: Every dataset tagged as Store, Derived, or Imported
+- **AI-friendly**: `DescribeAll()` returns schema, row counts, and sample data
+- **Lazy caching**: Metadata is computed on-demand and cached until invalidated
+- **DataFrame support**: `CreateDataFrame`, `ConvertToDataFrame`, full lifecycle
+- **Multi-workspace**: `store.CreateWorkspace("analysis")` + indexer `store["analysis"]`
+
+### Option 4: Agent Tools (For AI Integration)
+
+55 static tools for AI agent integration via `DataCoreTools.Execute()`:
+
+```csharp
+using AroAro.DataCore.Tools;
+
+DataCoreTools.Initialize(store);
+
+// Filter with human-readable expressions
+var result = DataCoreTools.Execute("workspace_filter", new Dictionary<string, object>
+{
+    ["source"] = "player-stats",
+    ["filter"] = "score > 300 AND class == Warrior",
+    ["resultName"] = "top-warriors"
+});
+// → {"success":true,"action":"workspace_filter","result":{"name":"top-warriors","rows":42,...}}
+
+// Join two datasets
+DataCoreTools.Execute("workspace_join", new Dictionary<string, object>
+{
+    ["left"] = "Players", ["right"] = "Scores",
+    ["leftKey"] = "id", ["rightKey"] = "player_id",
+    ["resultName"] = "PlayerScores"
+});
+
+// Graph operations
+DataCoreTools.Execute("workspace_open_graph", new Dictionary<string, object>
+{
+    ["dataset"] = "social-network"
+});
+
+// Get all tool schemas for Agent framework registration
+string schemas = DataCoreTools.GetToolSchemas();
+```
+
 ## Editor Integration
 
 ### Creating Data Core
@@ -205,12 +287,21 @@ dataCore.ImportCsvToTabular("path/to/file.csv", "MyDataset", true, ',');
 - **Tabular Data**: Store and query structured data with numeric and string columns
 - **Graph Data**: Create and manipulate graph datasets with nodes and edges
 - **Persistence**: Automatic saving and loading of datasets
+- **Workspace**: Unified in-memory working area for data analysis workflows — register results, track sources, introspect state
+- **Agent Tools**: 55 tools via `DataCoreTools.Execute()` with JSON Schema exposure for AI frameworks
+- **Filter Expressions**: Human-readable syntax (`age > 18 AND city == Shanghai`) with predicate cache
+- **DataFrame**: First-class DataFrame support within workspace
 
 ### Algorithm Framework
 - **Built-in Algorithms**: PageRank, Connected Components, Min-Max Normalization
 - **Composable Pipelines**: Chain algorithms sequentially with automatic data flow
 - **Algorithm Registry**: Discover, register, and look up algorithms at runtime
 - **Extensible**: Create custom algorithms by extending base classes
+
+### Analysis API
+- **Statistical Analysis**: `describe`, `correlation`, `outliers`, `clustering`, `distribution` via `workspace_analysis`
+- **Graph Analysis**: `centrality`, `communities`, `shortest_path` via `workspace_analysis`
+- **Algorithm Bridge**: Execute registered algorithms and list available ones via `workspace_algorithm`
 
 ### Editor Integration
 - **Inspector Preview**: View dataset contents directly in Unity Inspector
@@ -351,4 +442,87 @@ DataCoreEventManager.AlgorithmCompleted += (sender, args) =>
 
 DataCoreEventManager.PipelineCompleted += (sender, args) =>
     Debug.Log($"Pipeline '{args.PipelineName}': {args.StepCount} steps in {args.Duration.TotalMilliseconds}ms");
+```
+
+### Using the Analysis API
+
+```csharp
+using AroAro.DataCore.Tools;
+
+DataCoreTools.Initialize(store);
+
+// Statistical analysis — describe all columns
+var describeResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "describe",
+    ["dataset"] = "player-stats"
+});
+// → per-column profile: type, non-null count, unique count, min, max, mean, median, std, skewness, kurtosis, null rate
+
+// Correlation matrix
+var corrResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "correlation",
+    ["dataset"] = "player-stats",
+    ["columns"] = new[] { "score", "playtime", "level" }
+});
+
+// Outlier detection
+var outlierResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "outliers",
+    ["dataset"] = "player-stats",
+    ["column"] = "score"
+});
+
+// K-Means clustering
+var clusterResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "clustering",
+    ["dataset"] = "player-stats",
+    ["k"] = 3,
+    ["features"] = new[] { "score", "playtime" }
+});
+
+// Graph analysis — centrality
+var centralityResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "centrality",
+    ["graph"] = "social-network",
+    ["method"] = "betweenness"
+});
+
+// Community detection
+var communityResult = DataCoreTools.Execute("workspace_analysis", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["analysis"] = "communities",
+    ["graph"] = "social-network"
+});
+
+// Execute a registered algorithm via Agent tool
+var algoResult = DataCoreTools.Execute("workspace_algorithm", new Dictionary<string, object>
+{
+    ["workspace"] = "default",
+    ["algorithm"] = "PageRank",
+    ["dataset"] = "social-graph",
+    ["resultName"] = "ranked_graph",
+    ["params"] = new Dictionary<string, object>
+    {
+        ["dampingFactor"] = 0.85,
+        ["maxIterations"] = 200
+    }
+});
+
+// List all available algorithms
+var listResult = DataCoreTools.Execute("workspace_algorithm", new Dictionary<string, object>
+{
+    ["algorithm"] = "list"
+});
+// → [{ name: "PageRank", ... }, { name: "ConnectedComponents", ... }, { name: "MinMaxNormalize", ... }]
 ```

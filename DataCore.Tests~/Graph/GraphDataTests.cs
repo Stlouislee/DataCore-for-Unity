@@ -584,12 +584,10 @@ namespace DataCore.Tests.Graph
 
         [Fact]
         [Trait("Bug", "batch-not-atomic")]
-        public void AddNodes_Batch_PartialFailure_NotAtomic()
+        public void AddNodes_Batch_Failure_IsAtomic()
         {
-            // Known issue: AddNodes is not atomic. If one node in the batch
-            // fails (e.g., duplicate ID), previously added nodes are NOT rolled back.
-            // This leaves the graph in an inconsistent state where some nodes
-            // from the batch were added and some were not.
+            // AddNodes validates all nodes before applying any.
+            // If any node in the batch fails validation, no nodes are added.
             var graph = new GraphData("batch");
             graph.AddNode("existing");
 
@@ -604,11 +602,11 @@ namespace DataCore.Tests.Graph
             // The batch operation will throw on "existing" (duplicate)
             Assert.Throws<ArgumentException>(() => graph.AddNodes(nodes));
 
-            // But new1 and new2 were already added before the failure
-            // This is the non-atomic behavior
-            Assert.True(graph.HasNode("new1"), "new1 was added before the failure");
-            Assert.True(graph.HasNode("new2"), "new2 was added before the failure");
-            Assert.False(graph.HasNode("new3"), "new3 was never reached");
+            // Atomic behavior: no nodes from the batch should have been added
+            Assert.False(graph.HasNode("new1"), "new1 should not be added (atomic rollback)");
+            Assert.False(graph.HasNode("new2"), "new2 should not be added (atomic rollback)");
+            Assert.False(graph.HasNode("new3"), "new3 should not be added (atomic rollback)");
+            Assert.True(graph.HasNode("existing"), "existing should still be present");
         }
 
         [Fact]
@@ -1110,6 +1108,298 @@ namespace DataCore.Tests.Graph
 
             // All non-numeric → CompareNumeric returns 0 → Gt is false
             Assert.DoesNotContain("B", result);
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // DFS traversal (Issue #151)
+        // ────────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void DFS_TraversesDepthFirst()
+        {
+            // Graph: A → B, A → C, B → D, C → E
+            var graph = new GraphData("dfs");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddNode("D");
+            graph.AddNode("E");
+            graph.AddEdge("A", "B");
+            graph.AddEdge("A", "C");
+            graph.AddEdge("B", "D");
+            graph.AddEdge("C", "E");
+
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .UseDFS()
+                .ToNodeIds()
+                .ToList();
+
+            // DFS from A: A first, then B, D (deep), then C, E
+            Assert.Equal("A", result[0]);
+            Assert.Contains("B", result);
+            Assert.Contains("C", result);
+            Assert.Contains("D", result);
+            Assert.Contains("E", result);
+            // B and D should come before C (DFS goes deep first)
+            Assert.True(result.IndexOf("D") < result.IndexOf("C"),
+                "DFS should visit D before C (depth-first)");
+        }
+
+        [Fact]
+        public void DFS_MaxDepth_LimitsTraversal()
+        {
+            var graph = new GraphData("chain");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddNode("D");
+            graph.AddEdge("A", "B");
+            graph.AddEdge("B", "C");
+            graph.AddEdge("C", "D");
+
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .UseDFS()
+                .MaxDepth(1)
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Contains("A", result);
+            Assert.Contains("B", result);
+            Assert.DoesNotContain("C", result);
+            Assert.DoesNotContain("D", result);
+        }
+
+        [Fact]
+        public void DFS_WithNodeFilter_FiltersNodes()
+        {
+            var graph = new GraphData("filtered");
+            graph.AddNode("A", new Dictionary<string, object> { ["active"] = true });
+            graph.AddNode("B", new Dictionary<string, object> { ["active"] = false });
+            graph.AddNode("C", new Dictionary<string, object> { ["active"] = true });
+            graph.AddEdge("A", "B");
+            graph.AddEdge("B", "C");
+
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .UseDFS()
+                .WhereNodeProperty("active", QueryOp.Eq, true)
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Contains("A", result);
+            Assert.DoesNotContain("B", result);
+            Assert.Contains("C", result);
+        }
+
+        [Fact]
+        public void UseBFS_SwitchesBackToBFS()
+        {
+            var graph = new GraphData("switch");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B");
+            graph.AddEdge("A", "C");
+
+            // DFS then switch back to BFS
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .UseDFS()
+                .UseBFS()
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Equal("A", result[0]);
+            Assert.Equal(3, result.Count);
+        }
+
+        [Fact]
+        public void DFS_SingleNode_ReturnsOnlyStartNode()
+        {
+            var graph = new GraphData("single");
+            graph.AddNode("only");
+
+            var result = graph.Query()
+                .From("only")
+                .UseDFS()
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Single(result);
+            Assert.Equal("only", result[0]);
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // EdgeType (Issue #135)
+        // ────────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void AddEdge_WithType_TypeIsStored()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+
+            graph.AddEdge("A", "B", "WorksAt");
+
+            Assert.True(graph.HasEdge("A", "B"));
+        }
+
+        [Fact]
+        public void GetOutNeighbors_WithType_FiltersCorrectly()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("A", "C", "Colleague");
+
+            var friends = graph.GetOutNeighbors("A", "Friend").ToList();
+            Assert.Single(friends);
+            Assert.Contains("B", friends);
+
+            var colleagues = graph.GetOutNeighbors("A", "Colleague").ToList();
+            Assert.Single(colleagues);
+            Assert.Contains("C", colleagues);
+        }
+
+        [Fact]
+        public void GetInNeighbors_WithType_FiltersCorrectly()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "C", "Friend");
+            graph.AddEdge("B", "C", "Colleague");
+
+            var friends = graph.GetInNeighbors("C", "Friend").ToList();
+            Assert.Single(friends);
+            Assert.Contains("A", friends);
+        }
+
+        [Fact]
+        public void GetNeighbors_WithType_FiltersCorrectly()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("C", "B", "Colleague");
+
+            var friends = graph.GetNeighbors("B", "Friend").ToList();
+            Assert.Single(friends);
+            Assert.Contains("A", friends);
+        }
+
+        [Fact]
+        public void GetOutNeighbors_NoType_ReturnsAll()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("A", "C", "Colleague");
+
+            var all = graph.GetOutNeighbors("A").ToList();
+            Assert.Equal(2, all.Count);
+        }
+
+        [Fact]
+        public void WhereEdgeType_FiltersEdgesInQuery()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("A", "C", "Colleague");
+
+            var result = graph.Query()
+                .From("A")
+                .TraverseOut()
+                .WhereEdgeType("Friend")
+                .ToNodeIds()
+                .ToList();
+
+            Assert.Contains("A", result);
+            Assert.Contains("B", result);
+            Assert.DoesNotContain("C", result);
+        }
+
+        [Fact]
+        public void WhereEdgeType_CountEdges_FiltersCorrectly()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("A", "C", "Colleague");
+
+            var count = graph.Query()
+                .WhereEdgeType("Friend")
+                .CountEdges();
+
+            Assert.Equal(1, count);
+        }
+
+        [Fact]
+        public void WhereEdgeType_ToEdges_FiltersCorrectly()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+            graph.AddNode("C");
+            graph.AddEdge("A", "B", "Friend");
+            graph.AddEdge("A", "C", "Colleague");
+
+            var edges = graph.Query()
+                .WhereEdgeType("Friend")
+                .ToEdges()
+                .ToList();
+
+            Assert.Single(edges);
+            Assert.Equal("A", edges[0].From);
+            Assert.Equal("B", edges[0].To);
+        }
+
+        [Fact]
+        public void AddEdge_NullType_DefaultsToEmpty()
+        {
+            var graph = new GraphData("test");
+            graph.AddNode("A");
+            graph.AddNode("B");
+
+            graph.AddEdge("A", "B");
+
+            var neighbors = graph.GetOutNeighbors("A", "").ToList();
+            Assert.Single(neighbors);
+            Assert.Contains("B", neighbors);
+        }
+
+        [Fact]
+        public void WithName_CopyPreservesEdgeTypes()
+        {
+            var original = new GraphData("test");
+            original.AddNode("A");
+            original.AddNode("B");
+            original.AddEdge("A", "B", "Friend");
+
+            var copy = original.WithName("copy") as GraphData;
+
+            var friends = copy.GetOutNeighbors("A", "Friend").ToList();
+            Assert.Single(friends);
+            Assert.Contains("B", friends);
         }
 
         // ────────────────────────────────────────────────────────────────

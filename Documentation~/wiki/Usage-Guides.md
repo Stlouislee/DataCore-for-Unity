@@ -188,7 +188,71 @@ You can open a dedicated preview window for large datasets:
 
 ## Advanced Features
 
-### 1. Session Management
+### 1. Workspace (Recommended — replaces Session)
+Workspace is the unified in-memory working area for data operations.
+
+```csharp
+// Access the default workspace (always available)
+var ws = store.Workspace;
+
+// Load a dataset from store into workspace (copy semantics)
+var ds = ws.Get("player-stats"); // auto-loads from store
+
+// Create derived data
+var adultQuery = ((ITabularDataset)ws.Get("player-stats"))
+    .Query().Where("age", QueryOp.Gt, 18).ToTabular();
+ws.Register("adults", adultQuery, DataSource.Derived);
+
+// Inspect workspace
+ws.DescribeAll();  // full metadata for all datasets
+ws.Summary();      // "Workspace: 2 datasets (1 store, 1 derived)"
+
+// Multi-workspace support
+var analysis = store.CreateWorkspace("analysis");
+store["analysis"].Get("some-data");
+```
+
+### 2. Agent Tools
+46 tools for AI agent integration via `DataCoreTools.Execute()`.
+
+```csharp
+DataCoreTools.Initialize(store);
+
+// Filter
+var result = DataCoreTools.Execute("workspace_filter", new Dictionary<string, object>
+{
+    ["source"] = "player-stats",
+    ["filter"] = "score > 300 AND class == Warrior",
+    ["resultName"] = "top-warriors"
+});
+
+// Join
+var joined = DataCoreTools.Execute("workspace_join", new Dictionary<string, object>
+{
+    ["left"] = "Players",
+    ["right"] = "Scores",
+    ["leftKey"] = "id",
+    ["rightKey"] = "player_id",
+    ["resultName"] = "PlayerScores"
+});
+
+// Graph operations
+DataCoreTools.Execute("workspace_open_graph", new Dictionary<string, object>
+{
+    ["dataset"] = "social-network"
+});
+DataCoreTools.Execute("workspace_graph_neighbors", new Dictionary<string, object>
+{
+    ["graph"] = "social-network",
+    ["nodeId"] = "user1",
+    ["direction"] = "out"
+});
+
+// Get tool schemas for Agent framework registration
+string schemas = DataCoreTools.GetToolSchemas();
+```
+
+### 3. Session Management (Deprecated)
 Sessions provide isolated workspaces for temporary data or complex analysis without affecting the main database.
 
 ```csharp
@@ -209,6 +273,23 @@ session.PersistDataset("temp-results", "permanent-results");
 
 ### 2. Microsoft.Data.Analysis (DataFrame) Support
 DataCore integrates with the `Microsoft.Data.Analysis` library for advanced data science operations.
+
+#### Working with DataFrames in Workspace (Recommended)
+```csharp
+var ws = store.Workspace;
+
+// Load data and convert to DataFrame
+ws.Get("player-stats"); // load into workspace
+var df = ws.ConvertToDataFrame("player-stats");
+
+// Or create empty DataFrame
+var newDf = ws.CreateDataFrame("my-analysis");
+
+// Convert back to dataset
+// Use workspace_dataframe_to_dataset tool or:
+```
+
+#### Working with DataFrames in Session (Legacy)
 
 #### Working with DataFrames
 ```csharp

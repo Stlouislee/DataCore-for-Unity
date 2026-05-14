@@ -11,10 +11,7 @@ namespace AroAro.DataCore.Editor
         {
             var go = new GameObject("Data Core");
             var dataCore = go.AddComponent<DataCoreEditorComponent>();
-            
-            // Add self-test component for easy testing
-            go.AddComponent<DataCoreSelfTest>();
-            
+
             Selection.activeGameObject = go;
             Undo.RegisterCreatedObjectUndo(go, "Create Data Core");
         }
@@ -51,6 +48,40 @@ namespace AroAro.DataCore.Editor
                 return;
             }
 
+            // Ask for import options
+            var optionsResult = EditorUtility.DisplayDialogComplex(
+                "CSV Import Options",
+                $"Importing: {System.IO.Path.GetFileName(path)}\nDataset: {finalName}",
+                "Import (has header, comma)",
+                "Cancel",
+                "Custom options..."
+            );
+
+            bool hasHeader = true;
+            char delimiter = ',';
+
+            if (optionsResult == 1) // Cancel
+            {
+                return;
+            }
+            else if (optionsResult == 2) // Custom options
+            {
+                hasHeader = EditorUtility.DisplayDialog("CSV Import", "Does the CSV file have a header row?", "Yes (has header)", "No (no header)");
+
+                var delimiterChoice = EditorUtility.DisplayDialogComplex(
+                    "CSV Import Delimiter",
+                    "Select the delimiter used in the CSV file:",
+                    "Comma (,)",
+                    "Cancel",
+                    "Tab (\\t)"
+                );
+
+                if (delimiterChoice == 1) // Cancel
+                    return;
+
+                delimiter = delimiterChoice == 2 ? '\t' : ',';
+            }
+
             // 查找或创建 Data Core 组件
             var dataCore = Object.FindFirstObjectByType<DataCoreEditorComponent>();
             if (dataCore == null)
@@ -61,7 +92,7 @@ namespace AroAro.DataCore.Editor
 
             try
             {
-                dataCore.ImportCsvToTabular(path, finalName, true, ',');
+                dataCore.ImportCsvToTabular(path, finalName, hasHeader, delimiter);
                 EditorUtility.DisplayDialog("CSV Import Success", $"Successfully imported CSV to dataset '{finalName}'", "OK");
             }
             catch (System.Exception ex)
@@ -74,9 +105,16 @@ namespace AroAro.DataCore.Editor
         public static void RunSelfTest()
         {
             var go = new GameObject("DataCore Test Runner");
-            var test = go.AddComponent<DataCoreSelfTest>();
-            test.RunTests();
-            Object.DestroyImmediate(go);
+            go.hideFlags = HideFlags.HideAndDontSave;
+            try
+            {
+                var test = go.AddComponent<DataCoreSelfTest>();
+                test.RunTests();
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
         }
 
         [MenuItem("Tools/DataCore/Create Data Core GameObject")]

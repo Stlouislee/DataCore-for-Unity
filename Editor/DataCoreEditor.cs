@@ -4,6 +4,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using AroAro.DataCore.Session;
+using AroAro.DataCore.Workspace;
 
 namespace AroAro.DataCore.Editor
 {
@@ -13,8 +14,10 @@ namespace AroAro.DataCore.Editor
         private DataCoreEditorComponent component;
         private Vector2 scrollPosition;
         private bool showDatasets = true;
+        private bool showWorkspaceDatasets = true;
         private Dictionary<string, bool> datasetFoldouts = new Dictionary<string, bool>();
         private Dictionary<string, bool> datasetPreviewFoldouts = new Dictionary<string, bool>();
+        private Dictionary<string, bool> wsDatasetFoldouts = new Dictionary<string, bool>();
         
         // CSV 导入相关字段
         private string csvFilePath = "";
@@ -25,9 +28,12 @@ namespace AroAro.DataCore.Editor
         // GraphML 导入相关字段
         private string graphmlFilePath = "";
         private string graphmlDatasetName = "ImportedGraphML";
+        private int graphmlEncodingIndex = 0;
+        private static readonly string[] _graphmlEncodings = { "Auto Detect", "UTF-8", "UTF-16", "ASCII", "ISO-8859-1" };
+        private static readonly string[] _graphmlEncodingValues = { "", "utf-8", "utf-16", "us-ascii", "iso-8859-1" };
         
         // 预览相关字段
-        private Vector2 previewScrollPosition;
+        private Dictionary<string, Vector2> previewScrollPositions = new Dictionary<string, Vector2>();
         private int previewMaxRows = 10;
         private int previewMaxNodes = 20;
 
@@ -43,6 +49,8 @@ namespace AroAro.DataCore.Editor
         private void OnEnable()
         {
             component = (DataCoreEditorComponent)target;
+            csvFilePath = EditorPrefs.GetString("DataCoreEditor_csvFilePath", "");
+            csvDatasetName = EditorPrefs.GetString("DataCoreEditor_csvDatasetName", "ImportedCSV");
         }
 
         public override void OnInspectorGUI()
@@ -54,6 +62,9 @@ namespace AroAro.DataCore.Editor
 
             // 数据集管理
             DrawDatasetsSection();
+
+            // Workspace 数据集
+            DrawWorkspaceDatasetsSection();
             
             // CSV 导入
             DrawCsvImportSection();
@@ -134,6 +145,92 @@ namespace AroAro.DataCore.Editor
             }
         }
 
+        private void DrawWorkspaceDatasetsSection()
+        {
+            showWorkspaceDatasets = EditorGUILayout.Foldout(showWorkspaceDatasets, "Workspace Datasets", true);
+
+            if (!showWorkspaceDatasets) return;
+
+            EditorGUI.indentLevel++;
+
+            IWorkspace ws = null;
+            IReadOnlyList<WorkspaceEntry> entries = null;
+
+            try
+            {
+                ws = component.GetWorkspace();
+                entries = ws.DescribeAll();
+            }
+            catch (Exception ex)
+            {
+                EditorGUILayout.HelpBox($"Workspace error: {ex.Message}", MessageType.Warning);
+                EditorGUI.indentLevel--;
+                return;
+            }
+
+            // Filter to workspace-only datasets (not from store)
+            var wsEntries = entries.Where(e => e.Source != DataSource.Store).ToList();
+
+            if (wsEntries.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No workspace datasets. Use workspace_open or tools to load data.", MessageType.Info);
+            }
+            else
+            {
+                scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(200));
+
+                foreach (var entry in wsEntries)
+                {
+                    var name = entry.Name;
+                    if (!wsDatasetFoldouts.ContainsKey(name))
+                        wsDatasetFoldouts[name] = false;
+
+                    EditorGUILayout.BeginVertical(GUI.skin.box);
+
+                    EditorGUILayout.BeginHorizontal();
+                    wsDatasetFoldouts[name] = EditorGUILayout.Foldout(wsDatasetFoldouts[name],
+                        $"{name}  ({entry.Source})", true);
+
+                    if (GUILayout.Button("Preview", GUILayout.Width(60)))
+                    {
+                        DataCorePreviewWindow.ShowWorkspaceWindow(component, name);
+                    }
+
+                    if (GUILayout.Button("Remove", GUILayout.Width(60)))
+                    {
+                        ws.Remove(name);
+                        wsDatasetFoldouts.Remove(name);
+                    }
+                    EditorGUILayout.EndHorizontal();
+
+                    if (wsDatasetFoldouts[name])
+                    {
+                        EditorGUI.indentLevel++;
+                        EditorGUILayout.LabelField("Type", entry.Kind.ToString());
+                        EditorGUILayout.LabelField("Source", entry.Source.ToString());
+                        EditorGUILayout.LabelField("Rows", entry.Rows.ToString());
+                        EditorGUILayout.LabelField("Columns", entry.Columns.ToString());
+
+                        if (entry.Schema != null && entry.Schema.Count > 0)
+                        {
+                            EditorGUILayout.LabelField("Schema:", EditorStyles.miniLabel);
+                            foreach (var col in entry.Schema)
+                            {
+                                EditorGUILayout.LabelField($"  {col.Name} ({col.Type})", EditorStyles.miniLabel);
+                            }
+                        }
+                        EditorGUI.indentLevel--;
+                    }
+
+                    EditorGUILayout.EndVertical();
+                }
+
+                EditorGUILayout.EndScrollView();
+            }
+
+            EditorGUI.indentLevel--;
+        }
+
         private void DrawDatasetItem(DataCoreStore store, string name)
         {
             if (!datasetFoldouts.ContainsKey(name))
@@ -208,7 +305,10 @@ namespace AroAro.DataCore.Editor
                 {
                     var columns = data.First().Keys.ToList();
                     
-                    previewScrollPosition = EditorGUILayout.BeginScrollView(previewScrollPosition, GUILayout.Height(150));
+                    if (!previewScrollPositions.TryGetValue(datasetName, out var previewScroll))
+                        previewScroll = Vector2.zero;
+                    previewScroll = EditorGUILayout.BeginScrollView(previewScroll, GUILayout.Height(150));
+                    previewScrollPositions[datasetName] = previewScroll;
                     
                     // 表头
                     EditorGUILayout.BeginHorizontal();
@@ -225,7 +325,7 @@ namespace AroAro.DataCore.Editor
                         foreach (var col in columns)
                         {
                             var value = row.TryGetValue(col, out var v) ? v?.ToString() ?? "" : "";
-                            var display = value.Length > 10 ? value.Substring(0, 10) + "..." : value;
+                            var display = value.Length > 25 ? value.Substring(0, 25) + "…" : value;
                             EditorGUILayout.LabelField(display, GUILayout.Width(80));
                         }
                         EditorGUILayout.EndHorizontal();
@@ -254,7 +354,10 @@ namespace AroAro.DataCore.Editor
             {
                 EditorGUI.indentLevel++;
                 
-                previewScrollPosition = EditorGUILayout.BeginScrollView(previewScrollPosition, GUILayout.Height(150));
+                if (!previewScrollPositions.TryGetValue(datasetName, out var graphScroll))
+                    graphScroll = Vector2.zero;
+                graphScroll = EditorGUILayout.BeginScrollView(graphScroll, GUILayout.Height(150));
+                previewScrollPositions[datasetName] = graphScroll;
                 
                 // 显示节点
                 EditorGUILayout.LabelField("Nodes:", EditorStyles.boldLabel);
@@ -306,6 +409,8 @@ namespace AroAro.DataCore.Editor
                 {
                     csvFilePath = path;
                     csvDatasetName = System.IO.Path.GetFileNameWithoutExtension(path);
+                    EditorPrefs.SetString("DataCoreEditor_csvFilePath", csvFilePath);
+                    EditorPrefs.SetString("DataCoreEditor_csvDatasetName", csvDatasetName);
                 }
             }
             EditorGUILayout.EndHorizontal();
@@ -362,6 +467,27 @@ namespace AroAro.DataCore.Editor
             };
         }
 
+        private bool DatasetNameExists(string name)
+        {
+            try
+            {
+                var store = component.GetStore();
+                if (store != null && store.Names.Contains(name))
+                    return true;
+            }
+            catch { /* store not available */ }
+
+            try
+            {
+                var ws = component.GetWorkspace();
+                if (ws != null && ws.DescribeAll().Any(e => string.Equals(e.Name, name, StringComparison.Ordinal)))
+                    return true;
+            }
+            catch { /* workspace not available */ }
+
+            return false;
+        }
+
         private void ImportCsv()
         {
             if (string.IsNullOrEmpty(csvFilePath))
@@ -369,13 +495,19 @@ namespace AroAro.DataCore.Editor
                 EditorUtility.DisplayDialog("Import CSV", "Please select a CSV file first.", "OK");
                 return;
             }
-            
+
             if (string.IsNullOrEmpty(csvDatasetName))
             {
                 EditorUtility.DisplayDialog("Import CSV", "Please enter a dataset name.", "OK");
                 return;
             }
-            
+
+            if (DatasetNameExists(csvDatasetName))
+            {
+                EditorUtility.DisplayDialog("Import CSV", $"A dataset named '{csvDatasetName}' already exists. Please choose a different name.", "OK");
+                return;
+            }
+
             try
             {
                 var tabular = component.ImportCsvToTabular(csvFilePath, csvDatasetName, csvHasHeader, GetCsvDelimiter());
@@ -409,6 +541,7 @@ namespace AroAro.DataCore.Editor
             EditorGUILayout.EndHorizontal();
             
             graphmlDatasetName = EditorGUILayout.TextField("Dataset Name", graphmlDatasetName);
+            graphmlEncodingIndex = EditorGUILayout.Popup("Encoding", graphmlEncodingIndex, _graphmlEncodings);
             
             EditorGUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
@@ -428,16 +561,27 @@ namespace AroAro.DataCore.Editor
                 EditorUtility.DisplayDialog("Import GraphML", "Please select a GraphML file first.", "OK");
                 return;
             }
-            
+
             if (string.IsNullOrEmpty(graphmlDatasetName))
             {
                 EditorUtility.DisplayDialog("Import GraphML", "Please enter a dataset name.", "OK");
                 return;
             }
-            
+
+            if (DatasetNameExists(graphmlDatasetName))
+            {
+                EditorUtility.DisplayDialog("Import GraphML", $"A dataset named '{graphmlDatasetName}' already exists. Please choose a different name.", "OK");
+                return;
+            }
+
             try
             {
-                var graph = component.ImportGraphMLToGraph(graphmlFilePath, graphmlDatasetName);
+                System.Text.Encoding encoding = null;
+                if (graphmlEncodingIndex > 0 && graphmlEncodingIndex < _graphmlEncodingValues.Length)
+                {
+                    encoding = System.Text.Encoding.GetEncoding(_graphmlEncodingValues[graphmlEncodingIndex]);
+                }
+                var graph = component.ImportGraphMLToGraph(graphmlFilePath, graphmlDatasetName, encoding);
                 EditorUtility.DisplayDialog("Import GraphML", $"Successfully imported {graph.NodeCount} nodes and {graph.EdgeCount} edges.", "OK");
                 EditorUtility.SetDirty(component);
             }
@@ -461,13 +605,20 @@ namespace AroAro.DataCore.Editor
             {
                 if (!string.IsNullOrEmpty(newTabularName))
                 {
-                    component.CreateTabularDataset(newTabularName);
-                    EditorUtility.SetDirty(component);
-                    newTabularName = "NewTabular";
+                    if (DatasetNameExists(newTabularName))
+                    {
+                        EditorUtility.DisplayDialog("Duplicate Name", $"A dataset named '{newTabularName}' already exists.", "OK");
+                    }
+                    else
+                    {
+                        component.CreateTabularDataset(newTabularName);
+                        EditorUtility.SetDirty(component);
+                        newTabularName = "NewTabular";
+                    }
                 }
             }
             EditorGUILayout.EndHorizontal();
-            
+
             // 创建图数据集
             EditorGUILayout.BeginHorizontal();
             newGraphName = EditorGUILayout.TextField("Graph Name", newGraphName);
@@ -475,9 +626,16 @@ namespace AroAro.DataCore.Editor
             {
                 if (!string.IsNullOrEmpty(newGraphName))
                 {
-                    component.CreateGraphDataset(newGraphName);
-                    EditorUtility.SetDirty(component);
-                    newGraphName = "NewGraph";
+                    if (DatasetNameExists(newGraphName))
+                    {
+                        EditorUtility.DisplayDialog("Duplicate Name", $"A dataset named '{newGraphName}' already exists.", "OK");
+                    }
+                    else
+                    {
+                        component.CreateGraphDataset(newGraphName);
+                        EditorUtility.SetDirty(component);
+                        newGraphName = "NewGraph";
+                    }
                 }
             }
             EditorGUILayout.EndHorizontal();
@@ -566,9 +724,16 @@ namespace AroAro.DataCore.Editor
         private void RunSelfTest()
         {
             var go = new GameObject("DataCore Test Runner");
-            var test = go.AddComponent<DataCoreSelfTest>();
-            test.RunTests();
-            DestroyImmediate(go);
+            go.hideFlags = HideFlags.HideAndDontSave;
+            try
+            {
+                var test = go.AddComponent<DataCoreSelfTest>();
+                test.RunTests();
+            }
+            finally
+            {
+                DestroyImmediate(go);
+            }
         }
     }
 }

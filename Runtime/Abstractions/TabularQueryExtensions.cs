@@ -138,6 +138,8 @@ namespace AroAro.DataCore
         public ITabularQuery OrderBy(string column) => _inner.OrderBy(column);
         public ITabularQuery OrderByDescending(string column) => _inner.OrderByDescending(column);
         public ITabularQuery OrderBy(string column, SortDirection direction) => _inner.OrderBy(column, direction);
+        public ITabularQuery ThenBy(string column) => _inner.ThenBy(column);
+        public ITabularQuery ThenByDescending(string column) => _inner.ThenByDescending(column);
         public ITabularQuery Skip(int count) => _inner.Skip(count);
         public ITabularQuery Limit(int count) => _inner.Limit(count);
         public ITabularQuery Page(int pageNumber, int pageSize) => _inner.Page(pageNumber, pageSize);
